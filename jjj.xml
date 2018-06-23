@@ -1,0 +1,22 @@
+<pluginManagement>
+		<plugins>
+			<plugin>
+				<groupId></groupId>
+				<artifactId></artifactId>
+				<version></version>
+				<executions>
+					<execution>
+						<id></id>
+						<goals>
+							<goal></goal>
+						</goals>
+						<phase></phase>
+						<configuration>
+							<source></source>
+							<target></target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+   </plugins>
+</pluginManagement>
