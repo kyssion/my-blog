@@ -4,6 +4,12 @@
 
 ![](/blogimg/springMVC/1.jpg)
 
+![](blogimg/springMVC/1.png)
+
+![](blogimg/springMVC/2.png)
+
+![](blogimg/springMVC/3.png)
+
 spring 自己的webapplication支持嵌套作用域,通过这个方法可以实现spring applicationcongtext的继承特性(继承特性,子作用域可以访问夫作用域的中的属性,但是父作用域中的属性无法访问子作用域中的属性,具体的使用看HierarchicalBeanFactory)
 
 #### web容器的初始化设置
