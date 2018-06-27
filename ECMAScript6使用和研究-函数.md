@@ -289,4 +289,6 @@ var method = ::obj.foo;
 let log = ::console.log;
 // 等同于
 var log = console.log.bind(console);
+
+
 ```
