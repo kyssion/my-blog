@@ -204,3 +204,36 @@ $ docker image rm $(docker image ls -q -f before=mongo:3.2)
 ```
 
 > 充分利用你的想象力和 Linux 命令行的强大，你可以完成很多非常赞的功能。
+
+### docker commit 命令和相关的问题
+
+docker commit 的语法格式为：
+
+```shell
+docker commit [选项] <容器ID或容器名> [<仓库名>[:<标签>]]
+```
+
+可以使用如下的方法将指定的容器打包成镜像
+
+```shell
+$ docker commit \
+    --author "Tao Wang <twang2218@gmail.com>" \
+    --message "修改了默认网页" \
+    webserver \
+    nginx:v2
+sha256:07e33465974800ce65751acc279adc6ed2dc5ed4e0838f8b86f0c87aa1795214
+```
+
+> 引申：其中 --author 是指定修改的作者，而 --message 则是记录本次修改的内容。这点和 git 版本控制相似，不过这里这些信息可以省略留空。
+
+使用 docker commit 命令虽然可以比较直观的帮助理解镜像分层存储的概念，但是实际环境中并不会这样使用。
+
+首先，如果仔细观察之前的 docker diff webserver 的结果，你会发现除了真正想要修改的 /usr/share/nginx/html/index.html 文件外，由于命令的执行，还有很多文件被改动或添加了。这还仅仅是最简单的操作，如果是安装软件包、编译构建，那会有大量的无关内容被添加进来，如果不小心清理，将会导致镜像极为臃肿。
+
+此外，使用 docker commit 意味着所有对镜像的操作都是黑箱操作，生成的镜像也被称为黑箱镜像，换句话说，就是除了制作镜像的人知道执行过什么命令、怎么生成的镜像，别人根本无从得知。而且，即使是这个制作镜像的人，过一段时间后也无法记清具体在操作的。虽然 docker diff 或许可以告诉得到一些线索，但是远远不到可以确保生成一致镜像的地步。这种黑箱镜像的维护工作是非常痛苦的。
+
+> 注意： 应该使用dockerfile 进行相关的镜像生成和维护工作
+
+
+
+
