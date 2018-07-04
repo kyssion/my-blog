@@ -1,4 +1,4 @@
-### 获取镜像
+### 获取镜像 pull
 
 关键命令
 
@@ -11,13 +11,13 @@ docker pull [选项] [Docker Registry 地址[:端口号]/]仓库名[:标签]
 - Docker 镜像仓库地址：地址的格式一般是 <域名/IP>[:端口号]。默认地址是 Docker Hub。
 - 仓库名：如之前所说，这里的仓库名是两段式名称，即 <用户名>/<软件名>。对于 Docker Hub，如果不给出用户名，则默认为 library，也就是官方镜像。
 
-### 运行镜像
+### 运行镜像 run
 
 ```shell
 docker run -it --rm ubuntu:16.04 bash
 ```
 
-### 列出镜像
+### 列出镜像 image ls
 
 ```shell
 docker image ls
@@ -33,7 +33,7 @@ ubuntu              16.04               5e8b97a2a082        3 weeks ago         
 hello-world         latest              e38bc07ac18e        2 months ago        1.85kB
 ```
 
-### 查看docker 磁盘的使用情况
+#### 查看docker 磁盘的使用情况
 
 ```shell
 docker system df
@@ -41,11 +41,11 @@ docker system df
 
 注意：这里引申一下docker image 命令显示出来的各种信息，docker image ls 列表中的镜像体积总和并非是所有镜像实际硬盘消耗。由于 Docker 镜像是多层存储结构，并且可以继承、复用，因此不同镜像可能会因为使用相同的基础镜像，从而拥有共同的层。由于 Docker 使用 Union FS，相同的层只需要保存一份即可，因此实际镜像硬盘占用空间很可能要比这个列表镜像大小的总和要小的多。
 
-### 特殊的玄虚镜像
+#### 特殊的玄虚镜像
 
 由于新旧镜像同名，旧镜像名称被取消等，出现仓库名、标签均为 <none> 的镜像。这类无标签镜像也被称为 虚悬镜像(dangling image)
 
-使用这个命令将会直接的看到这些镜像
+> 使用这个命令将会直接的看到这些镜像
 
 ```
 $ docker image ls -f dangling=true
@@ -53,13 +53,13 @@ REPOSITORY          TAG                 IMAGE ID            CREATED             
 <none>              <none>              00285df0df87        5 days ago          342 MB
 ```
 
-一般来说，虚悬镜像已经失去了存在的价值，是可以随意删除的，可以用下面的命令删除。
+> 一般来说，虚悬镜像已经失去了存在的价值，是可以随意删除的，可以用下面的命令删除。
 
 ```shell
 $ docker image prune
 ```
 
-### 中间层镜像
+#### 中间层镜像
 
 默认的 docker image ls 列表中只会显示顶层镜像，如果希望显示包括中间层镜像在内的所有镜像的话，需要加 -a 参数。
 
@@ -69,11 +69,11 @@ $ docker image ls -a
 
 这样会看到很多无标签的镜像，与之前的虚悬镜像不同，这些无标签的镜像很多都是中间层镜像，是其它镜像所依赖的镜像。这些无标签镜像不应该删除，否则会导致上层镜像因为依赖丢失而出错。实际上，这些镜像也没必要删除，因为之前说过，相同的层只会存一遍，而这些镜像是别的镜像的依赖，因此并不会因为它们被列出来而多存了一份，无论如何你也会需要它们。只要删除那些依赖它们的镜像后，这些依赖的中间层镜像也会被连带删除。
 
-### 列出部分镜像
+#### 列出部分镜像
 
 不加任何参数的情况下，docker image ls 会列出所有顶级镜像，但是有时候我们只希望列出部分镜像。docker image ls 有好几个参数可以帮助做到这个事情。
 
-根据仓库名列出镜像
+> 根据仓库名列出镜像
 ```shell
 $ docker image ls ubuntu
 REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
@@ -82,7 +82,16 @@ ubuntu              latest              f753707788c5        4 weeks ago         
 ubuntu              14.04               1e0c3dd64ccd        4 weeks ago         188 MB
 ```
 
-列出特定的某个镜像，也就是说指定仓库名和标签
+> 显示镜像详细信息
+
+```shell
+$ docker image ls --digests
+```
+
+这个方法将会显示出这个镜像的长id等信息
+
+
+> 列出特定的某个镜像，也就是说指定仓库名和标签
 
 ```shell
 $ docker image ls ubuntu:16.04
@@ -90,7 +99,7 @@ REPOSITORY          TAG                 IMAGE ID            CREATED             
 ubuntu              16.04               f753707788c5        4 weeks ago         127 MB
 ```
 
-docker image ls 还支持强大的过滤器参数 --filter，或者简写 -f
+> docker image ls 还支持强大的过滤器参数 --filter，或者简写 -f
 
 比如，我们希望看到在 mongo:3.2 之后建立的镜像，可以用下面的命令：
 
@@ -101,9 +110,9 @@ redis               latest              5f515359c7f8        5 days ago          
 nginx               latest              05a60462f8ba        5 days ago          181 MB
 ```
 
-想查看某个位置之前的镜像也可以，只需要把 since 换成 before 即可。
+> 想查看某个位置之前的镜像也可以，只需要把 since 换成 before 即可。
 
-### 利用 docker image ls 把所有的虚悬镜像的 ID 列出来
+#### 利用 docker image ls 把所有的虚悬镜像的 ID 列出来
 
 ```shell
 $ docker image ls -q
@@ -116,7 +125,7 @@ f753707788c5
 1e0c3dd64ccd
 ```
 
-### 配合使用go 模板语法
+#### 配合使用go 模板语法
 
 下面的命令会直接列出镜像结果，并且只包含镜像ID和仓库名：
 
@@ -143,3 +152,55 @@ f753707788c5        ubuntu              16.04
 f753707788c5        ubuntu              latest
 1e0c3dd64ccd        ubuntu              14.04
 ```
+
+### 删除本地镜像
+
+#### 用 ID、镜像名、摘要删除镜像
+
+如果要删除本地的镜像，可以使用 docker image rm 命令，其格式为：
+
+```shell
+$ docker image rm [选项] <镜像1> [<镜像2> ...]
+```
+
+<镜像> 可以是 镜像短 ID、镜像长 ID、镜像名(<仓库名>:<标签>) 或者 镜像摘要
+
+> 引申： 短id 其实就是docker image ls 展示的相关的id
+
+#### Untagged 和 Deleted
+
+首先观察一个删除的命令和结果
+
+```shell
+$ docker image rm centos
+Untagged: centos:latest
+Untagged: centos@sha256:b2f9d1c0ff5f87a4743104d099a3d561002ac500db1b9bfa02a783a46e0d366c
+Deleted: sha256:0584b3d2cf6d235ee310cf14b54667d889887b838d3f3d3033acd70fc3c48b8a
+Deleted: sha256:97ca462ad9eeae25941546209454496e1d66749d53dfa2ee32bf1faabd239d38
+```
+
+删除行为分为两类，一类是 Untagged，另一类是 Deleted。我们之前介绍过，镜像的唯一标识是其 ID 和摘要，而一个镜像可以有多个标签。
+
+因此当我们使用上面命令删除镜像的时候，实际上是在要求删除某个标签的镜像。所以首先需要做的是将满足我们要求的所有镜像标签都取消，这就是我们看到的 Untagged 的信息。因为一个镜像可以对应多个标签，因此当我们删除了所指定的标签后，可能还有别的标签指向了这个镜像，如果是这种情况，那么 Delete 行为就不会发生。所以并非所有的 docker image rm 都会产生删除镜像的行为，有可能仅仅是取消了某个标签而已。
+
+当该镜像所有的标签都被取消了，该镜像很可能会失去了存在的意义，因此会触发删除行为。镜像是多层存储结构，因此在删除的时候也是从上层向基础层方向依次进行判断删除。镜像的多层结构让镜像复用变动非常容易，因此很有可能某个其它镜像正依赖于当前镜像的某一层。这种情况，依旧不会触发删除该层的行为。直到没有任何层依赖当前层时，才会真实的删除当前层。这就是为什么，有时候会奇怪，为什么明明没有别的标签指向这个镜像，但是它还是存在的原因，也是为什么有时候会发现所删除的层数和自己 docker pull 看到的层数不一样的源。
+
+除了镜像依赖以外，还需要注意的是容器对镜像的依赖。如果有用这个镜像启动的容器存在（即使容器没有运行），那么同样不可以删除这个镜像。之前讲过，容器是以镜像为基础，再加一层容器存储层，组成这样的多层存储结构去运行的。因此该镜像如果被这个容器所依赖的，那么删除必然会导致故障。如果这些容器是不需要的，应该先将它们删除，然后再来删除镜像。
+
+#### 用 docker image ls 命令来配合
+
+像其它可以承接多个实体的命令一样，可以使用 docker image ls -q 来配合使用 docker image rm，这样可以成批的删除希望删除的镜像。我们在“镜像列表”章节介绍过很多过滤镜像列表的方式都可以拿过来使用。
+
+> 比如，我们需要删除所有仓库名为 redis 的镜像：
+
+```shell
+$ docker image rm $(docker image ls -q redis)
+```
+
+> 或者删除所有在 mongo:3.2 之前的镜像：
+
+```shell
+$ docker image rm $(docker image ls -q -f before=mongo:3.2)
+```
+
+> 充分利用你的想象力和 Linux 命令行的强大，你可以完成很多非常赞的功能。
