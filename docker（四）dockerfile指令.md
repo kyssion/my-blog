@@ -69,3 +69,107 @@ CMD [ "sh", "-c", "echo $HOME" ]
 ```shell
 CMD ["nginx", "-g", "daemon off;"]
 ```
+
+注意： 如果 docker run 指定了其他命令，CMD 指定的默认命令将被忽略。如果 Dockerfile 中有多个 CMD 指令，只有最后一个 CMD 有效。
+
+### ENTRYPOINT 入口点
+
+这个方法相当于默认容器启动的时候运行的命令
+
+ENTRYPOINT 的格式和 RUN 指令格式一样，分为 exec 格式和 shell 格式。
+
+ENTRYPOINT 的目的和 CMD 一样，都是在指定容器启动程序及参数。ENTRYPOINT 在运行时也可以替代，不过比 CMD 要略显繁琐，需要通过 docker run 的参数 --entrypoint 来指定。
+
+当指定了 ENTRYPOINT 后，CMD 的含义就发生了改变，不再是直接的运行其命令，而是将 CMD 的内容作为参数传给 ENTRYPOINT 指令，换句话说实际执行时，将变为：
+
+```shell
+<ENTRYPOINT> "<CMD>"
+```
+高级应用类似 redis 官方镜像，自定义启动效果
+
+```shell
+FROM alpine:3.4
+...
+RUN addgroup -S redis && adduser -S -G redis redis
+...
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+EXPOSE 6379
+CMD [ "redis-server" ]
+```
+
+可以看到其中为了 redis 服务创建了 redis 用户，并在最后指定了 ENTRYPOINT 为 docker-entrypoint.sh 脚本。
+
+```shell
+#!/bin/sh
+...
+# allow the container to be started with `--user`
+if [ "$1" = 'redis-server' -a "$(id -u)" = '0' ]; then
+    chown -R redis .
+    exec su-exec redis "$0" "$@"
+fi
+
+exec "$@"
+```
+
+该脚本的内容就是根据 CMD 的内容来判断，如果是 redis-server 的话，则切换到 redis 用户身份启动服务器，否则依旧使用 root 身份执行。比如：
+
+```shell
+$ docker run -it redis id
+uid=0(root) gid=0(root) groups=0(root)
+```
+
+### RUN vs CMD vs ENTRYPOINT 
+
+
+RUN、CMD 和 ENTRYPOINT 这三个 Dockerfile 指令看上去很类似，很容易混淆。本节将通过实践详细讨论它们的区别。
+
+简单的说：
+
+- RUN 执行命令并创建新的镜像层，RUN 经常用于安装软件包。
+
+- CMD 设置容器启动后默认执行的命令及其参数，但 CMD 能够被 docker run 后面跟的命令行参数替换。
+
+- ENTRYPOINT 配置容器启动时运行的命令。
+
+最佳实践
+
+- 使用 RUN 指令安装应用和软件包，构建镜像。
+
+- 如果 Docker 镜像的用途是运行应用程序或服务，比如运行一个 MySQL，应该优先使用 Exec 格式的 ENTRYPOINT 指令。CMD 可为 ENTRYPOINT 提供额外的默认参数，同时可利用 docker run 命令行替换默认参数。
+
+- 如果想为容器设置默认的启动命令，可使用 CMD 指令。用户可在 docker run 命令行中替换此默认命令。
+
+### ENV 设置环境变量
+
+格式有两种：
+```shell
+- ENV <key> <value>
+- ENV <key1>=<value1> <key2>=<value2>...
+```
+
+这个指令很简单，就是设置环境变量而已，无论是后面的其它指令，如 RUN，还是运行时的应用，都可以直接使用这里定义的环境变量。
+
+```shell
+ENV VERSION=1.0 DEBUG=on \
+    NAME="Happy Feet"
+```
+
+除此之外还能使用环境变量在编写docker文件的时候进行使用，专业术语变量展开
+
+```shell
+ENV NODE_VERSION 7.2.0
+
+RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" \
+  && curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt.asc" \
+  && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \
+  && grep " node-v$NODE_VERSION-linux-x64.tar.xz\$" SHASUMS256.txt | sha256sum -c - \
+  && tar -xJf "node-v$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 \
+  && rm "node-v$NODE_VERSION-linux-x64.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt \
+  && ln -s /usr/local/bin/node /usr/local/bin/nodejs
+```
+
+下列指令可以支持环境变量展开： ADD、COPY、ENV、EXPOSE、LABEL、USER、WORKDIR、VOLUME、STOPSIGNAL、ONBUILD。
+
+可以从这个指令列表里感觉到，环境变量可以使用的地方很多，很强大。通过环境变量，我们可以让一份 Dockerfile 制作更多的镜像，只需使用不同的环境变量即可。
+
