@@ -121,7 +121,6 @@ uid=0(root) gid=0(root) groups=0(root)
 
 ### RUN vs CMD vs ENTRYPOINT 
 
-
 RUN、CMD 和 ENTRYPOINT 这三个 Dockerfile 指令看上去很类似，很容易混淆。本节将通过实践详细讨论它们的区别。
 
 简单的说：
