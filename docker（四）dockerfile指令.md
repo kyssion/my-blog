@@ -172,3 +172,113 @@ RUN curl -SLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-
 
 可以从这个指令列表里感觉到，环境变量可以使用的地方很多，很强大。通过环境变量，我们可以让一份 Dockerfile 制作更多的镜像，只需使用不同的环境变量即可。
 
+
+### ARG	设置环境变量
+
+构建参数和ENV的效果一样,都是设置环境变量。但是arg还可以将相关的变量使用进编译过程中
+
+### VOLUME 定义匿名卷
+
+格式为：
+
+```shell
+VOLUME ["<路径1>", "<路径2>"...]
+VOLUME <路径>
+```
+
+之前我们说过，容器运行时应该尽量保持容器存储层不发生写操作，对于数据库类需要保存动态数据的应用，其数据库文件应该保存于卷(volume)中，后面的章节我们会进一步介绍 Docker 卷的概念。
+
+之前我们说过，容器运行时应该尽量保持容器存储层不发生写操作，对于数据库类需要保存动态数据的应用，其数据库文件应该保存于卷(volume)中
+
+### EXPOSE 声明端口
+
+格式为 EXPOSE <端口1> [<端口2>...]。
+
+在 Dockerfile 中写入这样的声明有两个好处：
+- 帮助镜像使用者理解这个镜像服务的守护端口，以方便配置映射。
+- 在运行时使用随机端口映射时，也就是 docker run -P 时，会自动随机映射 EXPOSE 的端口。
+
+早期 Docker 版本中还有一个特殊的用处，解决以前所有容器都运行于默认桥接网络中，所有容器互相之间都可以直接访问导致的安全性问题。
+
+于是有了一个 Docker 引擎参数 --icc=false
+> --icc=false参数作用：当指定该参数后，容器间将默认无法互访，除非互相间使用了 --links 参数的容器才可以互通，并且只有镜像中 EXPOSE 所声明的端口才可以被访问。这个 --icc=false 的用法，在引入了 docker network 后已经基本不用了，通过自定义网络可以很轻松的实现容器间的互联与隔离。
+
+注意：要将 EXPOSE 和在运行时使用 -p <宿主端口>:<容器端口> 区分开来。-p，是映射宿主端口和容器端口，换句话说，就是将容器的对应端口服务公开给外界访问，而 EXPOSE 仅仅是声明容器打算使用什么端口而已，并不会自动在宿主进行端口映射。
+
+### WORKDIR 指定工作目录
+
+格式为 WORKDIR <工作目录路径>。
+
+这个命令是为了解决，如下shell 命令会产生的问题
+
+```shell
+RUN cd /app
+RUN echo "hello" > world.txt
+```
+
+因为每一个run 命令都会产生一个容易所以会导致对应的文件目录不同，通过使用这个名利可以相关的文件目录统一
+
+### USER 指定当前用户
+
+和WORKDIR都是解决docker run类似的命令产生新的容器导致环境不同的问题，只不过WORKDIR针对目录USER针对用户
+
+### HEALTHCHECK 健康检查
+
+格式：
+
+- HEALTHCHECK [选项] CMD <命令>：设置检查容器健康状况的命令
+- HEALTHCHECK NONE：如果基础镜像有健康检查指令，使用这行可以屏蔽掉其健康检查指令
+
+HEALTHCHECK 指令是告诉 Docker 应该如何进行判断容器的状态是否正常，这是 Docker 1.12 引入的新指令。
+
+HEALTHCHECK 支持下列选项：
+
+- --interval=<间隔>：两次健康检查的间隔，默认为 30 秒；
+- --timeout=<时长>：健康检查命令运行超时时间，如果超过这个时间，本次健康检查就被视为失败，默认 30 秒；
+- --retries=<次数>：当连续失败指定次数后，则将容器状态视为 unhealthy，默认 3 次。
+和 CMD, ENTRYPOINT 一样，HEALTHCHECK 只可以出现一次，如果写了多个，只有最后一个生效。
+
+在 HEALTHCHECK [选项] CMD 后面的命令，格式和 ENTRYPOINT 一样，分为 shell 格式，和 exec 格式。命令的返回值决定了该次健康检查的成功与否：0：成功；1：失败；2：保留，不要使用这个值。
+
+假设我们有个镜像是个最简单的 Web 服务，我们希望增加健康检查来判断其 Web 服务是否在正常工作，我们可以用 curl 来帮助判断，其 Dockerfile 的 HEALTHCHECK 可以这么写：
+
+```shell
+FROM nginx
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+HEALTHCHECK --interval=5s --timeout=3s \
+  CMD curl -fs http://localhost/ || exit 1
+```
+
+当运行该镜像后，可以通过 docker container ls 看到最初的状态为 (health: starting)：
+```shell
+$ docker container ls
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                            PORTS               NAMES
+03e28eb00bd0        myweb:v1            "nginx -g 'daemon off"   3 seconds ago       Up 2 seconds (health: starting)   80/tcp, 443/tcp     web
+```
+
+在等待几秒钟后，再次 docker container ls，就会看到健康状态变化为了 (healthy)：
+
+```shell
+$ docker container ls
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                    PORTS               NAMES
+03e28eb00bd0        myweb:v1            "nginx -g 'daemon off"   18 seconds ago      Up 16 seconds (healthy)   80/tcp, 443/tcp     web
+如果健康检查连续失败超过了重试次数，状态就会变为 (unhealthy)。
+```
+
+### ONBUILD 为他人做嫁衣裳
+格式：ONBUILD <其它指令>。
+
+ONBUILD 是一个特殊的指令，它后面跟的是其它指令，比如 RUN, COPY 等，而这些指令，在当前镜像构建时并不会被执行。只有当以当前镜像为基础镜像，去构建下一级镜像的时候才会被执行。
+
+Dockerfile 中的其它指令都是为了定制当前镜像而准备的，唯有 ONBUILD 是为了帮助别人定制自己而准备的。
+
+```shell
+FROM node:slim
+RUN mkdir /app
+WORKDIR /app
+ONBUILD COPY ./package.json /app
+ONBUILD RUN [ "npm", "install" ]
+ONBUILD COPY . /app/
+CMD [ "npm", "start" ]
+```
+
