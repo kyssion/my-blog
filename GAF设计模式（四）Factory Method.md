@@ -108,30 +108,13 @@ public class IDcard {
 ```java
 package org.kys.Gaf.FactoryMethod;
 
-public class IDcard {
-    private String cardName;
-    private String name;
-
-    public IDcard(String cardName,String name){
-        this.cardName=cardName;
-        this.name=name;
-        System.out.println("创建了"+this.getName()+"的"+this.getCardName()+"卡片");
-    }
-
-    public String getCardName() {
-        return cardName;
-    }
-
-    public void setCardName(String cardName) {
-        this.cardName = cardName;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
+public class Main {
+    public static void main(String[] args) {
+        Factory factory = new BookFactory();
+        Product product1= factory.create(new IDcard("美容卡","tom"));
+        Product product2= factory.create(new IDcard("购物卡","jack"));
+        product1.use();
+        product2.use();
     }
 }
 ```
