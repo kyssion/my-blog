@@ -108,3 +108,8 @@ public class Consumer {
     }
 }
 ```
+
+### dubbo 的四中配置方式
+
+#### xml　配置方法
+
