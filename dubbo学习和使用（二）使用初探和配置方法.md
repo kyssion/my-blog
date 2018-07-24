@@ -155,7 +155,7 @@ dubbo 所有的标签和作用
 <dubbo:method/>|方法配置|用于 ServiceConfig 和 ReferenceConfig 指定方法级的配置信息
 <dubbo:argument/>|参数配置|用于指定方法参数配置
 
-配置覆盖关系
+> 配置覆盖关系
 
 以 timeout 为例，显示了配置的查找顺序，其它 retries, loadbalance, actives 等类似：
 
@@ -163,3 +163,36 @@ dubbo 所有的标签和作用
 - 如果级别一样，则消费方优先，提供方次之。
 
 其中，服务提供方配置，通过 URL 经由注册中心传递给消费方。
+
+> 从上到下优先级递减
+
+![](blogimg/dubbo/n2.png)
+
+#### 属性配置
+
+如果公共配置很简单，没有多注册中心，多协议等情况，或者想多个 Spring 容器想共享配置，可以使用 dubbo.properties 作为缺省配置。
+
+映射规则
+将 XML 配置的标签名，加属性名，用点分隔，多个属性拆成多行
+
+- 比如：dubbo.application.name=foo等价于<dubbo:application name="foo" />
+- 比如：dubbo.registry.address=10.20.153.10:9090等价于<dubbo:registry address="10.20.153.10:9090" />
+如果 XML 有多行同名标签配置，可用 id 号区分，如果没有 id 号将对所有同名标签生效
+
+- 比如：dubbo.protocol.rmi.port=1234等价于<dubbo:protocol id="rmi" name="rmi" port="1099" /> [2]
+- 比如：dubbo.registry.china.address=10.20.153.10:9090等价于<dubbo:registry id="china" address="10.20.153.10:9090" />
+下面是 dubbo.properties 的一个典型配置：
+
+```
+dubbo.application.name=foo
+dubbo.application.owner=bar
+dubbo.registry.address=10.20.153.10:9090
+```
+
+> 覆盖策略（从上到下优先级递减）
+
+![](blogimg/dubbo/n3.png)
+
+- 如果 classpath 根目录下存在多个 dubbo.properties，比如多个 jar 包中有 dubbo.properties，Dubbo 会任意加载，并打印 Error 日志，后续可能改为抛异常。
+
+- 协议的 id 没配时，缺省使用协议名作为 id
