@@ -419,3 +419,98 @@ public class ConsumerTestApp {
 ```xml
 <dubbo:annotation package="com.alibaba.dubbo.test.service" /> 
 ```
+
+## 负载均衡
+
+在集群负载均衡时，Dubbo 提供了多种均衡策略，缺省为 random 随机调用。
+
+### 负载均衡策略
+
+> Random LoadBalance
+
+随机，按权重设置随机概率。
+在一个截面上碰撞的概率高，但调用量越大分布越均匀，而且按概率使用权重后也比较均匀，有利于动态调整提供者权重。
+
+> RoundRobin LoadBalance
+
+轮循，按公约后的权重设置轮循比率。
+存在慢的提供者累积请求的问题，比如：第二台机器很慢，但没挂，当请求调到第二台时就卡在那，久而久之，所有请求都卡在调到第二台上。
+
+> LeastActive LoadBalance
+
+最少活跃调用数，相同活跃数的随机，活跃数指调用前后计数差。
+使慢的提供者收到更少请求，因为越慢的提供者的调用前后计数差会越大。
+
+> ConsistentHash LoadBalance
+一致性 Hash，相同参数的请求总是发到同一提供者。
+当某一台提供者挂时，原本发往该提供者的请求，基于虚拟节点，平摊到其它提供者，不会引起剧烈变动。
+算法参见：http://en.wikipedia.org/wiki/Consistent_hashing
+缺省只对第一个参数 Hash，如果要修改，请配置 
+
+```xml
+<dubbo:parameter key="hash.arguments" value="0,1" />
+```
+
+缺省用 160 份虚拟节点，如果要修改，请配置 
+```xml
+<dubbo:parameter key="hash.nodes" value="320" />
+```
+### 配置
+
+服务端服务级别
+
+```xml
+<dubbo:service interface="..." loadbalance="roundrobin" />
+```
+
+客户端服务级别
+
+```xml
+<dubbo:reference interface="..." loadbalance="roundrobin" />
+```
+
+服务端方法级别
+
+```xml
+<dubbo:service interface="...">
+    <dubbo:method name="..." loadbalance="roundrobin"/>
+</dubbo:service>
+```
+
+客户端方法级别
+
+```xml
+<dubbo:reference interface="...">
+    <dubbo:method name="..." loadbalance="roundrobin"/>
+</dubbo:reference>
+```
+
+## 线程模型
+如果事件处理的逻辑能迅速完成，并且不会发起新的 IO 请求，比如只是在内存中记个标识，则直接在 IO 线程上处理更快，因为减少了线程池调度。
+
+但如果事件处理逻辑较慢，或者需要发起新的 IO 请求，比如需要查询数据库，则必须派发到线程池，否则 IO 线程阻塞，将导致不能接收其它请求。
+
+如果用 IO 线程处理事件，又在事件处理过程中发起新的 IO 请求，比如在连接事件中发起登录请求，会报“可能引发死锁”异常，但不会真死锁。
+
+![](blogimg/dubbo/n5.png)
+
+因此，需要通过不同的派发策略和不同的线程池配置的组合来应对不同的场景:
+
+```xml
+<dubbo:protocol name="dubbo" dispatcher="all" threadpool="fixed" threads="100" />
+```
+
+> Dispatcher
+
+- all 所有消息都派发到线程池，包括请求，响应，连接事件，断开事件，心跳等。
+- direct 所有消息都不派发到线程池，全部在 IO 线程上直接执行。
+- message 只有请求响应消息派发到线程池，其它连接断开事件，心跳等消息，直接在 IO 线程上执行。
+- execution 只请求消息派发到线程池，不含响应，响应和其它连接断开事件，心跳等消息，直接在 IO 线程上执行。
+- connection 在 IO 线程上，将连接断开事件放入队列，有序逐个执行，其它消息派发到线程池。
+
+> ThreadPool
+
+- fixed 固定大小线程池，启动时建立线程，不关闭，一直持有。(缺省)
+- cached 缓存线程池，空闲一分钟自动删除，需要时重建。
+- limited 可伸缩线程池，但池中的线程数只会增长不会收缩。只增长不收缩的目的是为了避免收缩时突然来了大流量引起的性能问题。
+- eager 优先创建Worker线程池。在任务数量大于corePoolSize但是小于maximumPoolSize时，优先创建Worker来处理任务。当任务数量大于maximumPoolSize时，将任务放入阻塞队列中。阻塞队列充满时抛出RejectedExecutionException。(相比于cached:cached在任务数量超过maximumPoolSize时直接抛出异常而不是将任务放入阻塞队列)

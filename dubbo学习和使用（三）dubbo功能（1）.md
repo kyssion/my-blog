@@ -89,3 +89,4 @@ dubbo.registry.check=false
 <dubbo:reference cluster="failsafe" />
 ```
 
+### 负载均衡
