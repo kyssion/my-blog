@@ -184,3 +184,213 @@ dubbo.registry.check=false
 - limited 可伸缩线程池，但池中的线程数只会增长不会收缩。只增长不收缩的目的是为了避免收缩时突然来了大流量引起的性能问题。
 - eager 优先创建Worker线程池。在任务数量大于corePoolSize但是小于maximumPoolSize时，优先创建Worker来处理任务。当任务数量大于maximumPoolSize时，将任务放入阻塞队列中。阻塞队列充满时抛出RejectedExecutionException。(相比于cached:cached在任务数量超过maximumPoolSize时直接抛出异常而不是将任务放入阻塞队列)
 
+## 直连提供者（只有测试环境使用）和只订阅，只注册
+
+### 直连
+
+在开发及测试环境下，经常需要绕过注册中心，只测试指定服务提供者，这时候可能需要点对点直连，点对点直联方式，将以服务接口为单位，**忽略注册中心的提供者列表**，A 接口配置点对点，不影响 B 接口从注册中心获取列表。
+
+> 通过 XML 配置
+
+如果是线上需求需要点对点，可在 <dubbo:reference> 中配置 url 指向提供者，将绕过注册中心，多个地址用分号隔开，配置如下 [1]：
+
+```xml
+<dubbo:reference id="xxxService" interface="com.alibaba.xxx.XxxService" url="dubbo://localhost:20890" />
+```
+> 通过文件映射
+
+如果服务比较多，也可以用文件映射，用 -Ddubbo.resolve.file 指定映射文件路径，此配置优先级高于 <dubbo:reference> 中的配置 [3]，如：
+
+```
+java -Ddubbo.resolve.file=xxx.properties
+```
+
+然后在映射文件 xxx.properties 中加入配置，其中 key 为服务名，value 为服务提供者 URL：
+
+```
+com.alibaba.xxx.XxxService=dubbo://localhost:20890
+```
+
+> 注意:为了避免复杂化线上环境，不要在线上使用这个功能，只应在测试阶段使用。
+
+### 禁用注册
+
+就是指服务方可以拉取配置中心的信息当时并不在配置中心进行注册
+
+![](blogimg/dubbo/n6.png)
+
+禁用注册配置
+```xml
+<dubbo:registry address="10.20.153.10:9090" register="false" />
+```
+或者
+```xml
+<dubbo:registry address="10.20.153.10:9090?register=false" />
+```
+
+### 禁用拉取
+
+制定一个配置中心只将自己注册进去但是不进行订阅功能
+
+禁用订阅配置
+
+<dubbo:registry id="hzRegistry" address="10.20.153.10:9090" />
+<dubbo:registry id="qdRegistry" address="10.20.141.150:9090" subscribe="false" />
+或者
+
+<dubbo:registry id="hzRegistry" address="10.20.153.10:9090" />
+<dubbo:registry id="qdRegistry" address="10.20.141.150:9090?subscribe=false" />
+
+## 多协议
+
+> 不同服务不同协议
+
+不同服务在性能上适用不同协议进行传输，比如大数据用短连接协议，小数据大并发用长连接协议
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:dubbo="http://dubbo.apache.org/schema/dubbo"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.3.xsd http://dubbo.apache.org/schema/dubbo http://dubbo.apache.org/schema/dubbo/dubbo.xsd"> 
+    <dubbo:application name="world"  />
+    <dubbo:registry id="registry" address="10.20.141.150:9090" username="admin" password="hello1234" />
+    <!-- 多协议配置 -->
+    <dubbo:protocol name="dubbo" port="20880" />
+    <dubbo:protocol name="rmi" port="1099" />
+    <!-- 使用dubbo协议暴露服务 -->
+    <dubbo:service interface="com.alibaba.hello.api.HelloService" version="1.0.0" ref="helloService" protocol="dubbo" />
+    <!-- 使用rmi协议暴露服务 -->
+    <dubbo:service interface="com.alibaba.hello.api.DemoService" version="1.0.0" ref="demoService" protocol="rmi" /> 
+</beans>
+```
+
+> 多协议暴露服务
+
+需要与 http 客户端互操作
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:dubbo="http://dubbo.apache.org/schema/dubbo"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.3.xsd http://dubbo.apache.org/schema/dubbo http://dubbo.apache.org/schema/dubbo/dubbo.xsd">
+    <dubbo:application name="world"  />
+    <dubbo:registry id="registry" address="10.20.141.150:9090" username="admin" password="hello1234" />
+    <!-- 多协议配置 -->
+    <dubbo:protocol name="dubbo" port="20880" />
+    <dubbo:protocol name="hessian" port="8080" />
+    <!-- 使用多个协议暴露服务 -->
+    <dubbo:service id="helloService" interface="com.alibaba.hello.api.HelloService" version="1.0.0" protocol="dubbo,hessian" />
+</beans>
+```
+
+## 服务分组
+
+当一个接口有多种实现时，可以用 group 区分。
+
+> 服务
+
+```xml
+<dubbo:service group="feedback" interface="com.xxx.IndexService" />
+<dubbo:service group="member" interface="com.xxx.IndexService" />
+```
+
+> 引用
+
+```xml
+<dubbo:reference id="feedbackIndexService" group="feedback" interface="com.xxx.IndexService" />
+<dubbo:reference id="memberIndexService" group="member" interface="com.xxx.IndexService" />
+
+> 任意组
+
+```xml
+<dubbo:reference id="barService" interface="com.foo.BarService" group="*" />
+```
+
+## 多版本
+当一个接口实现，出现不兼容升级时，可以用版本号过渡，版本号不同的服务相互间不引用。
+
+可以按照以下的步骤进行版本迁移：
+
+- 在低压力时间段，先升级一半提供者为新版本
+- 再将所有消费者升级为新版本
+- 然后将剩下的一半提供者升级为新版本
+
+> 老版本服务提供者配置：
+
+```xml
+<dubbo:service interface="com.foo.BarService" version="1.0.0" />
+```
+> 新版本服务提供者配置：
+
+```xml
+<dubbo:service interface="com.foo.BarService" version="2.0.0" />
+```
+
+> 老版本服务消费者配置：
+
+```xml
+<dubbo:reference id="barService" interface="com.foo.BarService" version="1.0.0" />
+```
+
+> 新版本服务消费者配置：
+
+```xml
+<dubbo:reference id="barService" interface="com.foo.BarService" version="2.0.0" />
+```
+
+> 如果不需要区分版本，可以按照以下的方式配置 [1]：
+
+```xml
+<dubbo:reference id="barService" interface="com.foo.BarService" version="*" />
+```
+
+## 分组聚合
+按组合并返回结果 [1]，比如菜单服务，接口一样，但有多种实现，用group区分，现在消费方需从每种**group**中调用一次返回结果，合并结果返回，这样就可以实现聚合菜单项。
+
+> 配置
+
+搜索所有分组
+
+```xml
+<dubbo:reference interface="com.xxx.MenuService" group="*" merger="true" />
+```
+
+> 合并指定分组
+
+```xml
+<dubbo:reference interface="com.xxx.MenuService" group="aaa,bbb" merger="true" />
+```
+
+> 指定方法合并结果，其它未指定的方法，将只调用一个 Group
+
+```xml
+<dubbo:reference interface="com.xxx.MenuService" group="*">
+    <dubbo:method name="getMenuItems" merger="true" />
+</dubbo:service>
+```
+
+> 某个方法不合并结果，其它都合并结果
+
+```xml
+<dubbo:reference interface="com.xxx.MenuService" group="*" merger="true">
+    <dubbo:method name="getMenuItems" merger="false" />
+</dubbo:service>
+```
+
+指定合并策略，缺省根据返回值类型自动匹配，如果同一类型有两个合并器时，需指定合并器的名称
+
+```xml
+<dubbo:reference interface="com.xxx.MenuService" group="*">
+    <dubbo:method name="getMenuItems" merger="mymerge" />
+</dubbo:service>
+```
+
+指定合并方法，将调用返回结果的指定方法进行合并，合并方法的参数类型必须是返回结果类型本身
+
+```xml
+<dubbo:reference interface="com.xxx.MenuService" group="*">
+    <dubbo:method name="getMenuItems" merger=".addAll" />
+</dubbo:service>
+```
