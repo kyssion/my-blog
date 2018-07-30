@@ -298,3 +298,99 @@ try {
 ```xml
 <dubbo:service delay="-1" />
 ```
+
+> 注意：Spring 2.x 初始化死锁问题
+
+原因描述
+在 Spring 解析到 <dubbo:service /> 时，就已经向外暴露了服务，而 Spring 还在接着初始化其它 Bean。如果这时有请求进来，并且服务的实现类里有调用 applicationContext.getBean() 的用法。
+
+1. 请求线程的 applicationContext.getBean() 调用，先同步 singletonObjects 判断 Bean 是否存在，不存在就同步 beanDefinitionMap 进行初始化，并再次同步 singletonObjects 写入 Bean 实例缓存。
+
+2. 而 Spring 初始化线程，因不需要判断 Bean 的存在，直接同步 beanDefinitionMap 进行初始化，并同步 singletonObjects 写入 Bean 实例缓存。
+
+这样就导致 getBean 线程，先锁 singletonObjects，再锁 beanDefinitionMap，再次锁 singletonObjects。
+而 Spring 初始化线程，先锁 beanDefinitionMap，再锁 singletonObjects。反向锁导致线程死锁，不能提供服务，启动不了。
+
+## 并发控制
+
+配置样例
+
+> 样例 1
+
+限制 com.foo.BarService 的每个方法，服务器端并发执行（或占用线程池线程数）不能超过 10 个：
+
+```xml
+<dubbo:service interface="com.foo.BarService" executes="10" />
+```
+
+> 样例 2
+
+限制 com.foo.BarService 的 sayHello 方法，服务器端并发执行（或占用线程池线程数）不能超过 10 个：
+
+```xml
+<dubbo:service interface="com.foo.BarService">
+    <dubbo:method name="sayHello" executes="10" />
+</dubbo:service>
+```
+
+> 样例 3
+
+限制 com.foo.BarService 的每个方法，每客户端并发执行（或占用连接的请求数）不能超过 10 个：
+
+```xml
+<dubbo:service interface="com.foo.BarService" actives="10" />
+或
+
+<dubbo:reference interface="com.foo.BarService" actives="10" />
+```
+
+> 样例 4
+
+
+限制 com.foo.BarService 的 sayHello 方法，每客户端并发执行（或占用连接的请求数）不能超过 10 个：
+
+```xml
+<dubbo:service interface="com.foo.BarService">
+    <dubbo:method name="sayHello" actives="10" />
+</dubbo:service>
+或
+<dubbo:reference interface="com.foo.BarService">
+    <dubbo:method name="sayHello" actives="10" />
+</dubbo:service>
+```
+
+注意：如果 \<dubbo:service> 和 \<dubbo:reference> 都配了actives，\<dubbo:reference> 优先，参见：配置的覆盖策略。
+
+> Load Balance 均衡
+
+配置服务的客户端的 loadbalance 属性为 leastactive，此 Loadbalance 会调用并发数最小的 Provider（Consumer端并发数）。
+
+```xml
+<dubbo:reference interface="com.foo.BarService" loadbalance="leastactive" />
+或
+<dubbo:service interface="com.foo.BarService" loadbalance="leastactive" />
+```
+
+## 连接控制
+
+> 服务端连接控制
+
+限制服务器端接受的连接不能超过 10 个：
+
+```xml
+<dubbo:provider protocol="dubbo" accepts="10" />
+或
+<dubbo:protocol name="dubbo" accepts="10" />
+```
+
+> 客户端连接控制
+
+限制客户端服务使用连接不能超过 10 个：
+
+```xml
+<dubbo:reference interface="com.foo.BarService" connections="10" />
+或
+<dubbo:service interface="com.foo.BarService" connections="10" />
+```
+
+如果 \<dubbo:service> 和 \<dubbo:reference> 都配了 connections，\<dubbo:reference> 优先
