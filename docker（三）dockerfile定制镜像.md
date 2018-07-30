@@ -6,13 +6,13 @@ Dockerfile 是一个文本文件，其内包含了一条条的指令(Instruction
 
 ### docker 指令
 
-#### 1. FROM 指定基础镜像
+#### FROM 指定基础镜像
 
 所谓定制镜像，那一定是以一个镜像为基础，在其上进行定制。就像我们之前运行了一个 nginx 镜像的容器，再进行修改一样，基础镜像是必须指定的。而 FROM 就是指定基础镜像，因此一个 Dockerfile 中 FROM 是必备的指令，并且必须是第一条指令。
 
 From 命令可以制定特定的服务类的镜像如 nginx、redis、mongo、mysql、httpd、php、tomcat 等，或者编程语言镜像如 node、openjdk、python、ruby、golang 等，或者操作系统如 ubuntu、debian、centos、fedora、alpine 等，或者使用空白镜像scratch（这个镜像只能运行可执行文件）
 
-#### 2. run 命令
+#### run 命令
 
 RUN 指令是用来执行命令行命令的。由于命令行的强大能力，RUN 指令在定制镜像时是最常用的指令之一。其格式有两种：
 
@@ -62,7 +62,7 @@ RUN buildDeps='gcc libc6-dev make' \
 
 此外，还可以看到这一组命令的最后添加了清理工作的命令，删除了为了编译构建所需要的软件，清理了所有下载、展开的文件，并且还清理了 apt 缓存文件。这是很重要的一步，我们之前说过，镜像是多层存储，每一层的东西并不会在下一层被删除，会一直跟随着镜像。因此镜像构建时，一定要确保每一层只添加真正需要添加的东西，任何无关的东西都应该清理掉。
 
-### 3. docker build命令
+### docker build命令
 
 docker build 命令将会自动的将docker file 文件进行运行构建出镜像
 
