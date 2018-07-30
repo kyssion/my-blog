@@ -401,7 +401,6 @@ public class DubboConfiguration {
 }
 ```
 
-
 > 指定dubbo扫描路径
 
 ```java
