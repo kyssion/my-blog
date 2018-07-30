@@ -282,3 +282,19 @@ try {
 - Mock 是 Stub 的一个子集，便于服务提供方在客户端执行容错逻辑，因经常需要在出现 RpcException (比如网络失败，超时等)时进行容错，而在出现业务异常(比如登录用户名密码错误)时不需要容错，如果用 Stub，可能就需要捕获并依赖 RpcException 类，而用 Mock 就可以不依赖 RpcException，因为它的约定就是只有出现 RpcException 时才执行。
 
 - 在 interface 旁放一个 Mock 实现，它实现 BarService 接口，并有一个无参构造函数
+
+## 延迟暴露
+
+如果你的服务需要预热时间，比如初始化缓存，等待相关资源就位等，可以使用 delay 进行延迟暴露。
+
+延迟 5 秒暴露服务
+
+```xml
+<dubbo:service delay="5000" />
+```
+
+延迟到 Spring 初始化完成后，再暴露服务 [1]
+
+```xml
+<dubbo:service delay="-1" />
+```
