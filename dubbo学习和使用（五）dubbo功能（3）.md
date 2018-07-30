@@ -415,7 +415,7 @@ try {
 
 通过令牌验证在注册中心控制权限，以决定要不要下发令牌给消费者，可以防止消费者绕过注册中心访问提供者，另外通过注册中心可灵活改变授权方式，而不需修改或升级提供者
 
-/user-guide/images/dubbo-token.jpg
+![](blogimg/dubbo/n10.png)
 
 可以全局设置开启令牌验证：
 
@@ -443,3 +443,4 @@ try {
 <!--固定token令牌，相当于密码-->
 <dubbo:protocol name="dubbo" token="123456" />
 ```
+
