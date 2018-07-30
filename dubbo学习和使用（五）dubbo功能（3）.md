@@ -196,3 +196,89 @@ for (int i = 0; i < 10; i++) {
 }
 Assert.assertEquals(requestId, notify.ret.get(requestId).getId());
 ```
+
+## 本地存根
+
+> 远程服务后，客户端通常只剩下接口，而实现全在服务器端，但提供方有些时候想在客户端也执行部分逻辑，比如：做 ThreadLocal 缓存，提前验证参数，调用失败后伪造容错数据等等，此时就需要在 API 中带上 Stub，客户端生成 Proxy 实例，会把 Proxy 通过构造函数传给 Stub，然后把 Stub 暴露给用户，Stub 可以决定要不要去调 Proxy。
+
+![](blogimg/dubbo/n9.png)
+
+在 spring 配置文件中按以下方式配置：
+
+```xml
+<dubbo:service interface="com.foo.BarService" stub="true" />
+或者
+<dubbo:service interface="com.foo.BarService" stub="com.foo.BarServiceStub" />
+```
+
+提供 Stub 的实现：
+
+```java
+package com.foo;
+public class BarServiceStub implements BarService { 
+    private final BarService barService;
+    
+    // 构造函数传入真正的远程代理对象
+    public (BarService barService) {
+        this.barService = barService;
+    }
+ 
+    public String sayHello(String name) {
+        // 此代码在客户端执行, 你可以在客户端做ThreadLocal本地缓存，或预先验证参数是否合法，等等
+        try {
+            return barService.sayHello(name);
+        } catch (Exception e) {
+            // 你可以容错，可以做任何AOP拦截事项
+            return "容错数据";
+        }
+    }
+}
+```
+1. Stub 必须有可传入 Proxy 的构造函数。
+
+2. 在 interface 旁边放一个 Stub 实现，它实现 BarService 接口，并有一个传入远程 BarService 实例的构造函数
+
+## 本地伪装
+
+本地伪装通常用于服务降级，比如某验权服务，当服务提供方全部挂掉后，客户端不抛出异常，而是通过 Mock 数据返回授权失败。
+
+在 spring 配置文件中按以下方式配置：
+
+```xml
+<dubbo:reference interface="com.foo.BarService" mock="true" />
+或
+<dubbo:reference interface="com.foo.BarService" mock="com.foo.BarServiceMock" />
+```
+
+在工程中提供 Mock 实现：
+
+```java
+package com.foo;
+public class BarServiceMock implements BarService {
+    public String sayHello(String name) {
+        // 你可以伪造容错数据，此方法只在出现RpcException时被执行
+        return "容错数据";
+    }
+}
+```
+
+如果服务的消费方经常需要 try-catch 捕获异常，如
+
+```java
+Offer offer = null;
+try {
+    offer = offerService.findOffer(offerId);
+} catch (RpcException e) {
+   logger.error(e);
+}
+```
+
+请考虑改为 Mock 实现，并在 Mock 实现中 return null。如果只是想简单的忽略异常，在 2.0.11 以上版本可用
+
+```xml
+<dubbo:reference interface="com.foo.BarService" mock="return null" />
+```
+
+- Mock 是 Stub 的一个子集，便于服务提供方在客户端执行容错逻辑，因经常需要在出现 RpcException (比如网络失败，超时等)时进行容错，而在出现业务异常(比如登录用户名密码错误)时不需要容错，如果用 Stub，可能就需要捕获并依赖 RpcException 类，而用 Mock 就可以不依赖 RpcException，因为它的约定就是只有出现 RpcException 时才执行。
+
+- 在 interface 旁放一个 Mock 实现，它实现 BarService 接口，并有一个无参构造函数
