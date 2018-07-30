@@ -6,7 +6,7 @@ Dubbo 采用全 Spring 配置方式，透明化接入应用，对应用没有任
 
 ### 服务提供者
 
-> 定义服务接口 DemoService.java [1]：
+> 定义服务接口 DemoService.java：
 
 ```java
 package com.kys.dubbo.demo;
