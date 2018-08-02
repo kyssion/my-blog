@@ -45,7 +45,7 @@ spring 只用maven的parent继承的方法（gradle类似）进行依赖管理�
 	</dependencies>
 </dependencyManagement>
 ```
-### springBoot starter，springBoot可以实现自动化配置的核心方法
+### springBoot starter-springBoot可以实现自动化配置的核心方法
 
 springBoot提供了一系列的starter方便进行自动化配置，比如spring-boot-starter-web
 
@@ -188,9 +188,6 @@ class Runtest implements ApplicationRunner {
 #spring boot 带有状态的结束 使用exit 运行程序
 
 在调用SpringApplication.exit（）时希望返回特定的退出代码，那么bean可以实现org.springframework.boot.ExitCodeGenerator接口。 ，然后可以将此退出代码传递给System.exit（）以将其作为状态代码返回，
-
-
-
 
 ```java
 /**
