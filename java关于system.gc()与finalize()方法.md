@@ -10,7 +10,6 @@
 
 1. 一些与finalize相关的方法，由于一些致命的缺陷，已经被废弃了，如System.runFinalizersOnExit()方法、Runtime.runFinalizersOnExit()方法
 System.gc()与System.runFinalization()方法增加了finalize方法执行的机会，但不可盲目依赖它们
-2
 
 2. Java语言规范并不保证finalize方法会被及时地执行、而且根本不会保证它们会被执行
 finalize方法可能会带来性能问题。因为JVM通常在单独的低优先级线程中完成finalize的执行
