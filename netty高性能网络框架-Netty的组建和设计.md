@@ -21,7 +21,7 @@
 
 这个接口相当于一个人容器，控制链接生命周期所发生的相关所有的事件。
 
-Channel、EventLoop、Thread、EventLoopGroup之间的关系如下图：
+Channel、EventLoop、Thread、EventLoopGroup之间的关系如下图： 
 
 ![](blogimg/netty/1.png)
 
