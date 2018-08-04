@@ -31,7 +31,7 @@ Class<?> itemClass3 = Class.forName("java.lang.String");
 Class<?> fatherClass = itemClass.getSuperClass();
 ```
 
-### 2. 使用class创建类
+### 2. 使用class类
 
 > 使用newInstance生成对象
 
@@ -46,6 +46,23 @@ Constructor<?> constructor = itemClass.getConstructor(Integer.class,String.class
 //返回这个class所含有的所有方法--不包括继承的方法--只能使用自己定义的构造方法
 Constructor<?>[] constructors = itemClass.getConstructors();
 constructor.newInstance(12,"sf");
+```
+
+> 其他用法
+
+```java
+//--返回成员枚举类型 如果不是枚举类型返回 null
+class1.getEnumConstants();
+//---class 类强制转化方法
+class1.asSubclass(class2);//将class1转化成class2
+class1.cast(i);// 讲 i强制转化成 class1所表示的实现类
+//获得classloader
+ClassLoader acClassLoader = class1.getClassLoader();
+Class<?>[] classes=class2.getInterfaces();//获得接口数组
+String string = class1.getName();//返回类名称
+Package string2 =class1.getPackage();//返回变量的包类
+URL rUrl = class1.getResource("xx");//返回给定名称所属的资源
+InputStream string3 = class1.getResourceAsStream("xxx");//将给定的资源变成输入流
 ```
 
 ### 使用反射获取类加载器
@@ -97,9 +114,21 @@ Thread.currentThread().getContextClassLoader().getResource(“test.txt”).getFi
 Method method = class1.getDeclaredMethod("xx", Integer.class);
 //方法处理继承的方法
 Method method2 = class1.getMethod("x", Integer.class);
+Annotation[][] annotations = method.getParameterAnnotations();//返回一个注解的二维数组 --同上面
+Annotation[] annotations2=method.getAnnotations();
+Class<?>[] class3 = method.getParameterTypes();//返回参数数组
+Class<?> class4 = method.getReturnType();//返回返回值数组
+int count=method.getParameterCount();//返回参数的数量
+Parameter[] parameters=method.getParameters();//返回参数列表
+parameters[0].getName();
+parameters[0].getType();//返回类型的class数组
+//参数类型没有注入 参数
+method.invoke(new ThisisCeshe(), null);//类似 FIeld的get方法--调用指定的实例的一个此method指定的方法
 ```
 
 ### Field字段
+
+field 相关方法
 
 ```java
 //--成员变量
@@ -108,18 +137,41 @@ Field field2= class1.getField("xxixi");//返回变量名称包括父元素的成
 //f ye e d
 Field[] fields=class1.getDeclaredFields();//返回所有直接的成员变量
 Field[] fields2 = class1.getFields();//返回所有的成员变量 包括父类进行继承的变量
+field.get(new ThisisCeshe());//返回object 传入一个得出field对象的class的实例才能对其使用 取出实例中的对应的field对象 --存在基本类型的那一坨方法
+field.getType();//返回一个class 对象表明这个字段的类型
+field.getName();//返回这个字段的名字
+field.set(new Integer(12), 123);//在前一个对象中 加入 后一个变量到field指定的变量上 --存在基本类型的那一坨方法
+int a=field.getModifiers();//返回参数类型--public或者其他
 ```
 
-### 注解使用
+### Annotated字段
 
 所有继承和实现了AnnotatedElement接口的类都具有返回对应的接口信息的方法，比如class method feild constructor
 
+> 注意下面的代码 *** 表示全部的反射都支持，特殊情况使用||分割
+
 ```java
-Annotation annotation = xxx.getAnnotation(hehehe.class);//返回当前类中是否存在出传入的注解 有的时候将会进行返回相应的注解
-//class1.isAnnotationPresent(Ceshi2.class);//判断是否存在一个注解
-Annotation[] annotations = xxx.getAnnotations();//返回类中所有的注解包括继承的
-Annotation[] annotations2= xxx.getDeclaredAnnotations();//f返回类中直接继承的元素
+Target Target = ***.getAnnotation(Target.class);//返回当前类中是否存在传入的注解 有的时候将会进行返回相应的注解
+***.isAnnotationPresent(Ceshi2.class);//判断是否存在一个注解
+Annotation[] annotations = ***.getAnnotations();//返回类中所有的注解包括继承的
+Annotation[] annotations2= ***.getDeclaredAnnotations();//f返回类中直接继承的元素
 ```
+
+注解的用法
+
+```java
+
+Annotation[][] annotation = constructor.getParameterAnnotations();
+//所使用类型判断 强制转换
+if(annotation[0][0] instanceof Target){
+    Target targets= (Target) annotation[0][0];
+}
+
+//直接获取直接使用
+Target annotation = ***.getAnnotation(Target.class);
+```
+
+
 
 ### 特殊的enclose* 方法
 
@@ -208,3 +260,26 @@ public class Outer {
 
 这个方法是针对内部类的，如果这个class是一个内部类通过这个方法可以得出这个内部类对应的声明位置
 
+### array 范型
+
+```java
+//创建一个第二个参数是边长参数的组 第一个参数是指定类型的数组
+Array[][] arrays=(Array[][]) Array.newInstance(Integer.class, 100,100);
+Array.get(arrays, 0);//返回制定对象索引的值 注意只能返回一维 并且返回的对象是object类型---相关  函数还有getint等基本类型
+Array.set(arrays, 0, new Integer(12));//将指定的类型传递到数组指定的位置中
+```
+
+### AccessibleObject
+
+> AccessibleObject是 Method Fielt Construction的一个父类-都实现了此类的方法,这个类主要是扩展了访问权限的控制
+
+```java
+AccessibleObject accessibleObject = null;
+accessibleObject.isAnnotationPresent(hehehe.class);//判断这个类是否实现了hehehe这个接口
+accessibleObject.getAnnotation(hehehe.class);
+accessibleObject.getAnnotations();
+//!!!---设置当前东西的访问性--- 设置为true的时候将可以实现对私有变量的  该便似有变量和成员的访问性
+accessibleObject.setAccessible(true);
+```
+
+尤其要注意这个地方setAccessible(true); 正是通过这个配置方法的访问权限
