@@ -16,49 +16,52 @@ DI   Dependency Injection  依赖注入
 
 ```java
 1. bean标签就是计入进spring bean工厂中的类 属性 id 是他的名字 class是,底层进行 class 反射的类底层默认使用的反射生成实例 所以 bean必须有无参的构造函数
-     相关参数
+    相关参数:
 	id - 属性的名字-不能重复
 	class - 属性的实现类
-	parent - 指的是这个bean 要将xml文件中那个bean的标签加入进来，通常和abstract标记连用
-		继承的属性子类将不能继承父类的depends-on autowire singleton scope lazy-init属性
+	parent - 指的是这个bean 要将xml文件中那个bean的标签加入进来，通常和abstract标记连用,继承的属性子类将不能继承父类的depends-on autowire singleton scope lazy-init属性
 	abstract - spring容器将不会尝试对他进行单例话而只是用来作为模板用在parent的属性上
-	autowrite - bean对其bean的引用可以自动进行，而不一定用ref=的方式显式声明，有五种表示方法
-		no  byname-根据注入的属性名（set方法去掉set小写首字母）称自动的注入相关的bean的id
-		bytype-查找同名后者同类型的属性超过两个会报错
-		constructor - 使用构造器中的参数类型进行匹配
+	autowrite - bean对其bean的引用可以自动进行，而不一定用ref=的方式显式声明，有五种表示方法:
+		- no  byname-根据注入的属性名（set方法去掉set小写首字- 母）称自动的注入相关的bean的id
+		- bytype-查找同名后者同类型的属性超过两个会报错
+		- constructor - 使用构造器中的参数类型进行匹配
 	autowirte-candidate- 在bean的自动装配(autowrite)方法中是否忽略这个方法
 	depend-on 表示这个方法的实例化优先于那个实例-强制初始化bean实例
 	name - 表示这个属性的别名
 	lazy-init - 表示spring框架将会进行延迟加载bean方法-（创建的时候不会调用 set方法进行实例化操作）使用的时候才进行创建
 	scope-指明bean实例化的时候使用的模式 
-		singleton-单利模式 单例模式相比较prototype 速度要快的多
-		prototype-模版模式 request-对于一次request请求
-		request作用域的bean实例只生成一个实例
-		session -对于一次session session作用域将只生成一次请求
+		- singleton-单利模式 单例模式相比较prototype 速度要快的多
+		- prototype-模版模式 request-对于一次request请求
+		- request作用域的bean实例只生成一个实例
+		- session -对于一次session session作用域将只生成一次请求
 	factory-method 指定spring的加载方式是使用工厂方法的时候调用这个工厂方法中的那个类实现相关的方法
 	factory-bean 指定相关的工厂方法进行相关的配置
 	destroy-method  指定销毁的方法
 	init-method 指定初始化的方法
 	profile-这个属性将会检查环境和Profile中的值 是否对应,有选择性的启用Bean的配置,配置在beans 中将会导致全局的效果,配置在bean中将只对这个标签有效
 2.property 是要进行依赖注入 的成员变量
-		name表示变量名称 
-		ref表示要注入的其他bean 实例
-		value 表示要进行注入的基本类型 注意不能注入自己定义的变量 
+		- name表示变量名称 
+		- ref表示要注入的其他bean 实例
+		- value 表示要进行注入的基本类型 注意不能注入自己定义的变量 
 3.spring框架默认使用无参数的构造器 如果想使用有参数的构造器需要使用构造器注入
 	constructor-agr-标签中可以传入几个参数 
-		index 	表示第几个参数
-		name 	表示参数的名称
-		ref 	同上
-		value  	同上
-		type 	制定参数的类型，可以使用非基本类型
+		- index 	表示第几个参数
+		- name 	表示参数的名称
+		- ref 	同上
+		- value  	同上
+		- type 	制定参数的类型，可以使用非基本类型
 4. beans 标签 表示一堆bean的集合 里面的属性表示是应用于所有有关这个的方法
-	default-lazy-init
-	default-merge -制定beans下所有的默认合并行为
-	default-autowire
-	dafault-autowire-condiadates
-	default-init-method - 所有bean的默认初始化行为
-	default-destroy-method - 所有bean的默认回收方法
-	profile-这个属性将会检查环境和Profile中的值 是否对应,有选择性的启用Bean的配置,配置在beans 中将会导致全局的效果,配置在bean中将只对这个标签有效
+	- default-lazy-init
+	- default-merge -制定beans下所有的默认合并行为
+	- default-autowire
+	- dafault-autowire-condiadates
+	- default-init-method - 所有bean的默认初始化行为
+	- default-destroy-method - 所有bean的默认回收方法
+	- profile-这个属性将会检查环境和Profile中的值 是否对应,有选择性的启用Bean的配置,配置在beans 中将会导致全局的效果,配置在bean中将只对这个标签有效
+5. 其他标签
+    alias - 重命名标签
+        - name - 原始名称
+		- alias -  重命名之后的名称
 ```
 
 #### parent abstract和list  map set Properties   属性使用
