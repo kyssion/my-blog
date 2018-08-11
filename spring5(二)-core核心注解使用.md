@@ -522,10 +522,6 @@ public class AppConfig {
 }
 ```
 
-
-
-
-
 #### 使用value 实现特殊的表达式注入
 
 xml文件
@@ -562,7 +558,6 @@ public class AppConfig {
 
 ```
 
-
 #### 一个例子
 
 ```java
@@ -597,3 +592,24 @@ class Demo1 {
 }
 ```
 > 注意:BeanPostProcessor和BeanFactoryPostProcessor 应该声明为static @Bean方法 , 防止processor生效之前有数据被初始化
+
+### spring lookup 方法注入注解@Lookup
+
+具体的功能和xml相同，LookUp提供了两种参数当有参数的时候将会自动寻找容器中beanid对应参数的bean，否则将会基于返回类型进行添加
+
+```java
+public abstract class CommandManager {
+
+    public Object process(Object commandState) {
+        Command command = createCommand();
+        command.setState(commandState);
+        return command.execute();
+    }
+
+    @Lookup("myCommand")
+    protected abstract Command createCommand();
+
+    @Lookup
+    protected abstract MyCommand createCommand();
+}
+```

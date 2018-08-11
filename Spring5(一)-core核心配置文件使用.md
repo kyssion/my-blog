@@ -23,10 +23,10 @@ DI   Dependency Injection  依赖注入
 	class - 属性的实现类
 	parent - 指的是这个bean 要将xml文件中那个bean的标签加入进来，通常和abstract标记连用,继承的属性子类将不能继承父类的depends-on autowire singleton scope lazy-init属性
 	abstract - spring容器将不会尝试对他进行单例话而只是用来作为模板用在parent的属性上
-	autowrite - bean对其bean的引用可以自动进行，而不一定用ref=的方式显式声明，有五种表示方法:
+	autowrite（会覆盖显示自动装配） - bean对其bean的引用可以自动进行，而不一定用ref=的方式显式声明，有五种表示方法:
 		- no  byname-根据注入的属性名（set方法去掉set小写首字- 母）称自动的注入相关的bean的id
 		- bytype-查找同名后者同类型的属性超过两个会报错
-		- constructor - 使用构造器中的参数类型进行匹配
+		- constructor - 使用构造器中的参数类型进行匹配  需要和constructor（使用构造注入的时候相互配合）
 	autowirte-candidate- 在bean的自动装配(autowrite)方法中是否忽略这个方法
 	depend-on 表示这个方法的实例化优先于那个实例-强制初始化bean实例
 	name - 表示这个属性的别名
@@ -45,12 +45,15 @@ DI   Dependency Injection  依赖注入
 		name表示变量名称 
 		ref表示要注入的其他bean 实例  （idref：不知道为啥存在感觉没用）
 		value 表示要进行注入的基本类型 注意不能注入自己定义的变量 这个可以传入多个值，自动变成list
+		     	注意在注入的时候可以使用复合属性名称比如：（此特性针对对象，并且使用保证具有set方法和不为空）
+				 	<property name="fred.bob.sammy" value="123" />
 		子标签 ：list set mpa orops - 分别对应 List，Set，Map，和Properties
 		子标签 ：null - 设置空值 （如果使用“”还是会设置成“”）
 3.spring框架默认使用无参数的构造器 如果想使用有参数的构造器需要使用构造器注入
 	constructor-agr-标签中可以传入几个参数 
 		- index 	表示第几个参数
-		- name 	表示参数的名称
+		- name 	表示参数的名称 ！！！ 注意如果jdk沒有使用保留参数名称的编译选项的时候
+					需要使用 @ConstructorProperties({"years", "ultimateAnswer"})显示的表明变量名称
 		- ref 	同上
 		- value  	同上
 		- type 	制定参数的类型，可以使用非基本类型
