@@ -12,7 +12,9 @@ DI   Dependency Injection  依赖注入
 如果要在A里面使用C，你会怎么做呢？当然是直接去创建C的对象，也就是说，是在A类中主动去获取所需要的外部资源C，这种情况被称为正向的。那么什么是反向呢？就是A类不再主动去获取C，而是被动等待，等待IoC/DI的容器获取一个C的实例，然后反向的注入到A类中
 
 
-### spring IOC 配置文件
+### spring IOC bean 配置文件
+
+> 注意：不使用构造注入的时候，将会使用setter注入所以必须提供setter函数
 
 ```java
 1. bean标签就是计入进spring bean工厂中的类 属性 id 是他的名字 class是,底层进行 class 反射的类底层默认使用的反射生成实例 所以 bean必须有无参的构造函数
@@ -40,9 +42,17 @@ DI   Dependency Injection  依赖注入
 	init-method 指定初始化的方法
 	profile-这个属性将会检查环境和Profile中的值 是否对应,有选择性的启用Bean的配置,配置在beans 中将会导致全局的效果,配置在bean中将只对这个标签有效
 2.property 是要进行依赖注入 的成员变量
+<<<<<<< HEAD:Spring5(一)-core核心配置文件使用.md
+		name表示变量名称 
+		ref表示要注入的其他bean 实例  （idref：不知道为啥存在感觉没用）
+		value 表示要进行注入的基本类型 注意不能注入自己定义的变量 这个可以传入多个值，自动变成list
+		子标签 ：list set mpa orops - 分别对应 List，Set，Map，和Properties
+		子标签 ：null - 设置空值 （如果使用“”还是会设置成“”）
+=======
 		- name表示变量名称 
 		- ref表示要注入的其他bean 实例
 		- value 表示要进行注入的基本类型 注意不能注入自己定义的变量 
+>>>>>>> 6fd73c4c4e8ee1a3b6c1b7b5d533801de31c3f47:Spring5-core核心配置文件使用.md
 3.spring框架默认使用无参数的构造器 如果想使用有参数的构造器需要使用构造器注入
 	constructor-agr-标签中可以传入几个参数 
 		- index 	表示第几个参数
@@ -63,6 +73,60 @@ DI   Dependency Injection  依赖注入
         - name - 原始名称
 		- alias -  重命名之后的名称
 ```
+
+### spring 自动配置内部类
+
+#### 内部类注入方式一：添加内部类默认构造函数参数
+
+非静态的内部类默认的构造函数有一个参数，这个参数指向其外部类的实例，所以我们需要给此内部类的bean添加constructor-arg节点，并指向外部类即可，配置文件：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd">
+	<bean class="cn.outofmemory.spring.Person" id="person">
+		<property name="hands">
+			<list>
+				<bean class="cn.outofmemory.spring.Person$Hand">
+					<constructor-arg ref="person"></constructor-arg>
+					<property name="strength" value="90"/>
+				</bean>
+			</list>
+		</property>
+	</bean>
+</beans>
+```
+
+#### 内部类注入方式二：将内部类修改为static
+
+这个使用不需要访问外部，所以就和外部类型等同了
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd">
+	<bean class="cn.outofmemory.spring.Person" id="person">
+		<property name="hands">
+			<list>
+				<bean class="cn.outofmemory.spring.Person$Hand">
+					<property name="strength" value="90"/>
+				</bean>
+			</list>
+		</property>
+	</bean>
+</beans>
+```
+
+> 注意spring 声明内部类的时候需要特殊处理,需要通过外部类$内部类名来使用
+
+```xml
+<bean id="serviceAware" class="com.qing.platform.schedule.scheduling.impl.Utils$ServiceAware" />
+```
+
 
 #### parent abstract和list  map set Properties   属性使用
 
