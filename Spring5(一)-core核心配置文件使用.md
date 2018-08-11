@@ -448,3 +448,46 @@ applicationContext.registerShutdownHook();
     </bean>
 </beans>
 ```
+
+------
+
+### 特殊用法 metho完全替换
+
+使用基于XML的配置元数据，您可以使用被替换的方法元素将已有的方法实现替换为已部署的bean
+
+比如需要替换MyValueCalculator类的cmputeValue方法
+
+> MyValueCalculator类
+
+```java
+public class MyValueCalculator {
+    public String computeValue(String input) {
+        // some real code...
+    }
+    // some other methods...
+}
+```
+
+> 替换的方法需要继承MethodReplacer接口并且在xml中进行配置
+
+```java
+public class ReplacementComputeValue implements MethodReplacer {
+    public Object reimplement(Object o, Method m, Object[] args) throws Throwable {
+        // get the input value, work with it, and return a computed result
+        String input = (String) args[0];
+        ...
+        return ...;
+    }
+}
+```
+
+```xml
+<bean id="myValueCalculator" class="x.y.z.MyValueCalculator">
+    <!-- arbitrary method replacement -->
+    <replaced-method name="computeValue" replacer="replacementComputeValue">
+        <arg-type>String</arg-type>
+    </replaced-method>
+</bean>
+<bean id="replacementComputeValue" class="a.b.c.ReplacementComputeValue"/>
+```
+
