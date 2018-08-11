@@ -42,17 +42,11 @@ DI   Dependency Injection  依赖注入
 	init-method 指定初始化的方法
 	profile-这个属性将会检查环境和Profile中的值 是否对应,有选择性的启用Bean的配置,配置在beans 中将会导致全局的效果,配置在bean中将只对这个标签有效
 2.property 是要进行依赖注入 的成员变量
-<<<<<<< HEAD:Spring5(一)-core核心配置文件使用.md
 		name表示变量名称 
 		ref表示要注入的其他bean 实例  （idref：不知道为啥存在感觉没用）
 		value 表示要进行注入的基本类型 注意不能注入自己定义的变量 这个可以传入多个值，自动变成list
 		子标签 ：list set mpa orops - 分别对应 List，Set，Map，和Properties
 		子标签 ：null - 设置空值 （如果使用“”还是会设置成“”）
-=======
-		- name表示变量名称 
-		- ref表示要注入的其他bean 实例
-		- value 表示要进行注入的基本类型 注意不能注入自己定义的变量 
->>>>>>> 6fd73c4c4e8ee1a3b6c1b7b5d533801de31c3f47:Spring5-core核心配置文件使用.md
 3.spring框架默认使用无参数的构造器 如果想使用有参数的构造器需要使用构造器注入
 	constructor-agr-标签中可以传入几个参数 
 		- index 	表示第几个参数
