@@ -122,7 +122,7 @@ public class MyWebAppInitializer extends AbstractDispatcherServletInitializer {
 
 引申： tomcat 此处实现spi技术的解析
 
-spring的web包的META-INF的文件夹中有一个名为，javax.servlet.ServletContainerInitializer的文件，其中的内容org.springframework.web.SpringServletContainerInitializer，表示定义的ServletContainerInitializer和spring的实现接口SpringServletContainerInitializer，其中@HandlesTypes注解表示CustomServletContainerInitializer 可以处理的类，在onStartup 方法中，可以通过Set<Class<?>> c 获取得到。
+spring的web包的META-INF的文件夹中有一个名为，javax.servlet.ServletContainerInitializer的文件，其中的内容org.springframework.web.SpringServletContainerInitializer，表示定义的ServletContainerInitializer和spring的实现接口SpringServletContainerInitializer，其中@HandlesTypes注解表示ServletContainerInitializerde 可以处理的类，可以将感兴趣的一些类注入到ServletContainerInitializerde的onStartup方法作为参数传入。,在onStartup 方法中，可以通过Set<Class<?>> c 获取得到。
 
 见下面代码：
 
@@ -185,7 +185,7 @@ public static final String WEB_APPLICATION_CONTEXT_ATTRIBUTE = DispatcherServlet
 
 2. HandlerExceptionResolver 
 
-这个是试图返回的异常处理包括相关的错误处理方法
+这个是试图返回的异常处理包括相关的错误处理方法 -- 通过这种方法可以实现全局的异常捕获
 
 3. HandlerIntercepter 
 
@@ -703,7 +703,7 @@ public void handle(
 }
 ```
 
-- @ModelAttribute
+- @ModelAttribute @sessionAttribute @sessionattributes
 
 在使用model view 场景下，有如下的一应用
 
@@ -715,10 +715,17 @@ public class HelloWorldController {
     public void populateModel(@RequestParam String abc, Model model) { 
          model.addAttribute("attributeName", abc); 
     } 
-    @ModelAttribute("attributeName") 
+    //这种写法是进阶写法，相当于model.addAttribute("string", abc) key 方法的返回值类型想写 value 返回值
+    @ModelAttribute 
     public String addAccount(@RequestParam String abc) { 
         return abc; 
     } 
+    //上面的那种的自定义key的写法
+    @ModelAttribute(value="attributeName")
+    public String addAccount(@RequestParam String abc) { 
+        return abc; 
+    } 
+
     @RequestMapping(value = "/helloWorld") 
     public String helloWorld() { 
        return "helloWorld"; 
@@ -743,13 +750,21 @@ public class HelloWorldController {
 @Controller 
 public class HelloWorldController { 
     @RequestMapping(value = "/helloWorld") 
-    public String helloWorld(@ModelAttribute User user) { 
+    public String helloWorld(@ModelAttribute("user") User user) { 
         return "helloWorld"; 
      } 
 }
 ```
 
-@CookieValue  和之前的相同，就是将cookie中相关的数据拿出来
+- @SessionAttribute 和@SessionAttributes
+
+这两个对对象是配合ModeAttribute使用的 齐总SessionAttribute只有从Session作用域中取数据的作用而@SessionAttributes 就是将ModeAttribute中制定key的数据设置到Session作用域中来
+
+- @RequestAttribute
+
+这个方法只能取出 request作用域中的数据
+
+- @CookieValue  和之前的相同，就是将cookie中相关的数据拿出来
 
 ```java
 @GetMapping("/demo")
