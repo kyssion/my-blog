@@ -33,3 +33,52 @@ public class Demo {
 }
 
 ```
+
+### 使用switch 判断Enum对象
+
+
+
+```java
+public enum POSITION {
+    BEFORE(1), END(2), BEFEND(3), OTHER(4);
+    public int way;
+
+    POSITION(int way) {
+        this.way = way;
+    }
+
+    public int getWay() {
+        return way;
+    }
+
+    public void setWay(int way) {
+        this.way = way;
+    }
+
+    public static POSITION getPositionValue(int way) {
+        for (POSITION position : values()) {
+            if (position.getWay() == way) {
+                return position;
+            }
+        }
+        return OTHER;
+    }
+}
+public static String SolLikeFieldSqlInjPlbm(String s, POSITION sqlPostion) {
+    if (s == null || s.equals("")) {
+        return null;
+    }
+    switch (POSITION.getPositionValue(sqlPostion.getWay())) {
+        case BEFORE:
+            return "%" + s;
+        case END:
+            return s + "%";
+        case BEFEND:
+            return "%" + s + "%";
+        default:
+            return null;
+    }
+}
+```
+
+> 注意这里使用的getPositionValue 方法 因为POSTOPN相当一个声明和String类似，所以不能直接的使用sqlPostion来作为switch的标记，需要使用实现类来标记，所以使用switch的写法要这样写
