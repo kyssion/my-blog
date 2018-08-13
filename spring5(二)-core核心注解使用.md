@@ -46,7 +46,7 @@ xml配置文件
 @Lazy(true)//表示函数是否进行延迟加载
 @Required   //这个注解只能放在setXxxx()方法上，spring检测set方法有没有使用，如果没有使用将会抛出异常
 @order和@Priority //见下面啊autowrite方法  指定自动装配时候的优先级别
-@Primary //如果autowrite进行注入的时候存在多个类型并且造成了冲突(使用集合类型就不会出现冲突),解决的办法就是使用@primary,进行这个注解的bean将会优先的进行注入,多个就按照后面的覆盖前面的
+@Primary //进行这个注解的bean将会优先的进行注入,多个就按照后面的覆盖前面的
 @DependsOn //在配置类(configration)中可以指定相关的配置方法
 ```
 ------------
@@ -76,10 +76,11 @@ public @interface Scope {
 #### 类中元素上的注解
 
 ```java
-@Resource(name="beanTwo")//使用这个注解相当于在框架中使用ref  参数可以为空首先是使用byname匹配法然后使用bytype匹配法
+@Resource(name="beanTwo")//使用这个注解相当于在框架中使用ref  参数可以为空首先是使用byname匹配法如果没有匹配到将会使用bytype匹配法
+//注意 resource这个方法如果使用方法上或者参数上时将会使用参数的名称进行自定装配（但是要注意开启java的参数名称保留的编译选项）
 @Autowired//将方法中所有的参数都默认使用bytype模式进行自动的依赖注入  找不到type对应的bean或者存在多个bean都会抛出异常，如果制定了required=false的时候将不会抛出异常。
 //该注解可以使用在变量 set 或者普通方法上，他会自动的将相关的属性注入进去，如果有多个匹配，可以使用list，数组，set，map进行接收，否则将会报错
-@Qualifier("beanTwo")//用来和autowired连用 表示使用自动转配并且指定相关的bean名称进行自动的装配
+@Qualifier("beanTwo")//用来和autowired连用 表示使用自动转配并且指定相关的bean名称进行自动的装配-！！这个注解同样可以注解在方法的参数上
 @Primary // 调整多个多个候选项时候autowirte的注入方式
 ```
 @Autowired 使用方法引申 ：这个注解可以使用在变量 set 或者普通方法上，他会自动的将相关的属性注入进去，如果有多个匹配，可以使用list，数组，set，map进行接收，否则将会报错，如果想要诸如的bean按照顺序，可以使用@order或者@Priority在bean上指定顺序
@@ -99,7 +100,24 @@ public @interface Scope {
 @PreDestroy//相当于删除的方法在使用这个方法的时候将会在销毁的时候进行回调
 ```
 
-5.0 新注解 使用@Nullable 可以忽略@Autowired 应在函数上面的时候的参数
+#### @Resource, @Autowired 和 @Qualifier自动注入使用
+
+- @Resource： 默认使用name属性进行自动装配，@Resource 没有指定 name 属性，那么使用 byName 匹配失败后，会退而使用 byType 继续匹配，如果再失败，则抛出异常，将其标注在 BeanFactory 类型、ApplicationContext 类型、ResourceLoader 类型、ApplicationEventPublisher 类型、MessageSource 类型上，那么 Spring 会自动注入这些实现类的实例，不需要额外的操作。
+- @Autowired 和 @Qualifier 注解执行自动装配： 
+- 1. 只能是根据类型进行匹配   
+- 2. 可以用于 Setter 方法、构造函数、字段，甚至普通方法，前提是方法必须有至少一个参数   
+- 3. 可以用于数组和使用泛型的集合类型。然后 Spring 会将容器中所有类型符合的 Bean 注入进来。 
+- 4.  标注作用于 Map 类型，将容器中所有类型符合 Map 的 value 对应的类型的 Bean 增加进来，用 Bean 的 id 或 name 作为 Map 的 key 5.@Autowired 后面增加一个 @Qualifier 标注，提供一个 String 类型的值作为候选的 Bean 的名字
+
+```java
+@Autowired(required=false)
+@Qualifier("ppp")
+public void setPerson(person p){}
+@Autowired(required=false)
+public void sayHello(@Qualifier("ppp")Person p,String name){}
+```
+
+> 5.0 新注解 使用@Nullable 可以忽略@Autowired 应在函数上面的时候的参数
 
 ```java
 @Autowired
@@ -107,9 +125,9 @@ public void setMovieFinder(@Nullable MovieFinder movieFinder) {
      ...
 }
 ```
-@Autowired对于那些众所周知的解析依赖接口：BeanFactory，ApplicationContext，Environment，ResourceLoader， ApplicationEventPublisher，和MessageSource。这些接口及其扩展接口（如ConfigurableApplicationContext或ResourcePatternResolver）会自动解析，无需特殊设置。
+> @Autowired对于那些众所周知的解析依赖接口：BeanFactory，ApplicationContext，Environment，ResourceLoader， ApplicationEventPublisher，和MessageSource。这些接口及其扩展接口（如ConfigurableApplicationContext或ResourcePatternResolver）会自动解析，无需特殊设置。
 
-@Autowired，@Inject，@Resource，和@Value注释由Spring处理 **BeanPostProcessor实现**，也就是说不可以使用以上的注解去自动装配**BeanPostProcessor或BeanFactoryPostProcessor类型（如果有的话）**。这些类型必须通过XML或使用Spring @Bean方法明确地手动地进行配置 。
+> @Autowired，@Inject，@Resource，和@Value注释由Spring处理 **BeanPostProcessor实现**，也就是说不可以使用以上的注解去自动装配**BeanPostProcessor或BeanFactoryPostProcessor类型（如果有的话）**。这些类型必须通过XML或使用Spring @Bean方法明确地手动地进行配置 。
 
 ------------
 
@@ -118,7 +136,6 @@ public void setMovieFinder(@Nullable MovieFinder movieFinder) {
 这里指定了相关的java配置类返回的参数
 
 ```java
-@Configuration
 public class MovieConfiguration {
     @Bean
     @Primary
@@ -135,7 +152,51 @@ public class MovieConfiguration {
 </bean>
 ```
 
-#### @autowrite注解关联范型（模糊类型增强）举例
+#### @Qualifier注解 为spring 容器自动装配提供更多选项
+
+这个注解可以进行派生
+
+```java
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Qualifier
+public @interface MovieQualifier {
+    String genre();
+    Format format();// 注意fromat是一个枚举
+}
+
+public enum Format {
+    VHS, DVD, BLURAY
+}
+```
+
+> 可以让autowirte和自定义的genre动态的进行连用，从而提高自动装配的灵活性
+
+```java
+public class MovieRecommender {
+    @Autowired
+    @MovieQualifier(format=Format.VHS, genre="Action")
+    private MovieCatalog actionVhsCatalog;
+}
+```
+
+或者使用xml进行配置，qualitier 这个标签的attribute中使用kye，value唯一定位一个属性如果，自定义注解的时候没有相关的内部属性，可以直接使用type来唯一的限定一个标记
+
+```xml
+<bean class="example.SimpleMovieCatalog">
+    <qualifier type="MovieQualifier">
+        <attribute key="format" value="VHS"/>
+        <attribute key="genre" value="Action"/>
+    </qualifier>
+    <!-- inject any dependencies required by this bean -->
+    <bean class="example.SimpleMovieCatalog">
+        <qualifier type="Offline"/>
+        <!-- 表示有一个注解名字就是Offine -->
+    </bean>
+</bean>
+```
+
+#### @Autowrite注解关联范型（模糊类型增强）举例
 
 javabean
 
@@ -255,21 +316,6 @@ public @interface SessionScope {
 @PreDestroy//相当于删除的方法在使用这个方法的时候将会在销毁的时候进行回调
 ```
 
-- @Resource： 默认使用name属性进行自动装配，@Resource 没有指定 name 属性，那么使用 byName 匹配失败后，会退而使用 byType 继续匹配，如果再失败，则抛出异常，将其标注在 BeanFactory 类型、ApplicationContext 类型、ResourceLoader 类型、ApplicationEventPublisher 类型、MessageSource 类型上，那么 Spring 会自动注入这些实现类的实例，不需要额外的操作。
-- @Autowired 和 @Qualifier 注解执行自动装配： 
-- 1. 只能是根据类型进行匹配   
-- 2. 可以用于 Setter 方法、构造函数、字段，甚至普通方法，前提是方法必须有至少一个参数   
-- 3. 可以用于数组和使用泛型的集合类型。然后 Spring 会将容器中所有类型符合的 Bean 注入进来。 
-- 4.  标注作用于 Map 类型，将容器中所有类型符合 Map 的 value 对应的类型的 Bean 增加进来，用 Bean 的 id 或 name 作为 Map 的 key 5.@Autowired 后面增加一个 @Qualifier 标注，提供一个 String 类型的值作为候选的 Bean 的名字
-
-```java
-@Autowired(required=false)
-@Qualifier("ppp")
-public void setPerson(person p){}
-@Autowired(required=false)
-public void sayHello(@Qualifier("ppp")Person p,String name){}
-```
-
 ### 配置类注解@Configuration
 
 >AnnotationConfigApplicationContext
@@ -283,6 +329,7 @@ ApplicationContext ctx = new AnnotationConfigApplicationContext(MyServiceImpl.cl
 MyService myService = ctx.getBean(MyService.class);
 myService.doStuff();
 
+//手动进行相关bean的配置
 AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
 ctx.register(AppConfig.class, OtherConfig.class);
 ctx.register(AdditionalConfig.class);
@@ -306,13 +353,15 @@ myService.doStuff();
 ```
 #### @ComponentScan 类扩展
 
-@ComponentScan 这个直接和配置文件中的自动扫描配置相同 支持的方法有annotation(包名称),assignable(指定类),aspectJ(aop 路径配置),regex(正则表达式),或者custom(使用这个方法传入org.springframework.core.type .TypeFilter接口实现了类自动自定义处理)
+@ComponentScan 这个直接和配置文件中的自动扫描配置相同 支持的方法有：
 
-自定的扩展:
-
-- 如果你不想依赖默认的bean命名策略，你可以提供一个自定义的bean命名策略。首先，实现 BeanNameGenerator 接口，并确保包含一个默认的无参数构造函数。
-- 要为范围解析提供自定义策略，而不是依赖基于注释的方法，请实现 ScopeMetadataResolver 接口，并确保包含默认的无参数构造函数
-- scopedProxy :当使用非单利作用域的时候,可以指定代理的方法 no ,interface ,targer_class
+类型|示例表达|描述
+---|---|---
+annotation(包名称)|org.example.SomeAnnotation|要在目标组件中的类型级别出现的注释。
+assignable(指定类)org.example.SomeClass|目标组件可分配给（扩展/实现）的类（或接口）。
+aspectJ(aop 路径配置)|org.example..*Service+|要由目标组件匹配的AspectJ类型表达式。
+regex(正则表达式)|org\.example\.Default.*|要由目标组件类名匹配的正则表达式。
+custom|org.example.MyTypeFilter|org.springframework.core.type .TypeFilter接口的自定义实现。
 
 例子
 
@@ -343,6 +392,41 @@ public class AppConfig {
 	//当type 为使用正则表单式等其他非class文件的方式的必须传入的方法
 	String[] pattern() default {};
 }
+```
+
+自定的扩展:
+
+- 如果你不想依赖默认的bean命名策略，你可以提供一个自定义的bean命名策略。首先，实现 BeanNameGenerator 接口，并确保包含一个默认的无参数构造函数。
+- 要为范围解析提供自定义策略，而不是依赖基于注释的方法，请实现 ScopeMetadataResolver 接口，并确保包含默认的无参数构造函数
+- scopedProxy :当使用非单利作用域的时候,可以指定代理的方法 no ,interface ,targer_class
+
+```java
+@ComponentScan(nameGenerator = NameGenerator.class,scopeResolver = MyScopeResolver.class)
+```
+
+```java
+public class genAndScope implements BeanNameGenerator, ScopeMetadataResolver {
+    @Override
+    public String generateBeanName(BeanDefinition beanDefinition, BeanDefinitionRegistry beanDefinitionRegistry) {
+        return null;
+    }
+    @Override
+    public ScopeMetadata resolveScopeMetadata(BeanDefinition definition) {
+        return null;
+    }
+}
+```
+
+> xml配置方法
+
+```xml
+<beans>
+    <context:component-scan base-package="org.example" scope-resolver="org.example.MyScopeResolver"/>
+</beans>
+<beans>
+    <context:component-scan base-package="org.example"
+        name-generator="org.example.MyNameGenerator" />
+</beans>
 ```
 
 #### @Bean 使用扩展
@@ -378,21 +462,33 @@ public class AppConfig {
 @Bean(initMethod = "init")
 @Bean(destroyMethod = "cleanup")
 ```
-- config 类中实现javaBean的依赖可以直接的调用相关的参数,但是不能在普通的@Component中使用这种方法
+- config 类中实现javaBean的依赖可以直接的调用相关的参数,可以使用@Qualitfier使用id指定需要注入的元素，否则将使用type进行依赖的注入
 
 ```java
 @Configuration
 public class AppConfig {
     @Bean
     public Foo foo() {
+        //这里直接生成新的元素
         return new Foo(bar());
     }
     @Bean
     public Bar bar() {
         return new Bar();
     }
+    @Bean
+    public TestBean protectedInstance(
+            @Qualifier("public") TestBean spouse,
+            @Value("#{privateInstance.age}") String country) {
+        TestBean tb = new TestBean("protectedInstance", 1);
+        tb.setSpouse(spouse);
+        tb.setCountry(country);
+        return tb;
+    }
 }
 ```
+
+> 请注意，单个类可以@Bean为同一个bean 保存多个方法，作为根据运行时可用依赖项使用多个工厂方法的安排。这与在其他配置方案中选择“最贪婪”构造函数或工厂方法的算法相同：将在构造时选择具有最多可满足依赖项的变体，类似于容器在多个@Autowired构造函数之间进行选择的方式。
 
 **特殊性 configuration 类 在spring内部使用的cglib方法进行构建的,导致下面的ClientDao 将不会出现数据对象的情况**
 
