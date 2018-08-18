@@ -15,7 +15,7 @@
 | 安全权限 | java.security.SecurityPermission | 多种权限名[见附录D] | 无 ||
 | 序列化权限 | java.io.SerializablePermission | 2种权限名[见附录E] | 无 ||
 | 反射权限 | java.lang.reflect.ReflectPermission | suppressAccessChecks（允许利用反射检查任意类的私有变量） | 无 ||
-| 完全权限 | java.security.AllPermission | 无（拥有执行任何操作的权限） | 无 ||
+| 完全权限 | java.security.AllPermission | 无（拥有执行任何操作的权限） | 无 | |
 
 > 在这种模式下 jvm的权限是给代码的(可以说类反正就代码的),一个类(代码)可以有多个权限(在$JREHOME/lib/security/java.policy文件中进行配置下面说),使用PermissionCollection这样的类进行封装(jvm在运行的时候通过文件自动生成好了,然后通过反射进行校验这些东西都被隐藏起来了,研究下去意义不大,就没有接着研究)
 
