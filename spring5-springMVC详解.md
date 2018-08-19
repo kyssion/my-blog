@@ -703,7 +703,7 @@ public void handle(
 }
 ```
 
-- @ModelAttribute @sessionAttribute @sessionattributes
+- @ModelAttribute @sessionAttribute（处理的是表单数据类型）
 
 在使用model view 场景下，有如下的一应用
 
@@ -744,7 +744,10 @@ public class HelloWorldController {
     } 
 }
 ```
+
 - 3. 绑定application/x-www-form-urlencoded 提交的请求中 的值到对象中 支持user.xxx,user2.ddd 嵌套对应法
+
+> 这里注意一个比较特殊的就是@RequestBody这个绑定的是json对象
 
 ```java
 @Controller 
@@ -782,7 +785,7 @@ public void handle(HttpEntity<Account> entity) {
 }
  ```
 
-- @InitBinder  spring自带的数据处理模块
+- @InitBinder  spring自带的数据处理模块(所有的表单处理，相反的参数有Model)
 
 由@InitBinder表示的方法，可以对WebDataBinder对象进行初始化。WebDataBinder是DataBinder的子类，用于完成由表单到JavaBean属性的绑定。
 @InitBinder方法不能有返回值，它必须盛名为void。
