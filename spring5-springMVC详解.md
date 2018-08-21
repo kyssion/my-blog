@@ -183,6 +183,8 @@ public static final String WEB_APPLICATION_CONTEXT_ATTRIBUTE = DispatcherServlet
 
 这个类解决了 url地址映射到对应的处理类中，主要有两个实现RequestMappingHandlerMapping-为@RequestMapping 注解提供支持 ，SimpleUrlHandlerMapping，实现简单的url地址映射
 
+> 通俗点说这个方法在设计的时候相当于一个路由，通过前端获取的url地址等到对应的handlerMapping，之后再根据这个handlermapping获取handleradapter
+
 2. HandlerExceptionResolver 
 
 这个是试图返回的异常处理包括相关的错误处理方法 -- 通过这种方法可以实现全局的异常捕获
