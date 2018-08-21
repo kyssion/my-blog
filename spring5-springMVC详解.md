@@ -439,6 +439,12 @@ spring mvc 中将相关的视图变成一个网页经历的过程
 视图解析链：
 在SpringMVC中可以同时定义多个ViewResolver视图解析器，然后它们会组成一个ViewResolver链。当Controller处理器方法返回一个逻辑视图名称后，ViewResolver链将根据其中ViewResolver的优先级来进行处理。所有的ViewResolver都实现了Ordered接口，在Spring中实现了这个接口的类都是可以排序的。在ViewResolver中是通过order属性来指定顺序的，默认都是最大值。所以我们可以通过指定ViewResolver的order属性来实现ViewResolver的优先级，order属性是Integer类型，order越小，对应的ViewResolver将有越高的解析视图的权利，所以第一个进行解析的将是ViewResolver链中order值最小的那个。当一个ViewResolver在进行视图解析后返回的View对象是null的话就表示该ViewResolver不能解析该视图，这个时候如果还存在其他order值比它大的ViewResolver就会调用剩余的ViewResolver中的order值最小的那个来解析该视图，依此类推。当ViewResolver在进行视图解析后返回的是一个非空的View对象的时候，就表示该ViewResolver能够解析该视图，那么视图解析这一步就完成了，后续的ViewResolver将不会再用来解析该视图。当定义的所有ViewResolver都不能解析该视图的时候，Spring就会抛出一个异常。
 
+> spring 重定向写法
+
+```
+redirect:files/{path}
+```
+
 ### spring mvc 常用注解
 
 spring 提供了一整套注解来简化spring相关的配置
@@ -703,7 +709,7 @@ public void handle(
 }
 ```
 
-- @ModelAttribute @sessionAttribute（处理的是表单数据类型）
+- @ModelAttribute @sessionAttribute @RequestAttribute（处理的是表单数据类型）
 
 在使用model view 场景下，有如下的一应用
 
