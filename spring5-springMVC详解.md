@@ -14,7 +14,7 @@ spring 自己的webapplication支持嵌套作用域,通过这个方法可以实�
 
 #### web容器的初始化设置
 
-springMVC 支持使用xml进行配置 
+springMVC 支持使用xml进行配置
 
 ```xml
 <web-app>
