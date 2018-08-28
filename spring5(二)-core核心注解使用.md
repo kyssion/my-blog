@@ -43,7 +43,7 @@ xml配置文件
 @RequestScope //作用域简写
 @SessionScope //作用域简写
 @DependsOn({"beanTwo"})//相当于xml文件中配置的dependson属性表示依赖关系
-@Lazy(true)//表示函数是否进行延迟加载
+@Lazy(true)//表示函数是否进行延迟加载 注意可以修饰@Bean
 @Required   //这个注解只能放在setXxxx()方法上，spring检测set方法有没有使用，如果没有使用将会抛出异常
 @order和@Priority //见下面啊autowrite方法  指定自动装配时候的优先级别
 @Primary //进行这个注解的bean将会优先的进行注入,多个就按照后面的覆盖前面的
