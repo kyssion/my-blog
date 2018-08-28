@@ -75,8 +75,8 @@ MyBatis 是一款优秀的持久层框架，它支持定制化 SQL、存储过�
     </settings>
     <!-- 别名:在系统的其他位置上可以用这个别名进行配置文件的配置 两种方法只能用一种 原因 文件只进行扫描一遍-->
     <typeAliases>
-        <!-- 1.可以使用注解方法进行配置   Alias注解方法 name为将要进行扫描的包   使用的时候自动为相关的类添加上相关的包名称，但是要注意冲突的问题 -->
-        <!-- <package name="javabean"/>-->
+        <!-- 1.可以使用注解方法进行配置 Alias注解方法 name为将要进行扫描的包  使用的时候自动为相关的类添加上相关的包名称，但是要注意冲突的问题 -->
+        <package name="javabean"/><!-- 如果使用这个中方法将会自动将这个包下面直接的javabean 按照小写字母映射 不能和下面的方法共存 -->
         <!-- 直接在这里面进行配置type是属性的全名称 alias 是别名称 -->
         <typeAlias type="S_Mybatis.a_自定义typeHandler.自定义typeHandler" alias="mytypehandle"/>
     </typeAliases>
@@ -139,7 +139,11 @@ MyBatis 是一款优秀的持久层框架，它支持定制化 SQL、存储过�
 
 ### 相关标签注意事项
 
-#### properties-除了使用xml进行相关属性的配置如下的方法进行配置
+#### typeAliases 别名配置引申
+
+如果使用package的标签的时候将会使用将类名首字母小写和对应的对象完整类名映射，可以通过@Alias(name) 注解来更改映射的规则
+
+#### properties标签除了使用xml进行相关属性配置，还可以使用java api的形式可以使用如下的方法进行配置
 
 > 使用java代码动态的导入属性
 

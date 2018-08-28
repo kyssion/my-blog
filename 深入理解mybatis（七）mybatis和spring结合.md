@@ -16,7 +16,7 @@
 
 要注意这个配置文件不需要是一个完整的 MyBatis 配置。确切地说,任意环境,数据源 和 MyBatis 的事务管理器都会被忽略。SqlSessionFactoryBean 会创建它自己的,使用这些 值定制 MyBatis 的 Environment 时是需要的。
 
-如果 MyBatis 映射器 XML 文件在和映射器类相同的路径下不存在,那么另外一个需要 配置文件的原因就是它了。使用这个配置,有两种选择。第一是手动在 MyBatis 的 XML 配 置文件中使用<mappers>部分来指定类路径。第二是使用工厂 bean 的 mapperLocations 属 性。
+如果MyBatis映射器XML文件在和映射器类相同的路径下不存在,那么另外一个需要 配置文件的原因就是它了。使用这个配置,有两种选择。第一是手动在 MyBatis 的 XML 配 置文件中使用<mappers>部分来指定类路径。第二是使用工厂bean的mapperLocations属性。
 
 ```xml
 <bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
@@ -24,7 +24,11 @@
 </bean>
 ```
 
-以上配置文件相当于以下java语句  要注意 SqlSessionFactoryBean 实现了 Spring 的 FactoryBean 接口(请参考 Spring 文 档的 3.8 章节)这就说明了由 Spring 最终创建的 bean 不是 SqlSessionFactoryBean 本身, 。 而是工厂类的 getObject()返回的方法的结果。
+以上配置文件相当于以下java语句
+
+> 要注意 SqlSessionFactoryBean 实现了 Spring 的 FactoryBean 接口(请参考 Spring 文 档的 3.8 章节)这就说明了由 Spring 最终创建的 bean 不是 SqlSessionFactoryBean 本身, 。 而是工厂类的 getObject()返回的方法的结果。
+
+
 
 ```java
 SqlSessionFactoryBean factoryBean = new SqlSessionFactoryBean();
