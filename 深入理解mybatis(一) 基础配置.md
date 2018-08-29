@@ -265,6 +265,31 @@ class MytypeHandler2 extends BaseTypeHandler<String>{
 
 **mybatis在使用自定义的type的时候，需要在结果属性（resultMap中的property或者id属性中）使用javatype和JDBCtype属性进行相关联，或者直接指定typehandler**
 
+#### 枚举类型的特殊处理
+
+若想映射枚举类型 Enum，则需要从 EnumTypeHandler 或者 EnumOrdinalTypeHandler 中选一个来使用。默认情况下，MyBatis 会利用 EnumTypeHandler 来把 Enum 值转换成对应的名字。
+
+> 注意 EnumTypeHandler 在某种意义上来说是比较特别的，其他的处理器只针对某个特定的类，而它不同，它会处理任意继承了 Enum 的类。
+
+自动映射器（auto-mapper）会自动地选用 EnumOrdinalTypeHandler 来处理， 所以如果我们想用普通的 EnumTypeHandler，就必须要显式地为那些 SQL 语句设置要使用的类型处理器。
+
+```xml
+<resultMap type="org.apache.ibatis.submitted.rounding.User" id="usermap2">
+	<id column="id" property="id"/>
+	<result column="name" property="name"/>
+	<result column="funkyNumber" property="funkyNumber"/>
+	<result column="roundingMode" property="roundingMode" typeHandler="org.apache.ibatis.type.EnumTypeHandler"/>
+</resultMap>
+<select id="getUser2" resultMap="usermap2">
+	select * from users2
+</select>
+<insert id="insert2">
+    insert into users2 (id, name, funkyNumber, roundingMode) values (
+    	#{id}, #{name}, #{funkyNumber}, #{roundingMode, typeHandler=org.apache.ibatis.type.EnumTypeHandler}
+    )
+</insert>
+```
+
 #### objectFactory-覆盖对象工厂的默认行为，创建自己的对象工厂。
 
 MyBatis 每次创建结果对象的新实例时，它都会使用一个对象工厂（ObjectFactory）实例来完成。 
@@ -348,8 +373,29 @@ public class ExamplePlugin implements Interceptor{
 SqlSessionFactory sessionFactory=new SqlSessionFactoryBuilder().build(inputStream,"envoirment");
 SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(reader, environment);
 SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(reader, environment,properties);
-
 ```
+在环境配置中有两个重要的配置一个是事务管理器transactionManager，另一个是数据源dataSource （具体的配置信息可以参考之前使用的xml 配置方法）
+
+> transactionManager事务管理器
+```java
+public interface TransactionFactory {
+  void setProperties(Properties props);  
+  Transaction newTransaction(Connection conn);
+  Transaction newTransaction(DataSource dataSource, TransactionIsolationLevel level, boolean autoCommit);  
+}
+```
+任何在 XML 中配置的属性在实例化之后将会被传递给 setProperties() 方法。你也需要创建一个 Transaction 接口的实现类，这个接口也很简单：
+```java
+public interface Transaction {
+  Connection getConnection() throws SQLException;
+  void commit() throws SQLException;
+  void rollback() throws SQLException;
+  void close() throws SQLException;
+  Integer getTimeout() throws SQLException;
+}
+```
+
+
 #### databaseIdProvider
 
 MyBatis 可以根据不同的数据库厂商执行不同的语句，这种多厂商的支持是基于映射语句中的 databaseId 属性。 MyBatis 会加载不带 databaseId 属性和带有匹配当前数据库 databaseId 属性的所有语句。 如果同时找到带有 databaseId 和不带 databaseId 的相同语句，则后者会被舍弃。 
