@@ -223,6 +223,8 @@ import org.apache.ibatis.type.TypeHandler;
 @MappedJdbcTypes(JdbcType.VARCHAR) // 定义数据库映射数据库的类型
 // 当使用自定义typeHandle的时候需要实现这个接口
 // !---在mapping文件中需要显示的注册使用的tylehandle 并且在mybatis的配置文件(和mapping文集不同)文件中个必须进行注册
+//注意 MappedJdbcTypes这个注解还有一个属性 includeNullJdbcType=true 默认值为false 表示当在只使用时-
+//-只指定了javaType类型但是没有指定 jdbctype的时候同样可以使用这个映射
 public class 自定义typeHandler implements TypeHandler<String> {
     public String getResult(ResultSet arg0, String columeName) throws SQLException {
         return null;
@@ -261,20 +263,11 @@ class MytypeHandler2 extends BaseTypeHandler<String>{
 }
 ```
 
-通过类型处理器的泛型，MyBatis 可以得知该类型处理器处理的 Java 类型，不过这种行为可以通过两种方法改变：
-
-- 在类型处理器的配置元素（typeHandler element）上增加一个 javaType 属性（比如：javaType=”String”）；
-- 在类型处理器的类上（TypeHandler class）增加一个 @MappedTypes 注解来指定与其关联的 Java 类型列表。 如果在 javaType 属性中也同时指定，则注解方式将被忽略。
-可以通过两种方式来指定被关联的 JDBC 类型：
-
-- 在类型处理器的配置元素上增加一个 jdbcType 属性（比如：jdbcType=”VARCHAR”）；
-- 在类型处理器的类上（TypeHandler class）增加一个 @MappedJdbcTypes 注解来指定与其关联的 JDBC 类型列表。 如果在 jdbcType 属性中也同时指定，则注解方式将被忽略。
-
-当决定在ResultMap中使用某一TypeHandler时，此时java类型是已知的（从结果类型中获得），但是JDBC类型是未知的。 因此Mybatis使用javaType=[TheJavaType], jdbcType=null的组合来选择一个TypeHandler。 这意味着使用@MappedJdbcTypes注解可以限制TypeHandler的范围，同时除非显示的设置，否则TypeHandler在ResultMap中将是无效的。 如果希望在ResultMap中使用TypeHandler，那么设置@MappedJdbcTypes注解的includeNullJdbcType=true即可。
-
-**简单点说就是，mybatis在使用自定义的type的时候，需要在结果属性（resultMap中的property或者id属性中）使用javatype和JDBCtype属性进行相关联，或者直接指定typehandler**
+**mybatis在使用自定义的type的时候，需要在结果属性（resultMap中的property或者id属性中）使用javatype和JDBCtype属性进行相关联，或者直接指定typehandler**
 
 #### objectFactory-覆盖对象工厂的默认行为，创建自己的对象工厂。
+
+MyBatis 每次创建结果对象的新实例时，它都会使用一个对象工厂（ObjectFactory）实例来完成。 
 
 ```java
 import java.util.List;
@@ -311,19 +304,18 @@ public class Myfactory extends DefaultObjectFactory{
 - ResultSetHandler (handleResultSets, handleOutputParameters)
 - StatementHandler (prepare, parameterize, batch, update, query)
 
-通过 MyBatis 提供的强大机制，使用插件是非常简单的，只需实现 Interceptor 接口，并指定了想要拦截的方法签名即可  下面的插件将会拦截在 Executor 实例中所有的 “update” 方法调用， 这里的 Executor 是负责执行低层映射语句的内部对象。
+通过 MyBatis 提供的强大机制，使用插件是非常简单的，只需实现 Interceptor 接口，并指定了想要拦截的方法签名即可
+
+> 下面的插件将会拦截在 Executor 实例中所有的 “update” 方法调用， 这里的 Executor 是负责执行低层映射语句的内部对象。**注意@Intercepts注解**
 
 ```java
 import java.util.Properties;
-
 import org.apache.ibatis.executor.Executor;
 import org.apache.ibatis.mapping.MappedStatement;
 import org.apache.ibatis.plugin.Interceptor;
 import org.apache.ibatis.plugin.Intercepts;
 import org.apache.ibatis.plugin.Invocation;
 import org.apache.ibatis.plugin.Signature;
-
-
 @Intercepts({@Signature(
         type= Executor.class,
         method = "update",
