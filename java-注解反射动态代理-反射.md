@@ -120,6 +120,7 @@ Class<?>[] class3 = method.getParameterTypes();//返回参数数组
 Class<?> class4 = method.getReturnType();//返回返回值数组
 int count=method.getParameterCount();//返回参数的数量
 Parameter[] parameters=method.getParameters();//返回参数列表
+class c = method.getDeclaringClass();//返回这个方法对应的class类
 parameters[0].getName();
 parameters[0].getType();//返回类型的class数组
 //参数类型没有注入 参数
