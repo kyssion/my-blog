@@ -128,7 +128,7 @@ public <T> void addMapper(Class<T> type) {
 }
 ```
 
-#### 深入分析mapper的生产调用机制
+#### 深入分析mapper的初始化调用机制
 
 在SqlSession.getMapper获取Mapper的时候同样是通过这个方式反方向方法获取MapperProxyFactory这个对象
 
@@ -199,3 +199,80 @@ public Object execute(SqlSession sqlSession, Object[] args) {
 ```
 
 代码逻辑非常清晰其实就是使用sqlSession的对应方法，mapper的报名加上类名构成了一开始的名称
+
+####　分析SqlSession运行相关数据库操作的详细分析
+
+通过源代码分析其实最终情况下sql将操作分成了两种类型 doupdate类型和query这里先看一下query
+
+```java
+public <E> List<E> query(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, CacheKey key, BoundSql boundSql) throws SQLException {
+  ErrorContext.instance().resource(ms.getResource()).activity("executing a query").object(ms.getId());
+//如果已经关闭，报错
+  if (closed) throw new ExecutorException("Executor was closed.");
+//先清局部缓存，再查询，但仅仅查询堆栈为0才清，为了处理递归调用
+  if (queryStack == 0 && ms.isFlushCacheRequired()) {
+    clearLocalCache();
+  }
+  List<E> list;
+  try {
+  //加一，这样递归调用到上面的时候就不会再清局部缓存了
+    queryStack++;
+  //根据cachekey从localCache去查
+    list = resultHandler == null ? (List<E>) localCache.getObject(key) : null;
+    if (list != null) {
+  //如果查到localCache缓存，处理localOutputParameterCache
+      handleLocallyCachedOutputParameters(ms, key, parameter, boundSql);
+    } else {
+  //从数据库查
+      list = queryFromDatabase(ms, parameter, rowBounds, resultHandler, key, boundSql);
+    }
+  } finally {
+  //清空堆栈
+    queryStack--;
+  }
+  if (queryStack == 0) {
+  //延迟加载队列中所有元素
+    for (DeferredLoad deferredLoad : deferredLoads) {
+      deferredLoad.load();
+    }
+  //清空延迟加载队列
+    deferredLoads.clear(); // issue #601
+    if (configuration.getLocalCacheScope() == LocalCacheScope.STATEMENT) {
+  //如果是statement，清本地缓存
+      clearLocalCache(); // issue #482
+    }
+  }
+  return list;
+}
+```
+
+真正执行相关的query操作的方法是deQuery方法(executor类的doQuery)
+
+```java
+@Override
+public <E> List<E> doQuery(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler, BoundSql boundSql) throws SQLException {
+  Statement stmt = null;
+  try {
+    Configuration configuration = ms.getConfiguration();
+    StatementHandler handler = configuration.newStatementHandler(wrapper, ms, parameter, rowBounds, resultHandler, boundSql);
+    stmt = prepareStatement(handler, ms.getStatementLog());
+    return handler.<E>query(stmt, resultHandler);
+  } finally {
+    closeStatement(stmt);
+  }
+}
+```
+
+从上面的方法中我们可以看见一个方法叫MappedStatement,观察一下他的产生
+
+通过获取方法可以判断出,这个类其实是一开就在configration配置成功的
+
+```java
+MappedStatement ms = configuration.getMappedStatement(statement);
+```
+
+如果跟踪一开始初始化的状态需要跟踪到SqlSessionFactoryBuilder类中,一开始mybatiss将所有状态初始化的过程
+
+
+
+
