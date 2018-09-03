@@ -363,7 +363,7 @@ public void addMappers(String packageName) {
 }
 ```
 
-跟踪到这里其实思路比较清洗了,这里就是初始化一个mapper和mapper中各种mathod的地方
+跟踪到这里其实思路比较清晰了,这里就是初始化一个mapper和mapper中各种mathod的地方（MapperRegistry）
 
 ```java
 public <T> void addMapper(Class<T> type) {
@@ -385,4 +385,124 @@ public <T> void addMapper(Class<T> type) {
   }
 }
 ```
+
+而MappedStatement的初始化就在这个MapperAnnotationBuilder.parse()
+
+```java
+public void parse() {
+  String resource = type.toString();
+  if (!configuration.isResourceLoaded(resource)) {
+    loadXmlResource();
+    configuration.addLoadedResource(resource);
+    assistant.setCurrentNamespace(type.getName());
+    parseCache();
+    parseCacheRef();
+    Method[] methods = type.getMethods();
+    for (Method method : methods) {
+      try {
+        // issue #237
+        if (!method.isBridge()) {
+          parseStatement(method);
+        }
+      } catch (IncompleteElementException e) {
+        configuration.addIncompleteMethod(new MethodResolver(this, method));
+      }
+    }
+  }
+  parsePendingMethods();
+}
+```
+
+```java
+void parseStatement(Method method) {
+  Class<?> parameterTypeClass = getParameterType(method);
+  LanguageDriver languageDriver = getLanguageDriver(method);
+  SqlSource sqlSource = getSqlSourceFromAnnotations(method, parameterTypeClass, languageDriver);
+  if (sqlSource != null) {
+    Options options = method.getAnnotation(Options.class);
+    final String mappedStatementId = type.getName() + "." + method.getName();
+    Integer fetchSize = null;
+    Integer timeout = null;
+    StatementType statementType = StatementType.PREPARED;
+    ResultSetType resultSetType = ResultSetType.FORWARD_ONLY;
+    SqlCommandType sqlCommandType = getSqlCommandType(method);
+    boolean isSelect = sqlCommandType == SqlCommandType.SELECT;
+    boolean flushCache = !isSelect;
+    boolean useCache = isSelect;
+    KeyGenerator keyGenerator;
+    String keyProperty = "id";
+    String keyColumn = null;
+    if (SqlCommandType.INSERT.equals(sqlCommandType) || SqlCommandType.UPDATE.equals(sqlCommandType)) {
+      // first check for SelectKey annotation - that overrides everything else
+      SelectKey selectKey = method.getAnnotation(SelectKey.class);
+      if (selectKey != null) {
+        keyGenerator = handleSelectKeyAnnotation(selectKey, mappedStatementId, getParameterType(method), languageDriver);
+        keyProperty = selectKey.keyProperty();
+      } else if (options == null) {
+        keyGenerator = configuration.isUseGeneratedKeys() ? Jdbc3KeyGenerator.INSTANCE : NoKeyGenerator.INSTANCE;
+      } else {
+        keyGenerator = options.useGeneratedKeys() ? Jdbc3KeyGenerator.INSTANCE : NoKeyGenerator.INSTANCE;
+        keyProperty = options.keyProperty();
+        keyColumn = options.keyColumn();
+      }
+    } else {
+      keyGenerator = NoKeyGenerator.INSTANCE;
+    }
+    if (options != null) {
+      if (FlushCachePolicy.TRUE.equals(options.flushCache())) {
+        flushCache = true;
+      } else if (FlushCachePolicy.FALSE.equals(options.flushCache())) {
+        flushCache = false;
+      }
+      useCache = options.useCache();
+      fetchSize = options.fetchSize() > -1 || options.fetchSize() == Integer.MIN_VALUE ? options.fetchSize() : null; //issue #348
+      timeout = options.timeout() > -1 ? options.timeout() : null;
+      statementType = options.statementType();
+      resultSetType = options.resultSetType();
+    }
+    String resultMapId = null;
+    ResultMap resultMapAnnotation = method.getAnnotation(ResultMap.class);
+    if (resultMapAnnotation != null) {
+      String[] resultMaps = resultMapAnnotation.value();
+      StringBuilder sb = new StringBuilder();
+      for (String resultMap : resultMaps) {
+        if (sb.length() > 0) {
+          sb.append(",");
+        }
+        sb.append(resultMap);
+      }
+      resultMapId = sb.toString();
+    } else if (isSelect) {
+      resultMapId = parseResultMap(method);
+    }
+    assistant.addMappedStatement(
+        mappedStatementId,
+        sqlSource,
+        statementType,
+        sqlCommandType,
+        fetchSize,
+        timeout,
+        // ParameterMapID
+        null,
+        parameterTypeClass,
+        resultMapId,
+        getReturnType(method),
+        resultSetType,
+        flushCache,
+        useCache,
+        // TODO gcode issue #577
+        false,
+        keyGenerator,
+        keyProperty,
+        keyColumn,
+        // DatabaseID
+        null,
+        languageDriver,
+        // ResultSets
+        options != null ? nullOrEmpty(options.resultSets()) : null);
+  }
+}
+```
+
+
 
