@@ -265,6 +265,8 @@ public <E> List<E> doQuery(MappedStatement ms, Object parameter, RowBounds rowBo
 
 从上面的方法中我们可以看见一个方法叫MappedStatement,观察一下他的产生
 
+#### MappedStatement 产生过程
+
 通过获取方法可以判断出,这个类其实是一开就在configration配置成功的
 
 ```java
@@ -273,6 +275,114 @@ MappedStatement ms = configuration.getMappedStatement(statement);
 
 如果跟踪一开始初始化的状态需要跟踪到SqlSessionFactoryBuilder类中,一开始mybatiss将所有状态初始化的过程
 
+SqlSessionFactoryBuilder在默认情况下会使用XMLConfigBuilder来生成configration
+
+```java
+public SqlSessionFactory build(Reader reader, String environment, Properties properties) {
+  XMLConfigBuilder parser = new XMLConfigBuilder(reader, environment, properties);
+  return build(parser.parse());
+}
+```
+
+接下来跟踪进去发现了初始化一个类XPathParser,并且使用嵌套构造函数的方法进行方法嵌套使用
+
+```java
+public XMLConfigBuilder(Reader reader, String environment, Properties props) {
+  this(new XPathParser(reader, true, props, new XMLMapperEntityResolver()), environment, props);
+}
+
+private XMLConfigBuilder(XPathParser parser, String environment, Properties props) {
+  super(new Configuration());
+  ErrorContext.instance().resource("SQL Mapper Configuration");
+  this.configuration.setVariables(props);
+  this.parsed = false;
+  this.environment = environment;
+  this.parser = parser;
+}
+```
+
+> 这个类其实就是将xml文件整理成node节点的形式方便之后的调用,其实是一个解析用的工具
+
+然后上调用者(sqlSessionFactoryBuilder)将会调用XMLConfigBuilder的parse方法进行生产configration对象这里才是整个mybatis配置真正产生的地方
 
 
+```java
+public Configuration parse() {
+  if (parsed) {
+    throw new BuilderException("Each XMLConfigBuilder can only be used once.");
+  }
+  parsed = true;
+  parseConfiguration(parser.evalNode("/configuration"));
+  return configuration;
+}
+//所有的配置都是在这里生成的
+private void parseConfiguration(XNode root) {
+  try {
+    //issue #117 read properties first
+    propertiesElement(root.evalNode("properties"));
+    Properties settings = settingsAsProperties(root.evalNode("settings"));
+    loadCustomVfs(settings);
+    typeAliasesElement(root.evalNode("typeAliases"));
+    pluginElement(root.evalNode("plugins"));
+    objectFactoryElement(root.evalNode("objectFactory"));
+    objectWrapperFactoryElement(root.evalNode("objectWrapperFactory"));
+    reflectorFactoryElement(root.evalNode("reflectorFactory"));
+    settingsElement(settings);
+    // read it after objectFactory and objectWrapperFactory issue #631
+    environmentsElement(root.evalNode("environments"));
+    databaseIdProviderElement(root.evalNode("databaseIdProvider"));
+    typeHandlerElement(root.evalNode("typeHandlers"));
+    mapperElement(root.evalNode("mappers"));
+  } catch (Exception e) {
+    throw new BuilderException("Error parsing SQL Mapper Configuration. Cause: " + e, e);
+  }
+}
+```
+
+终于到了关键的地方MappedStatement的生成部分,MappedStatement由名称就能知道是从mapperElement()方法中产生的
+
+在XMLConfigBuilder中定义的这个方法
+
+```java
+private void mapperElement(XNode parent) throws Exception {
+  if (parent != null) {
+    for (XNode child : parent.getChildren()) {
+      if ("package".equals(child.getName())) {
+        String mapperPackage = child.getStringAttribute("name");
+        configuration.addMappers(mapperPackage);
+      }
+  }
+}
+```
+
+我截取了一段代码这段代码是处理使用包名扫描mapper的代码,进入到其中的configuration.addMappers(mapperPackage);方法,发现这里使用了configration中的addMappers方法,进入到mapperRegistry类的这个方法中
+
+```java
+public void addMappers(String packageName) {
+  mapperRegistry.addMappers(packageName);
+}
+```
+
+跟踪到这里其实思路比较清洗了,这里就是初始化一个mapper和mapper中各种mathod的地方
+
+```java
+public <T> void addMapper(Class<T> type) {
+  if (type.isInterface()) {
+    if (hasMapper(type)) {
+      throw new BindingException("Type " + type + " is already known to the MapperRegistry.");
+    }
+    boolean loadCompleted = false;
+    try {
+      knownMappers.put(type, new MapperProxyFactory<T>(type));
+      MapperAnnotationBuilder parser = new MapperAnnotationBuilder(config, type);
+      parser.parse();
+      loadCompleted = true;
+    } finally {
+      if (!loadCompleted) {
+        knownMappers.remove(type);
+      }
+    }
+  }
+}
+```
 
