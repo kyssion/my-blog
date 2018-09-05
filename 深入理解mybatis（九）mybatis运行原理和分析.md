@@ -365,6 +365,8 @@ public void addMappers(String packageName) {
 
 跟踪到这里其实思路比较清晰了,这里就是初始化一个mapper和mapper中各种mathod的地方（MapperRegistry）
 
+> 注意到MapperStatues和Method是一一对应的
+
 ```java
 public <T> void addMapper(Class<T> type) {
   if (type.isInterface()) {
