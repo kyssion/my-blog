@@ -505,6 +505,3 @@ void parseStatement(Method method) {
   }
 }
 ```
-
-
-
