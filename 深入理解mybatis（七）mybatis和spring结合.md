@@ -175,6 +175,8 @@ public class FooServiceImpl implements FooService {
 
 这个注解可以替代mapperFactoryBean，而且，只要指定包名称，框架将会自动按照spring注解的命名规则将相关接口注入到spring的命名空间中（可以使用spring的自动扫描注解，指定映射名称）
 
+> 2018年8月补充 通过阅读源代码发现 @Mapper这个注解在spring-mybatis和mybatis 本身中更本不起道任何作用，只有在spring boot中有过使用（不过大多数的都是直接使用@MapperScan）
+
 ### 一个实例
 
 > mybatis的相关配置文件

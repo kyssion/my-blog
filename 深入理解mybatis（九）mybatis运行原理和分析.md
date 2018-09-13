@@ -505,3 +505,5 @@ void parseStatement(Method method) {
   }
 }
 ```
+
+从上面我们就可以得出MapperStatement的作用就是配置一个sql的各种信息，比如操作方法（select|upadte等），配置的sql ， sql的id ，缓存信息，resultMap，parameterType，resultType，languageDriver，等
