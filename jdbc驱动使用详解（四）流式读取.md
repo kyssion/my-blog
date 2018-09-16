@@ -17,4 +17,5 @@ while (rs.next()) {
 }
 ```
 
+
 mysql判断是否开启流式读取结果的方法，有三个条件forward-only，read-only，fatch size是Integer.MIN_VALUE
