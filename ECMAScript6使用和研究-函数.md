@@ -1,5 +1,6 @@
 ### ECMAScript6使用和研究-函数
 
+
 ```javascript
 function log(x, y) {
   y = y || 'World';
@@ -10,6 +11,7 @@ log('Hello') // Hello World
 log('Hello', 'China') // Hello China
 log('Hello', '') // Hello World
 ```
+
 
 注意:参数变量是默认声明的，所以不能用let或const再次声明。使用参数默认值时，函数不能有同名参数。
 
