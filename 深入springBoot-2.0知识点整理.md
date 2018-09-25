@@ -154,7 +154,9 @@ public class MyApplicationListener implements ApplicationListener<ApplicationEve
 2. SpringApplication.addListeners(…​)， SpringApplicationBuilder.listeners(…​)
 3. 配置文件中添加：META-INF/spring.factories 中 org.springframework.context.ApplicationListener
 
-### spring boot 应用环境的判断
+### spring boot 应用环境的判断构建ApplicationContext
+
+我们在没有使用spring boot 单纯的使用spring 或者使用spring mvc 的时候通常使用的application是XmlServletWebServerApplicationContext，或者ClasspathXmlApplicationContext ， 同样spring boot 基于注解方法使用了一套特殊的context
 
 1. 首先spring boot 判断这个环境是不是spring mvc 环境如果是马么webappcationcontext 选择AnnotationConfigServletWebServerApplicationContext
 
@@ -182,6 +184,10 @@ public class MyBean implements CommandLineRunner {
 
 ```java
 class Runtest implements ApplicationRunner {
+	//自动注入进来
+	@AutoWrite
+	ApplicationArguments run;
+
     @Override
     public void run(ApplicationArguments args) throws Exception {
         // Do something...
@@ -189,6 +195,8 @@ class Runtest implements ApplicationRunner {
     }
 }
 ```
+
+> 注意如果系统想使用，运行的时候传入的数据的话 可以使用ApplicationArguments 这个参数将相关的值注入进来或者使用ApplicationRunner接口初始化
 
 #spring boot 带有状态的结束 使用exit 运行程序
 
