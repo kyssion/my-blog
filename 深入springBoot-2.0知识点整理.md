@@ -130,24 +130,29 @@ new SpringApplicationBuilder()
 spring boot的事件和 spring原生的事件没有什么差别但是，spring boot 有一些自己的事件
 
 1. ApplicationStartingEvent在运行开始时但在任何处理之前发送，除了注册侦听器和初始化器之外。
-
 2. ApplicationEnvironmentPreparedEvent当在上下文中使用的环境是已知的但在创建上下文之前发送。
-
 3. ApplicationPreparedEvent在刷新开始之前但在bean定义加载之后发送。
-
 4. ApplicationStartedEvent在刷新上下文之后但在调用任何应用程序和命令行参赛者之前发送。
-
 5. ApplicationReadyEvent在任何应用程序和命令行参数被调用后发送。 它表示应用程序已准备好为请求提供服务。
-
 6. ApplicationFailedEvent如果启动时出现异常，则发送。
 
-在spring boot 中可以使用如下的方法注册监听器
+注意有些事件可能是在applicatincontext之前就出发了，所以不能使用@bean的方法注册在容器中，在spring boot 中可以应如下的方法注册监听器,使用方法：SpringApplication.addListeners(…​)， SpringApplicationBuilder.listeners(…​)，配置文件中添加：META-INF/spring.factories 中 org.springframework.context.ApplicationListener
 
-使用方法：SpringApplication.addListeners(…​)， SpringApplicationBuilder.listeners(…​)，
+注意了：因为spring拥有上下文的关系，而监听器除了监听自己的时间还会监听子元素的事件，所以在实现监听器的时候官方推荐同时实现ApplicationContextAware接口，来比较事件的context和和自身context的关系。
 
-配置文件中添加：META-INF/spring.factories 中 org.springframework.context.ApplicationListener
+```java
+public class MyApplicationListener implements ApplicationListener<ApplicationEvent>{
+	@Override
+	public void onApplicationEvent(ApplicationEvent arg0) {
+	}
+}
+```
 
-注意了：因为spring拥有上下文的关系，而监听器除了监听自己的时间还会监听子元素的时间，所以在实现监听器的时候官方推荐同时实现ApplicationContextAware接口，来比较事件的context和和自身context的关系
+> 总结添加事件的三种方法
+
+1. @bean
+2. SpringApplication.addListeners(…​)， SpringApplicationBuilder.listeners(…​)
+3. 配置文件中添加：META-INF/spring.factories 中 org.springframework.context.ApplicationListener
 
 ### spring boot 应用环境的判断
 
