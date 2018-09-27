@@ -1,77 +1,4 @@
-### springboot 配置的核心元素
 
-spring 只用maven的parent继承的方法（gradle类似）进行依赖管理和使用maven插件（gradle同样类似）的方法生成可执行的jar文件
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<groupId>com.example</groupId>
-	<artifactId>myproject</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-    <!--使用继承的方法实现自动化配置-->
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.0.1.RELEASE</version>
-	</parent>
-	<!-- Additional lines to be added here... -->
-    <!--使用maven插件实现自动化配置-->
-    <build>
-	    <plugins>
-		    <plugin>
-			    <groupId>org.springframework.boot</groupId>
-			    <artifactId>spring-boot-maven-plugin</artifactId>
-		    </plugin>
-	    </plugins>
-    </build>
-</project>
-```
-
-当不使用parent进行依赖配置的时候可以使用dependencyManagement来进行管理
-
-```xml
-<dependencyManagement>
-		<dependencies>
-		    <dependency>
-			    <!-- Import dependency management from Spring Boot -->
-			    <groupId>org.springframework.boot</groupId>
-			    <artifactId>spring-boot-dependencies</artifactId>
-			    <version>2.0.1.RELEASE</version>
-			    <type>pom</type>
-			    <scope>import</scope>
-		</dependency>
-	</dependencies>
-</dependencyManagement>
-```
-### springBoot starter-springBoot可以实现自动化配置的核心方法
-
-springBoot提供了一系列的starter方便进行自动化配置，比如spring-boot-starter-web
-
-> springBoot starter 明明规则：如果是官法的starter 将会按照spring-boot-starter-* 来进行划分，如果是自己实现的starter方法，建议按照*-spring-boot-starter 来进行命名
-
-这里介绍一个特边的非应用starter，spring-boot-starter-actuator，这个starter实现了监控的功能
-
-```xml
-<dependency>  
-    <groupId>org.springframework.boot</groupId>  
-    <artifactId>spring-boot-starter-actuator</artifactId>  
-</dependency>  
-```
-### spring boot 热部署工具  Developer Tools
-
-spring boot 实现了一定程度下的热部署功能，暂时不做过多的讨论
-
-```xml
-<dependencies>
-	<dependency>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-devtools</artifactId>
-		<optional>true</optional>
-	</dependency>
-</dependencies>
-```
 
 ### spring 个性化配置自定义横幅
 
@@ -168,7 +95,7 @@ public class MyApplicationListener implements ApplicationListener<ApplicationEve
 
 ### spring boot 启动前执行特定的程序
 
-要想实现这个方法，需要在spring 容器中添加实现CommandLineRunner接口的bean或者ApplicationRunner接口的bean
+在spring boot中 ， spring boot 会在容器彻底启动前运行实现现CommandLineRunner接口的bean或者ApplicationRunner接口的bean
 
 ```java
 import org.springframework.boot.*;
@@ -196,7 +123,9 @@ class Runtest implements ApplicationRunner {
 }
 ```
 
-> 注意如果系统想使用，运行的时候传入的数据的话 可以使用ApplicationArguments 这个参数将相关的值注入进来或者使用ApplicationRunner接口初始化
+注意这两个接口其中第二个接口传递命令的额外参数使用的是ApplicationArguments这个类（第一个和main相同）
+
+> 注意如果系统想使用，运行的时候传入的数据的话，可以使用ApplicationArguments 这个参数将相关的值注入进来或者使用ApplicationRunner接口或者CommandLineRunner初始化
 
 #spring boot 带有状态的结束 使用exit 运行程序
 
