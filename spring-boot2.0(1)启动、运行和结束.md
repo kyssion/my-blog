@@ -1,5 +1,5 @@
 
-spring boot 一般基于maven进行配置
+导引： spring boot的简单配置，基本启动方法，和特殊关闭模式
 
 ### springboot 配置的核心元素
 
@@ -77,4 +77,59 @@ spring boot 实现了一定程度下的热部署功能，暂时不做过多的�
 		<optional>true</optional>
 	</dependency>
 </dependencies>
+```
+
+### spring boot 的启动方法
+
+```java
+public static void main(String[] args) {
+	SpringApplication app = new SpringApplication(MySpringConfiguration.class);
+	app.setBannerMode(Banner.Mode.OFF);
+	app.run(args);
+}
+```
+注意这里传递过去的参数是一个配置源，也就是说这个类必须是@Configuration或者是一个继承@Configuration注解标记的类
+
+当然，也可以通过使用application.properties文件来配置SpringApplication，但是这里涉及到springboot外部化配置，见下面
+
+springboot 还可以使用流式布局构建application的上下文关系，具体的实现如下
+
+```java
+new SpringApplicationBuilder()
+		.sources(Parent.class)
+		.child(Application.class)
+		.bannerMode(Banner.Mode.OFF)
+		.run(args);
+```
+
+注意：Web组件必须包含在子上下文中，并且父环境和子环境都使用相同的环境
+
+
+#spring boot 带有状态的结束 使用exit 运行程序
+
+在调用SpringApplication.exit（）时希望返回特定的退出代码，那么bean可以实现org.springframework.boot.ExitCodeGenerator接口。 ，然后可以将此退出代码传递给System.exit（）以将其作为状态代码返回，
+
+```java
+/**
+* 接口只有一个方法
+* @Compomet
+* class Runtest implements ExitCodeGenerator {
+*     @Override
+*     public int getExitCode() {
+*         return 0;
+*     }
+* }
+*/
+
+@SpringBootApplication
+public class ExitCodeApplication {
+	@Bean
+	public ExitCodeGenerator exitCodeGenerator() {
+		return () -> 42;
+	}
+	public static void main(String[] args) {
+		System.exit(SpringApplication
+				.exit(SpringApplication.run(ExitCodeApplication.class, args)));
+	}
+}
 ```
