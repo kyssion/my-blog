@@ -4,7 +4,7 @@ IOC   inversion of control  控制反转
 
 DI   Dependency Injection  依赖注入
 
-####依赖注入
+#### 依赖注入
 
 当然是某个对象依赖于IoC/DI的容器，对象需要IoC/DI的容器来提供对象需要的外部资源，IoC/DI的容器 注入 某个对象并且注入某个对象所需要的外部资源，由IoC/DI的容器来控制对象了，根本上是控制对象实例的创建
 
