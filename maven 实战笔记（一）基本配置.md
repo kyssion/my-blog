@@ -5,7 +5,9 @@
 ### maven文件目录结构
 
 - bin：maven的运行时目录，放置maven运行时的脚本，目录中还有一个mvnDebug文件，相比较mvn文件添加了调试功能，文件夹中的m2.conf，是classworlds的配置文件
+
 - boot：中只有一个文件plexus-classworlds-2.5.2.jar（maven3.5）这个是maven自己的实现的类加载器（这个其实是实现jar下载等功能所必需的）
+
 - conf：其中的settting.xml文件全局定义maven的行为，在使用上更加倾向于见此文件拷贝至~/.m2文件夹中进行私有化定制
 lib：防止maven的各种依赖文件
 

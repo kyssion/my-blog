@@ -2,7 +2,7 @@
 
 ### spring MVC 整体的架构设计
 
-![](/blogimg/springMVC/1.jpg)
+![](blogimg/springMVC/1.jpg)
 
 ![](blogimg/springMVC/1.png)
 
