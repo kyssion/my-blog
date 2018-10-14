@@ -9,3 +9,9 @@ update mysql.user set authentication_string=password('123qwe') where user='root'
 ```sql
 update mysql.user set plugin = 'mysql_native_password' where user='root'
 ```
+
+生效和刷新
+
+```sql
+flush privileges;
+```
