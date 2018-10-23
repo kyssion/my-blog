@@ -13,6 +13,8 @@ xml配置文件
 	<context:include-filter type="annotation" expression=".*jkl"/><!-- 作为过滤器 -->
 </context:component-scan>
 ```   
+
+
    
 注意：必须还要加上如下的注解，这个注解的作用是开启@Autowired，@ Resource ，@ PostConstruct，@ PreDestroy，@PersistenceContext，@Required 各种支持从而不需要在xml文件中配置相关的类
 
