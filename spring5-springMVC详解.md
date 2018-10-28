@@ -234,7 +234,6 @@ public void client(){
     MediaType contentType = entity.getHeaders().getContentType();
     HttpStatus statusCode = entity.getStatusCode();
 }
-
 //服务端
 @RequestMapping("/handle")
 public ResponseEntity<String> handle() {
@@ -245,7 +244,6 @@ public ResponseEntity<String> handle() {
     return new ResponseEntity<String>("Hello World", responseHeaders,   HttpStatus.CREATED);
 }
 ```
-
 当使用string类型的时候就和@ResponceBody+@ResponseStatus(手动设置httpcode) 相同
 
 ```java
