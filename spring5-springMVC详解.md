@@ -234,7 +234,9 @@ public void client(){
     MediaType contentType = entity.getHeaders().getContentType();
     HttpStatus statusCode = entity.getStatusCode();
 }
+
 //服务端
+
 @RequestMapping("/handle")
 public ResponseEntity<String> handle() {
     URI location = ...;
