@@ -189,7 +189,7 @@ public static final String WEB_APPLICATION_CONTEXT_ATTRIBUTE = DispatcherServlet
 
 这个是试图返回的异常处理包括相关的错误处理方法 -- 通过这种方法可以实现全局的异常捕获
 
-3. HandlerIntercepter 
+3. HandlerIntercepter Print(a ...interface{}) (nPrint(a ...interface{}) (n
 
 处理相关的接口进行拦截 
 
