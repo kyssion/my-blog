@@ -111,6 +111,7 @@ import org.xnio.channels.ConnectedStreamChannel;
 public final class SimpleHelloWorldBlockingClient {
 
     public static void main(String[] args) throws Exception {
+        
         final Charset charset = Charset.forName("utf-8");
         //创建Xnio实例，并构造XnioWorker
         final Xnio xnio = Xnio.getInstance();
@@ -146,3 +147,6 @@ public final class SimpleHelloWorldBlockingClient {
     }
 }
 ```
+
+> 2018: ps - xnioworker 方法中的 connectStream 和 createStreamServer 已经被标记为过时, 建议采用
+
