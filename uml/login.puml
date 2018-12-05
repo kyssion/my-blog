@@ -1,0 +1,73 @@
+@startuml login
+
+actor user
+database cache order 10000
+database database order 20000
+user -> service_one : 发送请求信息
+service_one -> service_one : cookie中是否有token
+alt 存在token
+    service_one -> redis : 查询是否存在userId 和 token 的记录
+    redis --> service_one : 返回记录的查询结果
+    alt 如果不存在记录
+        service_one->user:重定向到sso并携带service url地址
+        user->sso : 进行登入校验 并传递sso处理后要跳转的地址 url(1)
+        alt 如果用户在sso登入过(存在sso cookie token)
+            sso->cache : 使用cookie token值查询 登入token
+            cache-->sso: 返回登入结果
+            sso->service_one : 使用jsonp等技术写入登入 token值
+            sso->user : 重定向到 url(1)
+        else 用户没有在sso登入过(无 so cookie token)
+            sso->user:进入登入页面
+            user->sso: 输入登入信息
+            sso->database:用户查询
+            database-->sso:返回查询结果
+            alt 无查询结果
+                sso->user:账号或密码错误请重试
+            else 存在查询结果
+                activate sso
+                sso->sso : 生成登入token
+                sso->cache : 写入登入token
+                sso->database : 写入登入token
+                sso->sso : 生成sso cookie token
+                sso->cache : 写入 soo cookie token和登入token的对应关系
+                sso->user : 写入用户sso cookie 到前端
+                sso->service_one : 使用jsonp等技术写入登入 token值
+                sso->user : 重定向到重定向到 url(1)
+                deactivate sso
+            end
+        end
+    else 存在记录
+        service_one->service_one:执行剩余业务逻辑
+        service_one->user: 返回结果
+    end
+
+else 不存在token
+    service_one->user:重定向到sso并携带service url地址
+    user->sso : 进行登入校验 并传递sso处理后要跳转的地址 url(1)
+    alt 如果用户在sso登入过(存在sso cookie token)
+        sso->cache : 使用cookie token值查询 登入token
+        cache-->sso: 返回登入结果
+        sso->service_one : 使用jsonp等技术写入登入 token值
+        sso->user : 重定向到 url(1)
+    else 用户没有在sso登入过(无 so cookie token)
+        sso->user:进入登入页面
+        user->sso: 输入登入信息
+        sso->database:用户查询
+        database-->sso:返回查询结果
+        alt 无查询结果
+            sso->user:账号或密码错误请重试
+        else 存在查询结果
+            activate sso
+            sso->sso : 生成登入token
+            sso->cache : 写入登入token
+            sso->database : 写入登入token
+            sso->sso : 生成sso cookie token
+            sso->cache : 写入 soo cookie token和登入token的对应关系
+            sso->user : 写入用户sso cookie 到前端
+            sso->service_one : 使用jsonp等技术写入登入 token值
+            sso->user : 重定向到重定向到 url(1)
+            deactivate sso
+        end
+    end
+end
+@enduml
