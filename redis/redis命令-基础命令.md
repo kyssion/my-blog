@@ -59,6 +59,3 @@ redis> BLPOP list1 list2 0
 这个方法是BLPOP从列表尾部获取信息的变体
 
 ---
-
-
-
