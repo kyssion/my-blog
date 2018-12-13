@@ -5,7 +5,6 @@
 ### 一.首先展示这个demo的目录结构
 
 ![](blogimg/netty/4.png)
-
 EchoClient 和 EchoServer 分别表示 客户端和服务端的运行程序，对应的Handler 数据调用的时候相关的操作方法
 
 ### 二.代码
