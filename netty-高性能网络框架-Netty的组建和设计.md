@@ -12,7 +12,7 @@ ChannelEventLoopchannelFutureChannelHandlerchannelPipelinebootstrap
 
 ### 一.Chanel接口
 
-这个接口实现基本的io操作(bind()、connect()、read()、write())，映射传统javaSocket的编程过程，大大降低相关的直接使用socket的复杂程度。相关的实现类
+这个接口实现基本的io操作(bind()、connect()、read()、write())，映射传统javaSocket的编程过程，大大降低相关的直接使用socket的复杂程度。相关的实现类工程师
 
 - NioSocketChannel
 
