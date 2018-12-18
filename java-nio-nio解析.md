@@ -228,4 +228,267 @@ public class BIOClient {
 
 缺点: 
 
-1. 
+1. 线程占用的比较多
+2. 如果处理多个请求一个请求阻塞了,会导致所有的请求都阻塞掉
+
+#### java NIO
+
+ps java nio比较难 , 里面有很多的点需要处理
+
+```java 
+
+//client
+import java.io.IOException;
+
+public class NioClient {
+    public static void main(String[] args) throws IOException {
+        new Thread(new ClientReactor("127.0.0.1",12345)).start();
+    }
+}
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
+import java.util.Iterator;
+import java.util.Set;
+
+public class ClientReactor implements Runnable {
+
+    private int port;
+    private String host;
+    private SocketChannel socketChannel;
+    private Selector selector;
+    private volatile boolean stop;
+
+    public void stop() {
+        this.stop = true;
+    }
+    public ClientReactor(String host, int port) {
+        this.host = host == null ? "127.0.0.1" : host;
+        this.port = port;
+        try {
+            selector = Selector.open();
+            socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
+    public void doWrite(SocketChannel socketChannel) throws IOException {
+        byte[] bytes = "client send info".getBytes();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(bytes.length);
+        byteBuffer.put(bytes);
+        byteBuffer.flip();
+        socketChannel.write(byteBuffer);
+        if (!byteBuffer.hasRemaining()) {
+            System.out.println("Send order 2 server succeed.");
+        }
+    }
+    public void doConnect() throws IOException {
+        if (this.socketChannel.connect(new InetSocketAddress(host, port))) {
+            socketChannel.register(selector, SelectionKey.OP_READ);
+            doWrite(socketChannel);
+        } else {
+            socketChannel.register(selector, SelectionKey.OP_CONNECT);
+        }
+    }
+    public void handleInput(SelectionKey selectionKey) throws IOException {
+        if (selectionKey.isValid()) {
+            SocketChannel socketChannel = (SocketChannel) selectionKey.channel();
+            if (selectionKey.isConnectable()) {
+                if(socketChannel.finishConnect()) {
+                    socketChannel.register(selector, SelectionKey.OP_READ);
+                    doWrite(socketChannel);
+                }else{
+                    System.exit(1);
+                }
+            }
+            if (selectionKey.isReadable()) {
+                ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+                int readLength = socketChannel.read(byteBuffer);
+                if (readLength > 0) {
+                    byteBuffer.flip();
+                    byte[] bytes = new byte[byteBuffer.remaining()];
+                    byteBuffer.get(bytes);
+                    String body = new String(bytes,"UTF-8");
+                    System.out.println(body);
+                    this.stop();
+                }else if (readLength<0){
+                    selectionKey.cancel();
+                    socketChannel.close();
+                }else{
+                    ;
+                }
+            }
+        }
+    }
+    @Override
+    public void run() {
+        try {
+            doConnect();
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
+        while (!stop) {
+            try {
+                selector.select(1000);
+                Set<SelectionKey> selectionKeys = this.selector.selectedKeys();
+                Iterator<SelectionKey> iterator = selectionKeys.iterator();
+                SelectionKey selectionKey = null;
+                while (iterator.hasNext()) {
+                    selectionKey = iterator.next();
+                    iterator.remove();
+                    try {
+                        handleInput(selectionKey);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        if (selectionKey != null) {
+                            selectionKey.cancel();
+                            if (selectionKey.channel() != null)
+                                selectionKey.channel().close();
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        // 多路复用器关闭后，所有注册在上面的Channel和Pipe等资源都会被自动去注册并关闭，所以不需要重复释放资源
+        if (selector != null) {
+            try {
+                selector.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+```
+
+```java
+//server
+import java.io.IOException;
+
+public class NioServer {
+    public static void main(String[] args) throws IOException {
+        ServerReactor serverReactor = new ServerReactor(12345);
+        new Thread(serverReactor,"nio_server").start();
+    }
+}
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.Set;
+
+public class ServerReactor implements Runnable {
+
+    private Selector selector;
+    private ServerSocketChannel serverSocketChannel;
+    private volatile boolean stop;
+
+    public ServerReactor(int port) throws IOException {
+        //创建reactor线程创建多路复用器
+        selector = Selector.open();
+        //用于监听客户端管道是所有管道的父管道
+        serverSocketChannel = ServerSocketChannel.open();
+        //设置为非阻塞模式
+        serverSocketChannel.configureBlocking(false);
+        //绑定端口
+        serverSocketChannel.socket().bind(new InetSocketAddress(port),1024);
+        //将channel 注册到selector上监听 ACCEPT
+        SelectionKey selectionKey = serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+        System.out.println("the server is start in port : " + port);
+    }
+    public void stop() {
+        this.stop = true;
+    }
+    public void handleInput(SelectionKey key) throws IOException {
+        if (key.isValid()) {
+            if (key.isAcceptable()) {
+                ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
+                SocketChannel socketChannel = ssc.accept();
+                socketChannel.configureBlocking(false);
+                socketChannel.register(selector, SelectionKey.OP_READ);
+            }
+            if (key.isReadable()) {
+                SocketChannel socketChannel = (SocketChannel) key.channel();
+                ByteBuffer byteBuffer = ByteBuffer.allocate(1024);
+                int readByteLength = socketChannel.read(byteBuffer);
+                if (readByteLength > 0) {
+                    byteBuffer.flip();
+                    byte[] bytes = new byte[byteBuffer.remaining()];
+                    byteBuffer.get(bytes);
+                    String body = new String(bytes, "UTF-8");
+                    System.out.println("the time server receive order : " + body);
+                    String sendInfo = "this is server you and now TIme is : " + new Date().toString();
+                    doWrite(socketChannel, sendInfo);
+                }else if(readByteLength<0){
+                    // 对端链路关闭
+                    key.cancel();
+                    socketChannel.close();
+                    System.out.println("close socket");
+                }
+            }
+        }
+    }
+    public void doWrite(SocketChannel socketChannel, String sendInfo) throws IOException {
+        if (sendInfo != null && sendInfo.trim().length() > 0) {
+            byte[] bytes = sendInfo.getBytes();
+            ByteBuffer writerByteBuffer = ByteBuffer.allocate(bytes.length);
+            writerByteBuffer.put(bytes);
+            writerByteBuffer.flip();
+            socketChannel.write(writerByteBuffer);
+        }
+    }
+    @Override
+    public void run() {
+        //
+        while (!stop) {
+            try {
+                //设置每秒进行一次查找就绪状态的通道
+                selector.select(1000);
+                Set<SelectionKey> keys = selector.selectedKeys();
+                Iterator<SelectionKey> iterable = keys.iterator();
+                SelectionKey selectionKey = null;
+                while (iterable.hasNext()) {
+                    selectionKey = iterable.next();
+                    iterable.remove();
+                    try {
+                        handleInput(selectionKey);
+                    }catch (IOException e){
+                        selectionKey.cancel();
+                        if(selectionKey.channel() != null){
+                            selectionKey.channel().close();
+                        }
+                        System.out.println("远程连接异常进行关闭");
+                    }
+
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        // 多路复用器关闭后，所有注册在上面的Channel和Pipe等资源都会被自动去注册并关闭，所以不需要重复释放资源
+        if (selector != null) {
+            try {
+                selector.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+```
