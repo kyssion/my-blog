@@ -28,6 +28,13 @@
 
 ![](blogimg/java/javaNIO/5.png)
 
+
+### java 几种io的对比
+
+![](blogimg/java/javaNIO/7.jpg)
+![](blogimg/java/javaNIO/8.png)
+
+
 ### java 集中io模型样例
 
 #### BIO 模型
