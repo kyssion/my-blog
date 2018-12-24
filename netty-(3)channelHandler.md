@@ -98,3 +98,45 @@ ChannelOutboundHandler的一个强大的功能是可以按需推迟操作或者�
 |read(ChannelHandlerContext)|当请求从Channel读取更多的数据时被调用|
 |flush(ChannelHandlerContext)|当请求通过Channel将入队数据冲刷到远程节点时被调用|
 |write(ChannelHandlerContext,Object,ChannelPromise)|当请求通过Channel将数据写到远程节点时被调用|
+
+> ChannelPromise与ChannelFuture　ChannelOutboundHandler中的大部分方法都需要一个ChannelPromise参数，以便在操作完成时得到通知。ChannelPromise是ChannelFuture的一个子类，其定义了一些可写的方法，如setSuccess()和setFailure()，从而使ChannelFuture不可变[2]。
+
+
+### netty 内置处理器实现类ChannelInboundHandlerAdapter和ChannelOutboundHandlerAdapter
+
+你可以使用ChannelInboundHandlerAdapter和ChannelOutboundHandlerAdapter类作为自己的ChannelHandler的起始点。这两个适配器分别提供了ChannelInboundHandler和ChannelOutboundHandler的基本实现。通过扩展抽象类ChannelHandlerAdapter，它们获得了它们共同的超接口ChannelHandler的方法。
+
+![](/blogimg/netty/10.png)
+
+ChannelHandlerAdapter还提供了实用方法isSharable()
+
+如果其对应的实现被标注为Sharable，那么这个方法将返回true，表示它可以被添加到多个ChannelPipeline中
+
+> 在ChannelInboundHandlerAdapter和ChannelOutboundHandlerAdapter中所提供的方法体调用了其相关联的ChannelHandlerContext上的等效方法，从而将事件转发到了ChannelPipeline中的下一个ChannelHandler中。
+
+### netty资源的标准写法
+
+```java
+@Sharable
+public class DiscardOutboundHandler
+　　extends ChannelOutboundHandlerAdapter {  //  扩展了ChannelOutboundHandlerAdapter
+　　@Override
+　　public void write(ChannelHandlerContext ctx,
+　　　　Object msg, ChannelPromise promise) {
+　　　　ReferenceCountUtil.release(msg);　// 通过使用R eferenceCountUtil.realse(...)方法释放资源
+　　　　promise.setSuccess();　 // 通知ChannelPromise数据已经被处理了
+　　}
+}
+```
+
+注意点:
+
+1. 使用ReferenceCountUtil.release(msg); 释放资源
+2. 使用promise.setSuccess();通知ChannelPromise数据已经被处理了
+
+### netty 内置资源泄漏检测工具
+
+每当通过调用ChannelInboundHandler.channelRead()或者ChannelOutbound- Handler.write()方法来处理数据时，你都需要确保没有任何的资源泄漏。你可能还记得在前面的章节中所提到的，Netty使用引用计数来处理池化的ByteBuf。所以在完全使用完某个ByteBuf后，调整其引用计数是很重要的。
+
+为了帮助你诊断潜在的（资源泄漏）问题，Netty提供了class ResourceLeakDetector[3]，它将对你应用程序的缓冲区分配做大约1%的采样来检测内存泄露。
+
