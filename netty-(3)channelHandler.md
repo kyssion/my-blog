@@ -1,0 +1,84 @@
+
+之前有一个netty的数据流处理图
+
+![](/blogimg/netty/8.png)
+
+在这张图中可以体现出在ChannelPipeline中将ChannelHandler链接在一起以组织处理逻辑,并且使用ChannelHandlerContext传递参数
+
+### ChannelHandler家族
+
+1. channnel的生命周期
+
+|状　　态|描　　述|
+|---|---|
+|ChannelUnregistered|Channel已经被创建，但还未注册到EventLoop|
+|ChannelRegistered|Channel已经被注册到了EventLoop|
+|ChannelActive|Channel处于活动状态（已经连接到它的远程节点）。它现在可以接收和发送数据了|
+|ChannelInactive|Channel没有连接到远程节点|
+
+channelHandler的状态扭转如下
+
+![](/blogimg/netty/9.png)
+
+2. channelHandler生命周期
+
+在ChannelHandler被添加到ChannelPipeline中或者被从ChannelPipeline中移除时会调用这些操作。这些方法中的每一个都接受一个ChannelHandlerContext参数
+
+channelHandlerContext在生命周期中的回调方法
+
+|类　　型|描　　述|
+|---|---|
+|handlerAdded|当把ChannelHandler添加到ChannelPipeline中时被调用|
+|handlerRemoved|当从ChannelPipeline中移除ChannelHandler时被调用|
+|exceptionCaught|当处理过程中在ChannelPipeline中有错误产生时被调用|
+|ChannelInactive|Channel没有连接到远程节点|
+
+Netty定义了下面两个重要的ChannelHandler子接口：
+
+- ChannelInboundHandler——处理入站数据以及各种状态变化；
+- ChannelOutboundHandler——处理出站数据并且允许拦截所有的操作。
+
+> channelInBoundHandler
+
+用来处理输入流的处理方法,相比较原始的channelhandler接口,本方法扩展了一写一channel状态相关的方法,这些方法将会在数据被接收时或者与其对应的Channel状态发生改变时被调用。正如我们前面所提到的，这些方法和Channel的生命周期密切相关
+
+|类　　型|描　　述|
+|----|----|
+|channelRegistered|当Channel已经注册到它的EventLoop并且能够处理I/O时被调用|
+|channelUnregistered|当Channel从它的EventLoop注销并且无法处理任何I/O时被调用|
+|channelActive|当Channel处于活动状态时被调用；Channel已经连接/绑定并且已经就绪|
+|channelInactive|当Channel离开活动状态并且不再连接它的远程节点时被调用|
+|channelReadComplete|当Channel上的一个读操作完成时被调用[1]|
+|channelRead|当从Channel读取数据时被调用|
+|ChannelWritabilityChanged|当Channel的可写状态发生改变时被调用。用户可以确保写操作不会完成得太快（以避免发生OutOfMemoryError）或者可以在Channel变为再次可写时恢复写入。可以通过调用Channel的isWritable()方法来检测Channel的可写性。与可写性相关的阈值可以通过Channel.config().setWriteHighWaterMark()和Channel.config().setWriteLowWaterMark()方法来设置|
+|userEventTriggered|当ChannelnboundHandler.fireUserEventTriggered()方法被调用时被调用，因为一个POJO被传经了ChannelPipeline|
+
+当某个ChannelInboundHandler的实现重写channelRead()方法时，它将负责显式地释放与池化的ByteBuf实例相关的内存。Netty为此提供了一个实用方法ReferenceCount-Util.release()
+
+```java
+@Sharable
+public class DiscardHandler extends ChannelInboundHandlerAdapter {   // 扩展了Channel-InboundHandler-Adapter
+　　@Override
+　　public void channelRead(ChannelHandlerContext ctx, Object msg) {  // 丢弃已接收的消息
+　　　　ReferenceCountUtil.release(msg);　
+　　}
+}
+```
+
+这样手动的进行资源的释放是比较麻烦的,netty提供了SimpleChannelInboundHandler可以自动的释放资源
+
+```java
+@Sharable
+public class SimpleDiscardHandler
+　　extends SimpleChannelInboundHandler<Object> {  //  扩展了SimpleChannelInboundHandler
+　　@Override
+　　public void channelRead0(ChannelHandlerContext ctx,
+　　　　Object msg) {
+　　　　// No need to do anything special　 // 不需要任何显式的资源释放
+　　}
+}
+```
+
+由于SimpleChannelInboundHandler会自动释放资源，所以你不应该存储指向任何消息的引用供将来使用，因为这些引用都将会失效。
+
+> ChannelOutBoundHandler
