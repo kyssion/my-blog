@@ -82,3 +82,19 @@ public class SimpleDiscardHandler
 由于SimpleChannelInboundHandler会自动释放资源，所以你不应该存储指向任何消息的引用供将来使用，因为这些引用都将会失效。
 
 > ChannelOutBoundHandler
+
+出站操作和数据将由ChannelOutboundHandler处理。它的方法将被Channel、Channel- Pipeline以及ChannelHandlerContext调用。
+
+ChannelOutboundHandler的一个强大的功能是可以按需推迟操作或者事件，这使得可以通过一些复杂的方法来处理请求。例如，如果到远程节点的写入被暂停了，那么你可以推迟冲刷操作并在稍后继续。
+
+|类　　型|描　　述|
+|---|---|
+|bind(ChannelHandlerContext,SocketAddress,ChannelPromise)|当请求将Channel绑定到本地地址时被调用|
+|connect(ChannelHandlerContext,|当请求将Channel连接到远程节点时被调用|
+|SocketAddress,SocketAddress,ChannelPromise)||
+|disconnect(ChannelHandlerContext,ChannelPromise)|当请求将Channel从远程节点断开时被调用|
+|close(ChannelHandlerContext,ChannelPromise)|当请求关闭Channel时被调用|
+|deregister(ChannelHandlerContext,ChannelPromise)|当请求将Channel从它的EventLoop注销时被调用|
+|read(ChannelHandlerContext)|当请求从Channel读取更多的数据时被调用|
+|flush(ChannelHandlerContext)|当请求通过Channel将入队数据冲刷到远程节点时被调用|
+|write(ChannelHandlerContext,Object,ChannelPromise)|当请求通过Channel将数据写到远程节点时被调用|
