@@ -140,3 +140,9 @@ public class DiscardOutboundHandler
 
 为了帮助你诊断潜在的（资源泄漏）问题，Netty提供了class ResourceLeakDetector[3]，它将对你应用程序的缓冲区分配做大约1%的采样来检测内存泄露。
 
+
+### netty 的 channelPipeLine 接口
+
+channelPipline 其实是一个调度链处理器,用来处理channel和对应的handle的执行过程
+
+每一个channel都被分配了一个唯一的pipeline
