@@ -226,3 +226,5 @@ pipeline.replace("handler2", "handler4", new ForthHandler());  //  将SecondHand
 
 ### channelHandlerContext接口
 
+### netty 的异常处理
+
