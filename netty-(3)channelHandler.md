@@ -145,4 +145,81 @@ public class DiscardOutboundHandler
 
 channelPipline 其实是一个调度链处理器,用来处理channel和对应的handle的执行过程
 
-每一个channel都被分配了一个唯一的pipeline
+每一个channel都被分配了一个唯一的pipeline,这项关联是永久性的；Channel既不能附加另外一个ChannelPipeline，也不能分离其当前的。
+
+根据事件的起源，事件将会被ChannelInboundHandler或者ChannelOutboundHandler处理。随后，通过调用ChannelHandlerContext的实现，它将被转发给同一超类型的下一个ChannelHandler
+
+> ChannelHandlerContext:ChannelHandlerContext使得ChannelHandler能够和它的ChannelPipeline以及其他的ChannelHandler交互。ChannelHandler可以通知其所属的ChannelPipeline中的下一个ChannelHandler，甚至可以动态修改它所属的ChannelPipeline。
+
+
+当你完成了通过调用ChannelPipeline.add*()方法将入站处理器（ChannelInboundHandler）和出站处理器（ChannelOutboundHandler）混合添加到ChannelPipeline之后，每一个ChannelHandler从头部到尾端的顺序位置正如同我们添加的时候那样。
+
+在ChannelPipeline传播事件时，它会测试ChannelPipeline中的下一个Channel- Handler的类型是否和事件的运动方向相匹配。如果不匹配，ChannelPipeline将跳过该ChannelHandler并前进到下一个，直到它找到和该事件所期望的方向相匹配的为止。
+
+> channelPipeline接口的方法
+
+
+|名　　称|描　　述|
+|---|---|
+|addFirst|将一个ChannelHandler添加到ChannelPipeline中|
+|addBeforeaddAfteraddLast||
+|remove|将一个ChannelHandler从ChannelPipeline中移除|
+|replace|将ChannelPipeline中的一个ChannelHandler替换为另一个ChannelHandler|
+
+```java
+ChannelPipeline pipeline = ..;
+FirstHandler firstHandler = new FirstHandler();   //  创建一个FirstHandler 的实例
+pipeline.addLast("handler1", firstHandler);　 //  将该实例作为"handler1" 添加到ChannelPipeline 中
+pipeline.addFirst("handler2", new SecondHandler());　 //  将一个SecondHandler的实例作为"handler2"添加到ChannelPipeline的第一个槽中。这意味着它将被放置在已有的"handler1"之前 
+pipeline.addLast("handler3", new ThirdHandler());　 //  将一个ThirdHandler 的实例作为"handler3"添加到ChannelPipeline 的最后一个槽中　
+...
+pipeline.remove("handler3");　 //  通过名称移除"handler3"　 
+pipeline.remove(firstHandler);　 //  通过引 用移除FirstHandler（它是唯一的，所以不需要它的名称）　
+pipeline.replace("handler2", "handler4", new ForthHandler());  //  将SecondHandler("handler2")替换为FourthHandler:"handler4"
+```
+
+> 有时可能需要与那些使用阻塞API的遗留代码进行交互。对于这种情况，ChannelPipeline有一些接受一个EventExecutorGroup的add()方法。如果一个事件被传递给一个自定义的EventExecutor- Group，它将被包含在这个EventExecutorGroup中的某个EventExecutor所处理，从而被从该Channel本身的EventLoop中移除。对于这种用例，Netty提供了一个叫DefaultEventExecutor- Group的默认实现。
+
+> channelPipeline 来访问ChannelHandler的方法
+
+|名　　称|描　　述|
+|---|---|
+|get|通过类型或者名称返回ChannelHandler|
+|context|返回和ChannelHandler绑定的ChannelHandlerContext|
+|names|返回ChannelPipeline中所有ChannelHandler的名称|
+
+> channelPipeline 事件触发方法
+
+1. 入站事件
+
+|方法名称|描　　述|
+|---|---|
+|fireChannelRegistered|调用ChannelPipeline中下一个ChannelInboundHandler的channelRegistered(ChannelHandlerContext)方法|
+|fireChannelUnregistered|调用ChannelPipeline中下一个ChannelInboundHandler的channelUnregistered(ChannelHandlerContext)方法|
+|fireChannelActive|调用ChannelPipeline中下一个ChannelInboundHandler的channelActive(ChannelHandlerContext)方法|
+|fireChannelInactive|调用ChannelPipeline中下一个ChannelInboundHandler的channelInactive(ChannelHandlerContext)方法|
+|fireExceptionCaught|调用ChannelPipeline中下一个ChannelInboundHandler的exceptionCaught(ChannelHandlerContext,Throwable)方法|
+|fireUserEventTriggered|调用ChannelPipeline中下一个ChannelInboundHandler的userEventTriggered(ChannelHandlerContext,Object)方法|
+|fireChannelRead|调用ChannelPipeline中下一个ChannelInboundHandler的channelRead(ChannelHandlerContext,Objectmsg)方法|
+|fireChannelReadComplete|调用ChannelPipeline中下一个ChannelInboundHandler的channelReadComplete(ChannelHandlerContext)方法|
+|fireChannelWritabilityChanged|调用ChannelPipeline中下一个ChannelInboundHandler的channelWritabilityChanged(ChannelHandlerContext)方法|
+
+2. 出站事件
+
+|方法名称|描　　述|
+|---|---|
+|bind|将Channel绑定到一个本地地址，这将调用ChannelPipeline中的下一个ChannelOutboundHandler的bind(ChannelHandlerContext,SocketAddress,ChannelPromise)方法|
+|connect|将Channel连接到一个远程地址，这将调用ChannelPipeline中的下一个ChannelOutboundHandler的connect(ChannelHandlerContext,SocketAddress,ChannelPromise)方法|
+|disconnect|将Channel断开连接。这将调用ChannelPipeline中的下一个ChannelOutboundHandler的disconnect(ChannelHandlerContext,ChannelPromise)方法|
+|close|将Channel关闭。这将调用ChannelPipeline中的下一个ChannelOutboundHandler的close(ChannelHandlerContext,ChannelPromise)方法|
+|deregister|将Channel从它先前所分配的EventExecutor（即EventLoop）中注销。这将调用ChannelPipeline中的下一个ChannelOutboundHandler的deregister(ChannelHandlerContext,ChannelPromise)方法|
+|flush|冲刷Channel所有挂起的写入。这将调用ChannelPipeline中的下一个ChannelOutboundHandler的flush(ChannelHandlerContext)方法|
+|write|将消息写入Channel。这将调用ChannelPipeline中的下一个ChannelOutboundHandler的write(ChannelHandlerContext,Objectmsg,ChannelPromise)方法。注意：这并不会将消息写入底层的Socket，而只会将它放入队列中。要将它写入Socket，需要调用flush()或者writeAndFlush()方法|
+|writeAndFlush|这是一个先调用write()方法再接着调用flush()方法的便利方法|
+|read|请求从Channel中读取更多的数据。这将调用ChannelPipeline中的下一个ChannelOutboundHandler的read(ChannelHandlerContext)方法|
+
+总结一下：
+
+- ChannelPipeline保存了与Channel相关联的ChannelHandler；
+- ChannelPipeline可以根据需要，通过添加或者删除ChannelHandler来动态地修改；
+- ChannelPipeline有着丰富的API用以被调用，以响应入站和出站事件。
