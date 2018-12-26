@@ -223,3 +223,6 @@ pipeline.replace("handler2", "handler4", new ForthHandler());  //  将SecondHand
 - ChannelPipeline保存了与Channel相关联的ChannelHandler；
 - ChannelPipeline可以根据需要，通过添加或者删除ChannelHandler来动态地修改；
 - ChannelPipeline有着丰富的API用以被调用，以响应入站和出站事件。
+
+### channelHandlerContext接口
+
