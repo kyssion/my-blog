@@ -226,5 +226,115 @@ pipeline.replace("handler2", "handler4", new ForthHandler());  //  将SecondHand
 
 ### channelHandlerContext接口
 
+ChannelHandlerContext代表了ChannelHandler和ChannelPipeline之间的关联，每当有ChannelHandler添加到ChannelPipeline中时，都会创建ChannelHandler- Context。ChannelHandlerContext的主要功能是管理它所关联的ChannelHandler和在同一个ChannelPipeline中的其他ChannelHandler之间的交互
+
+ChannelHandlerContext有很多的方法，其中一些方法也存在于Channel和Channel- Pipeline本身上，但是有一点重要的不同。如果调用Channel或者ChannelPipeline上的这些方法，它们将沿着整个ChannelPipeline进行传播。而调用位于ChannelHandlerContext上的相同方法，则将从当前所关联的ChannelHandler开始，并且只会传播给位于该ChannelPipeline中的下一个能够处理该事件的ChannelHandler。
+
+|方法名称|描　　述|
+|---|---|
+|alloc|返回和这个实例相关联的Channel所配置的ByteBufAllocator|
+|bind|绑定到给定的SocketAddress，并返回ChannelFuture|
+|channel|返回绑定到这个实例的Channel|
+|close|关闭Channel，并返回ChannelFuture|
+|connect|连接给定的SocketAddress，并返回ChannelFuture|
+|deregister|从之前分配的EventExecutor注销，并返回ChannelFuture|
+|disconnect|从远程节点断开，并返回ChannelFuture|
+|executor|返回调度事件的EventExecutor|
+|fireChannelActive|触发对下一个ChannelInboundHandler上的channelActive()方法（已连接）的调用|
+|fireChannelInactive|触发对下一个ChannelInboundHandler上的channelInactive()方法（已关闭）的调用|
+|fireChannelRead|触发对下一个ChannelInboundHandler上的channelRead()方法（已接收的消息）的调用|
+|fireChannelReadComplete|触发对下一个ChannelInboundHandler上的channelReadComplete()方法的调用|
+|fireChannelRegistered|触发对下一个ChannelInboundHandler上的fireChannelRegistered()方法的调用|
+|fireChannelUnregistered|触发对下一个ChannelInboundHandler上的fireChannelUnregistered()方法的调用|
+|fireChannelWritabilityChanged|触发对下一个ChannelInboundHandler上的fireChannelWritabilityChanged()方法的调用|
+|fireExceptionCaught|触发对下一个ChannelInboundHandler上的fireExceptionCaught(Throwable)方法的调用|
+|fireUserEventTriggered|触发对下一个ChannelInboundHandler上的fireUserEventTriggered(Objectevt)方法的调用|
+|handler|返回绑定到这个实例的ChannelHandler|
+|isRemoved|如果所关联的ChannelHandler已经被从ChannelPipeline中移除则返回true|
+|name|返回这个实例的唯一名称|
+|pipeline|返回这个实例所关联的ChannelPipeline|
+|read|将数据从Channel读取到第一个入站缓冲区；如果读取成功则触发[5]一个channelRead事件，并（在最后一个消息被读取完成后）通知ChannelInboundHandler的channelReadComplete(ChannelHandlerContext)方法|
+|write|通过这个实例写入消息并经过ChannelPipeline|
+|writeAndFlush|通过这个实例写入并冲刷消息并经过ChannelPipeline|
+
+当使用ChannelHandlerContext的API的时候，请牢记以下两点：
+
+- ChannelHandlerContext和ChannelHandler之间的关联（绑定）是永远不会改变的，所以缓存对它的引用是安全的；
+- 如同我们在本节开头所解释的一样，相对于其他类的同名方法，ChannelHandlerContext的方法将产生更短的事件流，应该尽可能地利用这个特性来获得最大的性能。
+
+
 ### netty 的异常处理
 
+异常处理是任何真实应用程序的重要组成部分，它也可以通过多种方式来实现。因此，Netty提供了几种方式用于处理入站或者出站处理过程中所抛出的异常。
+
+> 如果在处理入站事件的过程中有异常被抛出，那么它将从它在ChannelInboundHandler里被触发的那一点开始流经ChannelPipeline。要想处理这种类型的入站异常，你需要在你的ChannelInboundHandler实现中重写下面的方法。
+
+```java
+public class InboundExceptionHandler extends ChannelInboundHandlerAdapter {
+　　@Override
+　　public void exceptionCaught(ChannelHandlerContext ctx,
+　　　　Throwable cause) {
+　　　　cause.printStackTrace();
+　　　　ctx.close();
+　　}
+}
+```
+
+因为异常会向入站方向流动,，所以实现了前面所示逻辑的ChannelInboundHandler通常位于ChannelPipeline的最后,确保了所有的入站异常都总是会被处理，无论它们可能会发生在ChannelPipeline中的什么位置
+
+你应该如何响应异常，可能很大程度上取决于你的应用程序。你可能想要关闭Channel（和连接），也可能会尝试进行恢复。如果你不实现任何处理入站异常的逻辑（或者没有消费该异常），那么Netty将会记录该异常没有被处理的事实[7]。
+
+总结一下：
+
+- ChannelHandler.exceptionCaught()的默认实现是简单地将当前异常转发给ChannelPipeline中的下一个ChannelHandler；
+- 如果异常到达了ChannelPipeline的尾端，它将会被记录为未被处理；
+- 要想定义自定义的处理逻辑，你需要重写exceptionCaught()方法。然后你需要决定是否需要将该异常传播出去。
+
+> 用于处理出站操作中的正常完成以及异常的选项，都基于以下的通知机制。
+
+- 每个出站操作都将返回一个ChannelFuture。注册到ChannelFuture的Channel- FutureListener将在操作完成时被通知该操作是成功了还是出错了。
+- 几乎所有的ChannelOutboundHandler上的方法都会传入一个ChannelPromise的实例。作为ChannelFuture的子类，ChannelPromise也可以被分配用于异步通知的监听器。但是，ChannelPromise还具有提供立即通知的可写方法：
+
+```java
+ChannelPromise setSuccess();
+ChannelPromise setFailure(Throwable cause);
+```
+
+添加ChannelFutureListener只需要调用ChannelFuture实例上的addListener(ChannelFutureListener)方法，并且有两种不同的方式可以做到这一点。
+
+方法一是，调用出站操作（如write()方法）所返回的ChannelFuture上的addListener()方法。
+
+```java
+ChannelFuture future = channel.write(someMessage);
+future.addListener(new ChannelFutureListener() {
+　　@Override
+　　public void operationComplete(ChannelFuture f) {
+　　　　if (!f.isSuccess()) {
+　　　　　　f.cause().printStackTrace();
+　　　　　　f.channel().close();
+　　　　}
+　　}
+});
+```
+
+第二种方式是将ChannelFutureListener添加到即将作为参数传递给ChannelOut- boundHandler的方法的ChannelPromise
+
+```java
+public class OutboundExceptionHandler extends ChannelOutboundHandlerAdapter {
+　　@Override
+　　public void write(ChannelHandlerContext ctx, Object msg,
+　　　　ChannelPromise promise) {
+　　　　promise.addListener(new ChannelFutureListener() {
+　　　　　　@Override
+　　　　　　public void operationComplete(ChannelFuture f) {
+　　　　　　　　if (!f.isSuccess()) {
+　　　　　　　　　　f.cause().printStackTrace();
+　　　　　　　　　　f.channel().close();
+　　　　　　　　}
+　　　　　　}
+　　　　});
+　　}
+}
+```
+
+> 这种方式可以在全局上做了监听,也就是说如果整个ChannelOutboundHandler出现了问题,将会在ChannelPromise注册的监听其中进行监听
