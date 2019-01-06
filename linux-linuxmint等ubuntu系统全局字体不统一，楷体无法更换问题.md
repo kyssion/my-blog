@@ -54,7 +54,7 @@ zh_TW.EUC-TW EUC-TW
 zh_TW.UTF-8 UTF-8
 ```
 
-然后执行
+然后执行 sudo locale-gen
 
 ``` 
 Generating locales (this might take a while)...
