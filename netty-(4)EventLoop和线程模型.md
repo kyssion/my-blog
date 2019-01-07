@@ -6,7 +6,7 @@
 当任务完成时，将该Thread返回给该列表，使其可被重用。
 ![](blogimg/netty/11.png)
 
-### 反观netty中线程模型使用
+### netty中线程模型(eventLoop)使用
 
 1. EventLoop接口 
 
@@ -37,3 +37,55 @@ Netty的EventLoop是协同设计的一部分，它采用了两个基本的API：
 
 在Netty 4中，所有的I/O操作和事件都由已经被分配给了EventLoop的那个Thread来处理
 
+### jdk延时任务和netty的延时任务
+
+在执行延时任务的时候jdk的做法和netty的做法是不同的
+
+java使用多线程机制实现延迟操作ScheduledExecutorService等java.util.concurrent.Executors 类
+
+一个例子
+
+```java
+ScheduledExecutorService executor =
+　　Executors.newScheduledThreadPool(10);   //  创建一个其线程池具有10 个线程的ScheduledExecutorService
+ScheduledFuture<?> future = executor.schedule(
+　　new Runnable() {　  //  创建一个R unnable，以供调度稍后执行
+　　@Override
+　　public void run() {
+　　　　System.out.println("60 seconds later");  //  该任务要打印的消息
+　　}
+}, 60, TimeUnit.SECONDS);  // 调度任务在从现在开始的60 秒之后执行
+...
+executor.shutdown();   // 一旦调度任务执行完成，就关闭ScheduledExecutorService 以释放资源
+```
+
+在netty所有的事件本质上都是使用时间轮训的方法实现的
+
+所以Netty通过Channel的EventLoop实现任务调度解决了这一问题
+
+```java
+hannel ch = ...
+ScheduledFuture<?> future = ch.eventLoop().schedule(  //  创建一个Runnable以供调度稍后执行
+　　new Runnable() { 
+　　@Override
+　　public void run() {  //  要执行的代码
+　　　　System.out.println("60 seconds later");　
+　　}
+}, 60, TimeUnit.SECONDS);　 //  调度任务在从现在开始的60 秒之后执行
+```
+经过60秒之后，Runnable实例将由分配给Channel的EventLoop执行。如果要调度任务以每隔60秒执行一次，请使用scheduleAtFixedRate()方法
+
+```java
+Channel ch = ...
+ScheduledFuture<?> future = ch.eventLoop().scheduleAtFixedRate(   // 创建一个Runnable，以供调度稍后执行 
+　　new Runnable() {
+　　@Override
+　　public void run() {
+　　　　System.out.println("Run every 60 seconds");　  // 这将一直运行，直到ScheduledFuture 被取消
+　　}
+}, 60, 60, TimeUnit.Seconds);　  // 调度在60 秒之后，并且以后每间隔60 秒运行
+```
+
+> 注意:Netty的EventLoop扩展了ScheduledExecutorService（见图7-2），所以它提供了使用JDK实现可用的所有方法，包括在前面的示例中使用到的schedule()和scheduleAtFixedRate()方法
+
+要想取消或者检查（被调度任务的）执行状态，可以使用每个异步操作所返回的Scheduled- Future
