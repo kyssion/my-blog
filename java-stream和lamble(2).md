@@ -77,6 +77,38 @@ list.stream().filter((item) -> {
 
 > 引申一下:其实这个过程和建造者模式类似,在真正实现之前不停的添加配置和操作,只有在最后的Build过程中才真正的执行
 
+### java stream 的常用操作
+
+1. collect(toList); 及早求值 就不罗嗦了
+
+不过这个有两种种结构
+
+```java
+<R> R collect(Supplier<R> supplier,BiConsumer<R, ? super T> accumulator,BiConsumer<R, R> combiner);
+```
+
+```java
+<R, A> R collect(Collector<? super T, A, R> collector);
+```
+
+2. map类型
+
+这个方法很常用,就像他的名字映射,使用这种方法可以直接将一个流转化成另一个流
+
+一个例子,进行一下对比
+
+```java
+//使用传统方法
+for(String s:strings){
+    s.toUpperCase();
+}
+//使用stream流
+strings = strings.stream().map((item)->{
+    return item.toUpperCase();
+}).collect(Collectors.toList());
+
+strings = strings.stream().map(String::toUpperCase).collect(Collectors.toList());
+```
 
 
 

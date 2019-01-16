@@ -21,7 +21,16 @@ interface Function{
 }
 ```
 
-> 注意:lamble的new的对象必须为接口，并且接口中必须只有一个函数
+> 注意:lamble的new的对象必须为接口，并且接口中必须只有一个函数,但是可以有默认实现函数,比如下面这样
+
+```java
+interface Function{
+    void showWrite(String write);
+    default void Strr(String a,String b){
+        System.out.println("sf");
+    }
+}
+```
 
 ### java中lamble表达式的写法
 
