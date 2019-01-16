@@ -115,6 +115,28 @@ strings = strings.stream().map(String::toUpperCase).collect(Collectors.toList())
 这个是过滤器,通过这种方法可以将感兴趣的stream流中的对象整合进新的对象中
 
 ```java
-
+list.stream().filter((item) -> {
+    System.out.println(item);
+    if (item % 2 == 0) {
+        return true;
+    }
+    return false;
+}).collect(Collectors.toList());
 ```
+
+4. flapMap
+
+map 的升级版 flatMap 方法可用 Stream 替换值，然后将多个 Stream 连接成一个 Stream,说白了就是整合流用的
+
+```java
+List<String> objects = Stream.of(strings).flatMap(item->{// 这里的item是list对象,应为传入的就是strings list
+//返回值需要是stream用于合并流
+    return item.stream().map(i->{
+        i.toUpperCase();
+        i+="xxx";
+        return i;
+    });
+}).collect(Collectors.toList());
+```
+4. max和min
 
