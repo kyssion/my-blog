@@ -140,3 +140,41 @@ FunctionReturnF<String,Integer> functionReturnF1= (kkk)->Integer.valueOf(kkk);
 
 > 注意当使用的是范型的时候,要注意lamble表达式的各种属性应该满足范型定义的各种类型(声明时T,R的类型)
 
+3. 注意三，使用lamble可能有函数签名不一致的问题
+
+> 这个问题的本质是应为lamble表达式只是关心接口中函数的形式而这个函数所在的接口其实lamble并不关心
+> 在java内部的虚拟机实现这个方法的时候本质上是寻找有没有一个接口能够读应这个表达式,从而通过这种方法找到对应的接口
+
+例子：
+
+```java
+//两个lamble接口
+interface IntPred{
+    boolean Test(Integer integer);
+}
+interface IntPred2{
+    boolean Test2(Integer integer);
+}
+
+//一个可以运行的测试类
+public class JavaLamble {
+    boolean check(IntPred2 predicate){
+        return predicate.Test2(123);
+    }
+    boolean check2(IntPred intPred){
+        return intPred.Test(123);
+    }
+    //这个函数的声明并没有错误但是会导致lamble表达式不知道对应哪一个函数
+    boolean check(IntPred intPred){
+        return intPred.Test(123);
+    }
+    public static void main(String[] args) {
+        JavaLamble javaLamble = new JavaLamble();
+        //这里会报错，应为java底层在通过check方法中的表达式可以找到两个多态的方法java 不知到匹配哪一个
+        javaLamble.check((x)->x>10);//通过这个可以看到lamble表达式隐藏了接口的类名,本质上是通过这个函数去对应的接口
+        javaLamble.check2((x)->x>10);
+    }
+}
+```
+
+
