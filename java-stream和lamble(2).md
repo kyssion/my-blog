@@ -110,6 +110,11 @@ strings = strings.stream().map((item)->{
 strings = strings.stream().map(String::toUpperCase).collect(Collectors.toList());
 ```
 
+3. filter 
 
+这个是过滤器,通过这种方法可以将感兴趣的stream流中的对象整合进新的对象中
 
+```java
+
+```
 
