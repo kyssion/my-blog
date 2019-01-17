@@ -79,7 +79,7 @@ list.stream().filter((item) -> {
 
 ### java stream 的常用操作
 
-1. collect(toList); 及早求值 就不罗嗦了
+####　1. collect(toList); 及早求值 就不罗嗦了
 
 不过这个有两种种结构
 
@@ -91,7 +91,7 @@ list.stream().filter((item) -> {
 <R, A> R collect(Collector<? super T, A, R> collector);
 ```
 
-2. map类型
+#### 2. map类型
 
 这个方法很常用,就像他的名字映射,使用这种方法可以直接将一个流转化成另一个流
 
@@ -110,7 +110,7 @@ strings = strings.stream().map((item)->{
 strings = strings.stream().map(String::toUpperCase).collect(Collectors.toList());
 ```
 
-3. filter 
+#### 3. filter 
 
 这个是过滤器,通过这种方法可以将感兴趣的stream流中的对象整合进新的对象中
 
@@ -124,7 +124,7 @@ list.stream().filter((item) -> {
 }).collect(Collectors.toList());
 ```
 
-4. flapMap
+#### 4. flapMap
 
 map 的升级版 flatMap 方法可用 Stream 替换值，然后将多个 Stream 连接成一个 Stream,说白了就是整合流用的
 
@@ -138,5 +138,81 @@ List<String> objects = Stream.of(strings).flatMap(item->{// 这里的item是list
     });
 }).collect(Collectors.toList());
 ```
-4. max和min
+#### 5. max和min
 
+```java
+Integer integer = list.stream().max(Comparator.comparing(item->{
+    return item;
+})).get();
+```
+
+max 和min一样只要有一个比较器就好了,但是java底层有关这一层的封装特性比较复杂,接下来引申一下java Comparator#comparing方法的相关实现
+
+```java
+public static <T, U extends Comparable<? super U>> Comparator<T> comparing(
+            Function<? super T, ? extends U> keyExtractor){
+    Objects.requireNonNull(keyExtractor);
+    return (Comparator<T> & Serializable)
+        (c1, c2) -> keyExtractor.apply(c1).compareTo(keyExtractor.apply(c2));
+}
+```
+
+首先看一下接口的定义 T 只是一个普通的变量 U在这里必须是一个实现了Comparable接口的类(java类内部比较函数), 而传入的Function Lamble 表达式的返回值也是u,这样就可以理解了java Comparator的这个方法干了什么了-> **传入一个可以生成可比较类的Function lamble 表达式,返回一个Comparator 比较逻辑** ps: 封转的很牛逼!
+
+> 注意这里有一个java8 的全新语法 类1 & 类2 其实这个接口相当于强制转化成一个同时 继承了类1 类2 的对象,这个用法的规则通java的继承规则
+
+其实java 如果编写相关的逻辑的时候使用的写法类似这样的
+
+```java
+Object accumulator = initialValue;
+for(Object element : collection) {
+    accumulator = combine(accumulator, element);
+    //combine 是一个方法 比较accumulator 和 element 然后挑选一个进行赋值
+}
+```
+
+> *** : 其实看一下jdk底层的源代码就知道了,其实这个东西本质上是调用了reduce 方法接下来来说一下reduce这个方法
+
+####　6. reduce 
+
+一个调用的例子
+```java
+int a=list.stream().reduce(0,(x,y)->{
+    return x+y;
+},(x,y)->{
+    return x-y;
+});
+```
+
+reduce模式的核心就是accumulator 迭代器, 这个方法第一个参数是每次迭代的返回值,第二个参数是当前进行迭代的值, 转换成java代码就是如下的形式
+
+```java
+U result = identity;
+for (T element : this stream){
+    result = accumulator.apply(result, element)
+    return result;
+}
+```
+
+reduce主要有三种形式
+
+```java
+T reduce(T identity, BinaryOperator<T> accumulator);
+Optional<T> reduce(BinaryOperator<T> accumulator);
+<U> U reduce(U identity,BiFunction<U, ? super T, U> accumulator,BinaryOperator<U> combiner);
+```
+
+类型1 和 2 没什么好说的都是迭代求值,罢了 注意第二种方法是Optional类型的返回值
+
+类型3 有两个相同的迭代函数 accumulator 和 combiner,具有这个设计的原因是这样的,Stream是支持并发操作的，为了避免竞争，对于reduce线程都会有独立的result，combiner的作用在于合并每个线程的result得到最终结果。这也说明了了第三个函数参数的数据类型必须为返回数据类型了
+
+#### 8. 整合操作
+
+其实java的所有惰性求值都可以不停的第迭代的, 比如想下面这样
+
+```java
+Set<String> origins = album.getMusicians()
+        .filter(artist -> artist.getName().startsWith("The"))
+        .map(artist -> artist.getNationality())
+        .collect(toSet());
+```
