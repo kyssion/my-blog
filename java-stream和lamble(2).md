@@ -206,9 +206,9 @@ Optional<T> reduce(BinaryOperator<T> accumulator);
 
 类型3 有两个相同的迭代函数 accumulator 和 combiner,具有这个设计的原因是这样的,Stream是支持并发操作的，为了避免竞争，对于reduce线程都会有独立的result，combiner的作用在于合并每个线程的result得到最终结果。这也说明了了第三个函数参数的数据类型必须为返回数据类型了
 
-#### 8. 整合操作
+#### 8. 流式迭代操作
 
-其实java的所有惰性求值都可以不停的第迭代的, 比如想下面这样
+其实java的所有惰性求值都可以不停的第迭代(流式操作)))的, 比如想下面这样
 
 ```java
 Set<String> origins = album.getMusicians()
@@ -216,3 +216,138 @@ Set<String> origins = album.getMusicians()
         .map(artist -> artist.getNationality())
         .collect(toSet());
 ```
+
+#### 9. foreach 迭代
+
+一个基本的java 迭代操作像如下的形式
+
+```java
+for(Integer i : list){
+    System.out.println(i);
+}
+```
+使用foreach 改造成函数式编程变成如下的形式
+
+```java
+list.stream().forEach((i)-> System.out.println(i));
+```
+
+### 一个高级例子
+
+首先我们定义稍微复杂的对象,School 学校对象,Student 用户对象
+
+```java
+class School{
+    private String schoolName;
+    private String schoolAddress;
+    private List<Student> students;
+}
+class Student{
+    private String name;
+    private String age;
+    private List<Student> friends;
+}
+```
+
+定义初始化方法allInit
+
+```java
+class JavaStreamUp{
+    public void allInit(){
+        List<School> schools = new ArrayList<>();
+        School schoolUSA = new School("ONE", "USA");
+        School schoolUK = new School("TOW", "UK");
+
+        List<Student> studentsUSA = initStudent(schoolUSA);
+        List<Student> studentsUK = initStudent(schoolUK);
+        createFrient(studentsUSA,studentsUK);
+        createFrient(studentsUK,studentsUSA);
+        schools.add(schoolUK);
+        schools.add(schoolUSA);
+    }
+    public void createFrient(List<Student> addF,List<Student> fStudent){
+        for (Student student:addF){
+            int item = (int) (Math.random()*fStudent.size());
+            for(int i=0 ;i<item;i++){
+                addF.add(student);
+            }
+        }
+    }
+    public List<Student>  initStudent(School schools){
+        List<Student> students = new ArrayList<>();
+        for (int item = 0; item < 10; item++) {
+            Student student = new Student();
+            student.setName("item_"+item);
+            student.setAge(""+(item+1)*3);
+            students.add(student);
+        }
+        return students;
+    }
+}
+```
+
+这里定义一个需求,找到这两个大学找出其中所有年纪大于14岁的所有学生的姓名和学校姓名
+
+1. 最基本的遍历方法 (简单双层for循环遍历)
+
+```java
+public void functionBaseMethod(List<School> schools) {
+    Set<String> studentSet = new HashSet<>();
+    for (School school : schools) {
+        for (Student student : school.getStudents()) {
+            if (student.getAge() > 14) {
+                studentSet.add(student.getName()+"|"+student.getSchoolName());
+            }
+        }
+    }
+    for (String student : studentSet) {
+        System.out.println(student);
+    }
+}
+```
+
+2. foreach 处理迭代
+
+```java
+public void functionForEachMethod(List<School> schools) {
+    Set<String> studentSet = new HashSet<>();
+    schools.stream().forEach(item -> {
+        item.getStudents().forEach(iii -> {
+            if (iii.getAge() > 14) {
+                studentSet.add(iii.getName()+"|"+iii.getSchoolName());
+            }
+        });
+    });
+    for (String student : studentSet) {
+        System.out.println(student);
+    }
+}
+```
+
+3. 使用 filter过滤用户年龄使用 map 生成新的对象
+
+```java
+public void functionForFilterMap(List<School> schools){
+    Set<String> stringSet = new HashSet<>();
+    schools.stream().forEach(item->{
+        item.getStudents().stream().filter(i->i.getAge()>14)
+                .map(i-> i.getName()+"|"+i.getSchoolName())
+                .forEach(i->stringSet.add(i));
+    });
+    for (String student : stringSet) {
+        System.out.println(student);
+    }
+}
+```
+
+4. 进阶 使用flatmap 配合 collect(collection.toset())一次性生成
+
+```java
+Set<String> stringSet=schools.stream().flatMap(i->i.getStudents().stream())
+        .filter(i->i.getAge()>14).map(i->i.getName()+"|"+i.getSchoolName()).collect(Collectors.toSet());
+for (String student : stringSet) {
+    System.out.println(student);
+}
+```
+
+> 这里简单的原因是 flatMap整合了流,而collect 结合了list
