@@ -91,7 +91,7 @@ list.stream().filter((item) -> {
 <R, A> R collect(Collector<? super T, A, R> collector);
 ```
 
-#### 2. map类型
+#### 2. map类型 
 
 这个方法很常用,就像他的名字映射,使用这种方法可以直接将一个流转化成另一个流
 
@@ -109,6 +109,40 @@ strings = strings.stream().map((item)->{
 
 strings = strings.stream().map(String::toUpperCase).collect(Collectors.toList());
 ```
+
+#### 2.1 mapToLong mapToInt mapToDouble
+
+这三个方法是java 的stream 针对java对基本类型的自动装箱和自动拆箱的优化
+
+传入的参数拿 Long类型举例
+
+ToLongFunction -> 实现对象到long 类型的转换
+
+这些方法将会返回一下特殊的stream 比如LongStream等等
+
+而这种stream针对不同的输出,拥有不同的适配方法
+
+比如long转double会有 LongToDoubleFunction接口
+比如long转Long 对象 会有 LongFunction接口
+而这种stream 实现的map接口是LongUnaryOperator,通过这种方法实现性能上的高效
+
+
+> ****引申 java在针对数字统计的时候,有意识的提供了额外的方法来统计数据->summaryStatistics 方法,这个方法能计算出各种各样的统计值， 如 IntStream 对象内所有元素中的最小值、 最大值、 平均值以及数值总和,例子如下
+
+```java
+public static void printTrackLengthStatistics(Album album) {
+    IntSummaryStatistics trackLengthStats
+            = album.getTracks()
+            .mapToInt(track -> track.getLength())
+            .summaryStatistics();
+    System.out.printf("Max: %d, Min: %d, Ave: %f, Sum: %d",
+            trackLengthStats.getMax(),
+            trackLengthStats.getMin(),
+            trackLengthStats.getAverage(),
+            trackLengthStats.getSum());
+}
+```
+
 
 #### 3. filter 
 
