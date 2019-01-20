@@ -385,3 +385,12 @@ for (String student : stringSet) {
 ```
 
 > 这里简单的原因是 flatMap整合了流,而collect 结合了list
+
+
+### @FunctionalInterface 注解
+
+其实看一下所有java 内置的函数化接口其实都使用了这个注解
+
+该注解会强制 javac 检查一个接口是否符合函数接口的标准。如果该注释添加给一个枚举
+类型、类或另一个注释，或者接口包含不止一个抽象方法，javac 就会报错。重构代码时，
+使用它能很容易发现问题。
