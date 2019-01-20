@@ -266,6 +266,14 @@ for(Integer i : list){
 list.stream().forEach((i)-> System.out.println(i));
 ```
 
+### 10. sorted
+
+排序方法,和list的集合sort一样 惰性求值方法
+
+### 11. unordered
+
+unordered操作不会进行任何显式的打乱流的操作。它的工作是：消除流中必须保持的有序约束，因此允许之后的操作使用 不必考虑有序的优化。
+
 ### 一个高级例子
 
 首先我们定义稍微复杂的对象,School 学校对象,Student 用户对象
@@ -394,3 +402,37 @@ for (String student : stringSet) {
 该注解会强制 javac 检查一个接口是否符合函数接口的标准。如果该注释添加给一个枚举
 类型、类或另一个注释，或者接口包含不止一个抽象方法，javac 就会报错。重构代码时，
 使用它能很容易发现问题。
+
+### java 收集器
+
+java stream的收集器就是为了将数据整理成同一结构的工具
+
+#### 1. java 内部类库实现的部分收集器
+
+```java
+Collectors.toList();
+Collectors.toSet();
+```
+
+以上两个式最简单的,就是将stream中的方法形成新的集合
+
+------
+
+```java
+List<Integer> list = new ArrayList<>();
+list.stream().collect(Collectors.toCollection(HashSet::new));
+```
+
+上面这个可以将 list 转化成stream方法定义接口的相同的集合实现自定义
+
+比如stream是定义在collection接口上的,那个通过这个方法能实现list和set的相互转化
+
+> ps 这个方法的实现建议仔细的研究一下
+
+```java
+List<Integer> item = new ArrayList<>();
+Optional<Integ> i = item.stream().collect(Collectors.minBy(Comparator.comparingInt((i)->i)));
+Optional<Integ> i = item.stream().collect(Collectors.maxBy(Comparator.comparingInt((i)->i)));
+```
+
+这个方法将会把这个
