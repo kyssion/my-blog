@@ -409,6 +409,8 @@ java stream的收集器就是为了将数据整理成同一结构的工具
 
 #### 1. java 内部类库实现的部分收集器
 
+> tolist toSet
+
 ```java
 Collectors.toList();
 Collectors.toSet();
@@ -417,6 +419,8 @@ Collectors.toSet();
 以上两个式最简单的,就是将stream中的方法形成新的集合
 
 ------
+
+> toCollection
 
 ```java
 List<Integer> list = new ArrayList<>();
@@ -431,6 +435,8 @@ list.stream().collect(Collectors.toCollection(HashSet::new));
 
 ------
 
+> minBy maxBy
+
 ```java
 List<Integer> item = new ArrayList<>();
 Optional<Integ> i = item.stream().collect(Collectors.minBy(Comparator.comparingInt((i)->i)));
@@ -440,6 +446,8 @@ Optional<Integ> i = item.stream().collect(Collectors.maxBy(Comparator.comparingI
 这个方法将会把这个集合中制定参数最小的那个对象返回
 
 -----
+
+> averagingInt 平均数 
 
 ```java
 double item3 = item.stream().collect(Collectors.averagingInt((i)->{
@@ -451,6 +459,8 @@ double item3 = item.stream().collect(Collectors.averagingInt((i)->{
 
 ------
 
+> partitioningBy 分组筛选
+
 ```java
 Map<Boolean,List<Fox>> listMap=item.stream().collect(Collectors.partitioningBy((Fox::isNeed)));
 Map<Boolean,List<Fox>> listMap2=item.stream().collect(Collectors.partitioningBy((i)->{
@@ -459,3 +469,18 @@ Map<Boolean,List<Fox>> listMap2=item.stream().collect(Collectors.partitioningBy(
 ```
 
 数据分组， 通过一个返回boolean类型的表达式从而实现两种返回值的特殊收集器
+
+---
+
+> groupingBy mapping 自定义分组
+
+```java
+Map<String,String> map=albums.collect(Collectors.groupingBy(Album::getStringItem,
+            Collectors.mapping(Album::getName,Collectors.toList())));
+```
+
+这个方法是上面的扩展,函数将会传入两个参数，第一个函数是生成返回的key，第二个函数是生成value
+
+
+
+
