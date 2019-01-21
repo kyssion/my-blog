@@ -471,7 +471,18 @@ Map<Boolean,List<Fox>> listMap2=item.stream().collect(Collectors.partitioningBy(
 
 数据分组， 通过一个返回boolean类型的表达式从而实现两种返回值的特殊收集器
 
----
+------
+
+> java  字符串拼接方法
+
+```java
+String result = artists.stream().map(Artist::getName)
+            .collect(Collectors.joining(", ", "[", "]"));
+```
+
+joining中的各种方法分别表示参数的分隔符，开始符号和结束符号
+
+------
 
 > groupingBy mapping 自定义分组
 
@@ -490,6 +501,122 @@ Map<String,String> map=albums.collect(Collectors.groupingBy(Album::getStringItem
 
 #### 自定义java stream 收集器
 
+有的时候java内置的组合器其实并不能真正的实现我们的需求，这个时候我们就需要自定义收集器来实现我们想要的东西
 
+比如我们有这样的一个业务，存在如下的一种对象和对象的list集合，我们需要遍历的list集合，取出手有的name信息，整合成以"{"符合开头,"]"符号结尾,","符号分隔的字符串
 
+```java
+class Fox {
+    private Integer integer;
+    private String name;
+    。。。getter and setter
+}
+```
+
+> 方法1 传统遍历法
+
+```java
+public String userBase(List<Fox> list){
+    StringBuilder stringBuilder =
+            new StringBuilder();
+    boolean isFirst = true;
+    String index = null;
+    for (Fox fox:list){
+        index="{"+fox.getName()+"]";
+        stringBuilder.append(isFirst?index :","+index);
+        isFirst=false;
+    }
+    return stringBuilder.toString();
+}
+```
+
+> 方法2 使用foreach遍历
+
+```java
+public String useForEach(List<Fox> list) {
+    StringBuilder stringBuilder =
+            new StringBuilder();
+    list.stream().forEach((i) -> {
+        if (stringBuilder.length() == 0) {
+            stringBuilder.append("{" + i.getName() + "]");
+        } else {
+            stringBuilder.append(",{" + i.getName() + "]");
+        }
+    });
+    return stringBuilder.toString();
+}
+```
+
+> 方法3 发现是一种迭代模型使用reduce实现
+
+```java
+public String userStreamReduce(List<Fox> list){
+    return list.stream().map(Fox::getName).reduce(new StringBuilder(),(x,y)->{
+        if (x.length() == 0) {
+            x.append("{").append(y).append("]");
+        } else {
+            x.append(",{").append(y).append("]");
+        }
+        return x;
+    },(left,right)-> left.append(",").append(right)).toString();
+}
+```
+
+> 方法4 实现Collector<T, A, R> 接口
+
+首先说一下Collector<T, A, R>接口中的三个范型
+
+- T 待收集元素的类型,这里是 String ;
+- A 累加器的类型 StringCombiner ;
+- R 最终结果的类型,这里依然是 String 。
+
+几个重要的方法 
+
+- supplier 初始化容器，其实也就是默认的值或者处理类
+- accumulator 迭代方法
+- combiner 双流合并方法
+- finish 最终生成方法
+- characteristics 一个优化用的列表
+
+```java
+class StringCollector implements Collector<String, StringBuilder, String> {
+    @Override
+    public Supplier<StringBuilder> supplier() {
+        return StringBuilder::new;
+    }
+
+    @Override
+    public BiConsumer<StringBuilder, String> accumulator() {
+        return (before, now) -> {
+            if (before.length() == 0) {
+                before.append("{" + now + "]");
+            } else {
+                before.append(",{" + now + "]");
+            }
+        };
+    }
+
+    @Override
+    public BinaryOperator<StringBuilder> combiner() {
+        return (left, right) -> left.append(",").append(right);
+    }
+
+    @Override
+    public Function<StringBuilder, String> finisher() {
+        return StringBuilder::toString;
+    }
+
+    //这个方法使用来进行指数优化的
+    @Override
+    public Set<Characteristics> characteristics() {
+        return new HashSet<>();
+    }
+}
+```
+
+定义好了自定义的collect之后就简单了，直接调用就可以了
+
+```java
+list.stream().map(Fox::getName).collect(new StringCollector());
+```
 
