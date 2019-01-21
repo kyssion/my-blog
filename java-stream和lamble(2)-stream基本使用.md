@@ -407,7 +407,7 @@ for (String student : stringSet) {
 
 java stream的收集器就是为了将数据整理成同一结构的工具
 
-#### 1. java 内部类库实现的部分收集器
+#### java 内部类库实现的部分收集器
 
 > tolist toSet
 
@@ -447,12 +447,13 @@ Optional<Integ> i = item.stream().collect(Collectors.maxBy(Comparator.comparingI
 
 -----
 
-> averagingInt 平均数 
+> averagingInt 平均数  summarizingInt 求合
 
 ```java
 double item3 = item.stream().collect(Collectors.averagingInt((i)->{
     return i;
 }));
+item.stream().collect(Collectors.summarizingInt(Fox::getInteger));
 ```
 
 这个方法可以获取这个integer数组的平均值
@@ -480,6 +481,14 @@ Map<String,String> map=albums.collect(Collectors.groupingBy(Album::getStringItem
 ```
 
 这个方法是上面的扩展,函数将会传入两个参数，第一个函数是生成返回的key，第二个函数是生成value
+
+
+例子中我们都用到了第二个收集器,用以收集最终结果的一个子集。这些收集器叫作下游收集器。收集器是生成最终结果的一剂配方,下游收集器则是生成部分结果的配方,主收集器中会用到下游收集器。这种组合使用收集器的方式,使得它们在 Stream 类库
+中的作用更加强大。
+
+那些为基本类型特殊定制的函数,如 averagingInt 、 summarizingLong 等,事实上和调用特殊 Stream 上的方法是等价的,加上它们是为了将它们当作下游收集器来使用的
+
+#### 自定义java stream 收集器
 
 
 
