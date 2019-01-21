@@ -429,10 +429,33 @@ list.stream().collect(Collectors.toCollection(HashSet::new));
 
 > ps 这个方法的实现建议仔细的研究一下
 
+------
+
 ```java
 List<Integer> item = new ArrayList<>();
 Optional<Integ> i = item.stream().collect(Collectors.minBy(Comparator.comparingInt((i)->i)));
 Optional<Integ> i = item.stream().collect(Collectors.maxBy(Comparator.comparingInt((i)->i)));
 ```
 
-这个方法将会把这个
+这个方法将会把这个集合中制定参数最小的那个对象返回
+
+-----
+
+```java
+double item3 = item.stream().collect(Collectors.averagingInt((i)->{
+    return i;
+}));
+```
+
+这个方法可以获取这个integer数组的平均值
+
+------
+
+```java
+Map<Boolean,List<Fox>> listMap=item.stream().collect(Collectors.partitioningBy((Fox::isNeed)));
+Map<Boolean,List<Fox>> listMap2=item.stream().collect(Collectors.partitioningBy((i)->{
+    return i.getInteger()+10>5;
+}));
+```
+
+数据分组， 通过一个返回boolean类型的表达式从而实现两种返回值的特殊收集器
