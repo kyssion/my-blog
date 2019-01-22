@@ -619,4 +619,3 @@ class StringCollector implements Collector<String, StringBuilder, String> {
 ```java
 list.stream().map(Fox::getName).collect(new StringCollector());
 ```
-
