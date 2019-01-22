@@ -508,6 +508,16 @@ Map<String,String> map=albums.collect(Collectors.groupingBy(Album::getStringItem
 
 那些为基本类型特殊定制的函数,如 averagingInt 、 summarizingLong 等,事实上和调用特殊 Stream 上的方法是等价的,加上它们是为了将它们当作下游收集器来使用的
 
+------
+
+> 其他的一些api
+
+list转map -- 这个非常常用，Function.identity
+
+```java
+list.stream().collect(Collectors.toMap(MapItem::getName, Function.identity()));
+```
+
 #### 自定义java stream 收集器
 
 有的时候java内置的组合器其实并不能真正的实现我们的需求，这个时候我们就需要自定义收集器来实现我们想要的东西

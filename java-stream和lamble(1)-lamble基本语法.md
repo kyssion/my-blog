@@ -89,6 +89,11 @@ Function f1 = (String write,Integer one) -> {//多参数
      System.out.println(write);
 }
 ```
+
+### lamble 表达式常用的一些接口
+
+  ![](/blogimg/java/stream_lamble/3.png)
+
 ### lamble表达式的作用域
 
 lamble表达式将会使用作用域的引用,比如下面的例子
