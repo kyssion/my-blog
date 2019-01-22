@@ -185,7 +185,8 @@ public class JavaLamble {
     }
 }
 ```
-不过由于这种重载导致的问题可以使用强制转换解决
+
+不过由于这种重载导致的问题可以使用强制转换解决,如果参数的数量相同但是类型不同，可以使用有类型的lamble表达式
 
 ```java
 javaLamble.check((IntPred2)(x)->x>10);
