@@ -274,6 +274,15 @@ list.stream().forEach((i)-> System.out.println(i));
 
 unordered操作不会进行任何显式的打乱流的操作。它的工作是：消除流中必须保持的有序约束，因此允许之后的操作使用 不必考虑有序的优化。
 
+### 12. 针对map的新操作
+
+```java
+map.compute("string",(key,oldValue)-> "sdf");//如果map中没有这个值将会使用后面的函数进行计算
+map.putIfAbsent("string", "defaule"); // 如果map没有值，将会用后面的值替代它
+map.computeIfAbsent("string",(i)->i+"sdf"); // 如果map中没有这个值将会使用后面的函数进行计算 不过之传入value
+map.computeIfPresent("string",(key,oldValue)-> key+oldValue); // 如果map中有值，将会使用后面的值替代相关的数量
+```
+
 ### 一个高级例子
 
 首先我们定义稍微复杂的对象,School 学校对象,Student 用户对象
