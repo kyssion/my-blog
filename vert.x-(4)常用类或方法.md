@@ -27,5 +27,11 @@ CompsiteFuture 方法监听传入的Future类的状态，可以传入一个list�
 
 CompsiteFuture 提供的整理方法
 
+- any : 只要有一个成功，传入下一个handle中的状态就是成功
+- all : 必须全部成功，传入下一个handle中的状态才能是成功
+- join : 所有的future 都执行完成了没有一场无论结果是否失败，传入到下一个handle中的状态就是成功
+
+
+
 
 
