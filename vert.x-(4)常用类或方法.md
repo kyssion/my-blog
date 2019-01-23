@@ -23,7 +23,44 @@ CompositeFuture.all(httpServerFuture, netServerFuture).setHandler(ar -> {
 });
 ```
 
-CompsiteFuture 方法监听传入的Future类的状态，可以传入一个list列表或者最多留个Future参数
+> Futuer 描述的是这个异步执行的结果状态，通过这种方法可以将下层的异步监听方法在上层反馈到
+
+Funtuer的compose方法用于顺序组合Future 实现多个futuer 链式调用
+
+```java
+
+FileSystem fs = vertx.fileSystem();
+Future<Void> startFuture = Future.future();
+
+Future<Void> fut1 = Future.future();
+fs.createFile("/foo", fut1.completer());
+
+fut1.compose(v -> {
+  // fut1中文件创建完成后执行
+  Future<Void> fut2 = Future.future();
+  fs.writeFile("/foo", Buffer.buffer(), fut2.completer());
+  return fut2;
+}).compose(v -> {
+  // fut2文件写入完成后执行
+  fs.move("/foo", "/bar", startFuture.completer());
+},
+// 如果任何一步失败，将startFuture标记成failed
+startFuture);
+```
+
+这里例子中，有三个操作被串起来了：
+
+1. 一个文件被创建（fut1）
+2. 一些东西被写入到文件（fut2）
+3. 文件被移走（startFuture）
+
+这个方法的参数有两种的形式
+
+1. 只有一个函数 :
+2. 两个函数 : 
+
+
+> CompsiteFuture 方法监听传入的Future类的状态，可以传入一个list列表或者最多留个Future参数
 
 CompsiteFuture 提供的整理方法
 
