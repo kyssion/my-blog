@@ -61,3 +61,16 @@ Worker Executor 在不需要的时候必须被关闭：
 ```java
 executor.close();
 ```
+
+当使用同一个名字创建了许多 worker 时，它们将共享同一个 pool。当所有的 worker executor 调用了 close 方法被关闭过后，对应的 worker pool 会被销毁。
+
+如果 Worker Executor 在 Verticle 中创建，那么 Verticle 实例销毁的同时 Vert.x 将会自动关闭这个 Worker Executor。
+
+Worker Executor 可以在创建的时候配置：
+
+```java
+int poolSize = 10;
+// 2分钟
+long maxExecuteTime = 120000;
+WorkerExecutor executor = vertx.createSharedWorkerExecutor("my-worker-pool", poolSize, maxExecuteTime);
+```
