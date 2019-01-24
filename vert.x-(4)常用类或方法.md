@@ -68,7 +68,14 @@ CompsiteFuture 提供的整理方法
 - all : 必须全部成功，传入下一个handle中的状态才能是成功
 - join : 所有的future 都执行完成了没有一场无论结果是否失败，传入到下一个handle中的状态就是成功
 
+### vert.x Verticle
 
+Vertticle是vert.x提供的一个简单便捷的、可扩展的、类似 Actor Model 的部署和并发模型机制
 
+Verticle 是由 Vert.x 部署和运行的代码块。默认情况一个 Vert.x 实例维护了N（默认情况下N = CPU核数 x 2）个 Event Loop 线程。Verticle 实例可使用任意 Vert.x 支持的编程语言编写，而且一个简单的应用程序也可以包含多种语言编写的 Verticle。
+
+可以将 Verticle 想成 Actor Model 中的 Actor。
+
+一个应用程序通常是由在同一个 Vert.x 实例中同时运行的许多 Verticle 实例组合而成。不同的 Verticle 实例通过向 Event Bus 上发送消息来相互通信。
 
 
