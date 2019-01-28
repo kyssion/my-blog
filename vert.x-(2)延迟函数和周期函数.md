@@ -21,3 +21,11 @@ long pid =  vertx.setPeriodic(1000,id->{
 });
 System.out.println("the main periodic time id is :"+pid);
 ```
+
+### 两种计时器的取消操作
+
+```java
+vertx.cancelTimer(timerID);
+```
+
+这个方法其中的trmerId就是在声明计时器的时候产生的id编码
