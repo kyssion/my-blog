@@ -30,4 +30,17 @@ gradle init
 
 # gradle的task
 
-gradle 方便用户进行配置的特性是源于gradle提供了方便使用task参数，
+gradle 方便用户进行配置的特性是源于gradle提供了方便使用task参数
+这里编写一个很基本的copy文件的权限，在路径中添加一个src文件夹和dest文件夹，在src文件中添加一个文件markfile.txt 并且里面有一个内容hello world！
+
+然后在build.gradle 中编写一个任务
+
+```groovy
+task copy(type:Copy,group:"custom",description:"test one"){
+    from "src"
+    into "dest"
+}
+```
+
+其中的type 字段将会调用系统总的Copy函数，而group和description 只是描述这个过程的描述符，只会影响系统的log输出，并不会影响实际的效果
+
