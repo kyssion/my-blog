@@ -44,3 +44,4 @@ task copy(type:Copy,group:"custom",description:"test one"){
 
 其中的type 字段将会调用系统总的Copy函数，而group和description 只是描述这个过程的描述符，只会影响系统的log输出，并不会影响实际的效果
 
+
