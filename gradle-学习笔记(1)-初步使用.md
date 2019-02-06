@@ -74,3 +74,74 @@ task zip(type: Zip, group: "Archive", description: "Archives sources in a zip fi
 ```groovy
 ./gradlew Zip
 ```
+
+# 查看当前拥有的task
+
+gradle 有一个内置的命令
+
+```groovy
+./gradlew task
+```
+
+这条命令将会将所有的当前的gradle项目中拥有的构建命令全部列出来
+
+```groovy
+> Task :tasks
+
+------------------------------------------------------------
+Tasks runnable from root project
+------------------------------------------------------------
+
+Archive tasks
+-------------
+zip - Archives sources in a zip file
+
+Build tasks
+-----------
+assemble - Assembles the outputs of this project.
+build - Assembles and tests this project.
+clean - Deletes the build directory.
+
+Build Setup tasks
+-----------------
+init - Initializes a new Gradle build.
+wrapper - Generates Gradle wrapper files.
+
+Custom tasks
+------------
+copy - Copies sources to the dest directory
+
+Help tasks
+----------
+buildEnvironment - Displays all buildscript dependencies declared in root project 'gradle'.
+components - Displays the components produced by root project 'gradle'. [incubating]
+dependencies - Displays all dependencies declared in root project 'gradle'.
+dependencyInsight - Displays the insight into a specific dependency in root project 'gradle'.
+dependentComponents - Displays the dependent components of components in root project 'gradle'. [incubating]
+help - Displays a help message.
+model - Displays the configuration model of root project 'gradle'. [incubating]
+projects - Displays the sub-projects of root project 'gradle'.
+properties - Displays the properties of root project 'gradle'.
+tasks - Displays the tasks runnable from root project 'gradle'.
+
+Verification tasks
+------------------
+check - Runs all checks.
+
+Rules
+-----
+Pattern: clean<TaskName>: Cleans the output files of a task.
+Pattern: build<ConfigurationName>: Assembles the artifacts of a configuration.
+Pattern: upload<ConfigurationName>: Assembles and uploads the artifacts belonging to a configuration.
+
+To see all tasks and more detail, run gradlew tasks --all
+
+To see more detail about a task, run gradlew help --task <task>
+
+BUILD SUCCESSFUL in 1s
+1 actionable task: 1 executed
+<-------------> 0% WAITING
+> IDLE
+```
+
+
