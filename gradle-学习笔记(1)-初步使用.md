@@ -144,4 +144,41 @@ BUILD SUCCESSFUL in 1s
 > IDLE
 ```
 
+# gradle 提供的在线查看构建详情的方法 --scan命令
+
+我们在使用构建命令的时候可以在命令的后面添加一个 --scan命令,通过这个命令可以链接到gradle官方的view显示仓库或者连接到自定义的链接仓库中,然后轻松的查看项目使用的构建任务,构建时间等等信息
+
+```
+./gradlew Zip --scan
+```
+
+然后可以登入命令行打出的一个网址,在其中的form表单中填写邮箱地址,然后就会将构建的信息发送到邮箱中了
+
+![](blogimg/gradle/1.jpg)
+
+> 注意:这个功能是收费的
+
+
+# gradle 展示当前系统的可用参数信息 properties命令
+
+```
+$ ./gradlew properties
+> Task :properties
+
+------------------------------------------------------------
+Root project
+------------------------------------------------------------
+
+buildDir: /Users/.../basic-demo/build
+buildFile: /Users/.../basic-demo/build.gradle
+description: null
+group:
+name: basic-demo
+projectDir: /Users/.../basic-demo
+version: unspecified
+
+BUILD SUCCESSFUL
+```
+
+
 
