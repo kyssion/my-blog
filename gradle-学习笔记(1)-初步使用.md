@@ -42,6 +42,35 @@ task copy(type:Copy,group:"custom",description:"test one"){
 }
 ```
 
-其中的type 字段将会调用系统总的Copy函数，而group和description 只是描述这个过程的描述符，只会影响系统的log输出，并不会影响实际的效果
+其中的type 字段将会调用系统中的Copy函数，而group和description 只是描述这个过程的描述符，只会影响系统的log输出，并不会影响实际的效果
 
+```groovy
+./gradlew Copy
+```
 
+运行对应的命令就能运行对应的copy方法
+
+# 使用一个gradle内部的插件系统
+
+在项目中使用插件标签plugins添加指定的base插件到系统中
+
+```groovy
+plugins {
+    id "base"
+}
+```
+
+然后在指定的位置我们添加一个插件(和任务的使用方法相同，我怀疑其实gradle的插件就是打包好的任务)
+
+```groovy
+task zip(type: Zip, group: "Archive", description: "Archives sources in a zip file") {
+    from "src"
+    setArchiveName "basic-demo-1.0.zip"
+}
+```
+
+然后运行对应的命令,就可以在对应的目录 build/distributions 中找到 src目录下的压缩文件了
+
+```groovy
+./gradlew Zip
+```
