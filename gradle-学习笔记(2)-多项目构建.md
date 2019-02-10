@@ -161,6 +161,8 @@ include 'greeting-library'
 注意： 通过上面的例子我们可以得出，在gradle 中不同的子项目的命名规则是使用文件夹的
 注意：在java 项目中，gradle 要求 必须指定项目的main函数具体方法见下方
 
+> 这里针对gradle的多语言的编程的目录结构做一下补充，gradle中源代码同意放置在这样的位置中src->main/test->编程语言名称文件夹 下
+
 ```groovy
 plugins {
     id 'java'
@@ -183,3 +185,6 @@ dependencies {
 }
 ```
 
+# 总结
+
+在构建gradle 多模块项目的时候,一定要注意多模块的之间的引用，模块中main函数的编写，父模块的include
