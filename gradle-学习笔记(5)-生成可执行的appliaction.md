@@ -102,3 +102,7 @@ BUILD SUCCESSFUL in 0s
 ```
 
 可以看见这里其实运行了对应的函数输出了hello world
+
+> 引申 一下把,看一下这里的测试,当运行了gradle 的build命令的时候,同样会执行测试样例,并且在build的reports文件夹中生成对应的测试报告html
+
+![](blogimg/gradle/5.png)
