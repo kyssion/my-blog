@@ -51,3 +51,54 @@ public class App {
     }
 }
 ```
+
+并且编写了一个test样例 TestApp
+
+```java
+public class TestApp {
+    @Test
+    public void testAppHasAGreeting(){
+        App classItem = new App();
+        assertNotNull("app should have a greeting" , classItem.getGreeting());
+    }
+}
+```
+
+整个项目的build.gradle如下
+
+```groovy
+plugins {
+    id 'java'
+    id 'application'
+}
+group 'com.kyssion'
+version '1.0-SNAPSHOT'
+sourceCompatibility = 1.8
+mainClassName='demo.App'
+repositories {
+    mavenCentral()
+}
+dependencies {
+    implementation 'com.google.guava:guava:26.0-jre'
+    testImplementation 'junit:junit:4.12'
+}
+```
+
+这里我们引入了application插件,通过这个插件,我们就能在项目中使用gradle 对应的命令来执行我们自己的main方法了
+
+> 执行 gradle run
+
+```
+> Task :java-application:compileJava UP-TO-DATE
+> Task :java-application:processResources UP-TO-DATE
+> Task :java-application:classes UP-TO-DATE
+
+> Task :java-application:run
+hello world
+
+BUILD SUCCESSFUL in 0s
+3 actionable tasks: 1 executed, 2 up-to-date
+10:53:30: Task execution finished 'run'.
+```
+
+可以看见这里其实运行了对应的函数输出了hello world
