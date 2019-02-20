@@ -43,7 +43,7 @@ task hello {
     }
 }
 task intro {
-    dependsOn hello
+    dependsOn hello 
     doLast {
         println "I'm Gradle"
     }
