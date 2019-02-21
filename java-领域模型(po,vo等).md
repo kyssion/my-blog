@@ -37,5 +37,4 @@
 定义好所有的 mapping 之后，这个 O/R 
 Mapper 可以帮我们做很多的工作。通过这些 mappings, 这个 O/R 
 Mapper 可以生成所有的关于对象保存，删除，读取的 SQL 语句，我们不再需要写那么多行的 DAL 代码了。 
-
-其实是EJP(hibnate时代的东西)，O/R Mapper是mybatis的方法，本质上都是描述域模型的java bean
+本质上就是数据表到领域bean的对应关系
