@@ -220,3 +220,42 @@ BUILD SUCCESSFUL in 0s
 
 在上面的例子中我们使用了 taskGraph方法来在gradle的配置过程中（还有一个是运行过程）动态改变 变量（version）的方法
 
+### 添加外部依赖的方法
+
+这个点应该大家都很熟悉了
+
+```groovy
+import org.apache.commons.codec.binary.Base64
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath group: 'commons-codec', name: 'commons-codec', version: '1.2'
+    }
+}
+
+task encode {
+    doLast {
+        def byte[] encodedString = new Base64().encode('hello world\n'.getBytes())
+        println new String(encodedString)
+    }
+}
+```
+
+> 这里groovy 提供了非常强大的功能，我们可以在代码中直接使用gradle 引用的代码（例子中的task定义）
+
+> 我们这里里一定要注意import这个包，idea框架并不会自动提示
+
+我们使用命令 gradle encode 将会有如下的输出
+
+```
+> Task :encode
+aGVsbG8gd29ybGQK
+
+BUILD SUCCESSFUL in 0s
+1 actionable task: 1 executed
+18:16:26: Task execution finished 'encode'.
+```
+
