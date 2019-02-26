@@ -250,7 +250,7 @@ mustRunAfter 表示必须按照指定的顺序执行
 
 上面的例子中会按照 taskz -> taskY->taskx 的顺序执行，如果使用了mustRunAfter将会报错
 
-## gradle task的描述，替换，和跳过执行操作
+## gradle task的描述，替换，和跳过执行，启用，禁用，超时时间操作
 
 gradle 针对任务提供了大量的操作性功能
 
@@ -273,3 +273,59 @@ task copy(overwrite: true) {
 }
 ```
 
+3. 跳过执行操作
+
+> 在这里gradle 提供了两个方法跳过执行操作，第一种，使用哦onlyIf 关键字 指定只在什么情况下才会执行对应的任务
+
+```groovy
+task hello {
+    doLast {
+        println 'hello world'
+    }
+}
+hello.onlyIf { !project.hasProperty('skipHello') }
+```
+
+> 第二种，在程序执行的过程中抛出 stopExecutionException异常，终止这个调用链操作
+
+```groovy
+task compile {
+    doLast {
+        println 'We are doing the compile.'
+    }
+}
+compile.doFirst {
+    // Here you would put arbitrary conditions in real life.
+    // But this is used in an integration test so we want defined behavior.
+    if (true) { throw new StopExecutionException() }
+}
+task myTask {
+    dependsOn('compile')
+    doLast {
+        println 'I am not affected'
+    }
+}
+```
+
+4. 启用禁用设置超时时间这些gradle操作，我用一个例子来解释吧
+
+> 启用禁用操作
+```groovy
+task disableMe {
+    doLast {
+        println 'This should not be printed if the task is disabled.'
+    }
+}
+disableMe.enabled = false
+```
+
+> 超时时间
+
+```groovy
+task hangingTask() {
+    doLast {
+        Thread.sleep(100000)
+    }
+    timeout = Duration.ofMillis(500)
+}
+```
