@@ -249,3 +249,27 @@ shouldRunAfter 指定的是这些任务应该按照指定的顺序执行
 mustRunAfter 表示必须按照指定的顺序执行
 
 上面的例子中会按照 taskz -> taskY->taskx 的顺序执行，如果使用了mustRunAfter将会报错
+
+## gradle task的描述，替换，和跳过执行操作
+
+gradle 针对任务提供了大量的操作性功能
+
+1. 使用description
+
+```groovy
+description 'Copies the resource directory to the target directory.'
+```
+
+2. 同名覆盖操作
+
+如果自己命名的task与系统中或者自己定义的其他task重名，那么可以使用这种方法进行覆盖
+
+```groovy
+task copy(type: Copy)
+task copy(overwrite: true) {
+    doLast {
+        println('I am the new one.')
+    }
+}
+```
+
