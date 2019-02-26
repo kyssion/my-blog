@@ -250,6 +250,26 @@ mustRunAfter 表示必须按照指定的顺序执行
 
 上面的例子中会按照 taskz -> taskY->taskx 的顺序执行，如果使用了mustRunAfter将会报错
 
+## gradle 最终任务
+
+使用finalizedBy字段描述执行器的最终任务，这个任务将不论定义放是否执行成功，最终都将会执行
+
+```groovy
+task taskX {
+    doLast {
+        println 'taskX'
+        throw new RuntimeException()
+    }
+}
+task taskY {
+    doLast {
+        println 'taskY'
+    }
+}
+
+taskX.finalizedBy taskY
+```
+
 ## gradle task的描述，替换，和跳过执行，启用，禁用，超时时间操作
 
 gradle 针对任务提供了大量的操作性功能
@@ -329,3 +349,22 @@ task hangingTask() {
     timeout = Duration.ofMillis(500)
 }
 ```
+
+## gradle 任务组级别全局规则注入
+
+```groovy
+tasks.addRule("Pattern: ping<ID>") { String taskName ->
+    if (taskName.startsWith("ping")) {
+        task(taskName) {
+            doLast {
+                println "Pinging: " + (taskName - 'ping')
+            }
+        }
+    }
+}
+task groupPing {
+    dependsOn pingServer1, pingServer2
+}
+```
+
+## 生命周期任务
