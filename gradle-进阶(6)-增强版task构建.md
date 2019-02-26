@@ -217,3 +217,35 @@ task notALib {
 ```
 
 这个方法通过groovy的扩展方法，指定了所有名称有lib前缀的task都是他的依赖
+
+## gradle 任务运行时排序
+
+两个关键字 shouldAfterRun mustAfterRun
+
+一个例子：
+
+```groovy
+task taskX {
+    doLast {
+        println 'taskX'
+    }
+}
+task taskY {
+    doLast {
+        println 'taskY'
+    }
+}
+task taskZ {
+    doLast {
+        println 'taskZ'
+    }
+}
+taskX.dependsOn taskY
+taskY.dependsOn taskZ
+taskZ.shouldRunAfter taskX
+```
+
+shouldRunAfter 指定的是这些任务应该按照指定的顺序执行
+mustRunAfter 表示必须按照指定的顺序执行
+
+上面的例子中会按照 taskz -> taskY->taskx 的顺序执行，如果使用了mustRunAfter将会报错
