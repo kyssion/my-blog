@@ -367,4 +367,8 @@ task groupPing {
 }
 ```
 
+## gradle的project 和 其他信息
+
+
+
 ## 生命周期任务
