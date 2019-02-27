@@ -56,6 +56,3 @@ tasks.register("hello", Greeting) {
 ```
 
 > 具体的一看代码就明白了,说两点1.@TaskAction 表明这个是默认的任务方法,如果没有指明就默认使用这个方法  2. DefaultTask 是gradle的默认扩展,gradle还提供了其他的方法,这里不做展开了
-
-
-
