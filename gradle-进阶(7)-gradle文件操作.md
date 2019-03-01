@@ -277,6 +277,34 @@ task copyAppAssets(type: Copy) {
 }
 ```
 
+> 任务中添加复制功能
+
+```groovy
+task copyMethodWithExplicitDependencies {
+    // up-to-date check for inputs, plus add copyTask as dependency
+    inputs.files copyTask
+    outputs.dir 'some-dir' // up-to-date check for outputs
+    doLast{
+        copy {
+            // Copy the output of copyTask
+            from copyTask
+            into 'some-dir'
+        }
+    }
+}
+```
+
+> sync方法将复制目录和被copy目录同步
+
+简单点说就是如果复制的时候少了几个文件，那么复制结束后，被复制的文集夹将会删除这些文件，其他的用法和gradle相同
+
+```groovy
+task libs(type: Sync) {
+    from configurations.runtime
+    into "$buildDir/libs"
+}
+```
+
 
 
 > 常见用法例子
