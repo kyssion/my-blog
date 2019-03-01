@@ -28,6 +28,7 @@ configFile = file(configFile.absolutePath)
 File configFile = file("$rootDir/shared/config.xml")
 ```
 
+
 # gradle 文件操作
 
 ## 文件集合
@@ -36,15 +37,216 @@ gradle这么定义文件集合的-就是一组文件，不考虑目录什么
 
 获取文件集合
 
-gradle推荐使用 ProjectLayout.files（java.lang.Object ...）方法获取文件集合，本方法返回一个FileCollection实例
+gradle推荐使用 ProjectLayout.files（java.lang.Object ...）方法获取文件集合，本方法返回一个FileCollection实例，此方法非常灵活，允许您传递多个字符串，File实例，字符串集合，Files 集合等
+
+```groovy
+FileCollection collection = layout.files('src/file1.txt',
+                                  new File('src/file2.txt'),
+                                  ['src/file3.csv', 'src/file4.csv'],
+                                  Paths.get('src', 'file5.txt'))
+```
+
+这里写一个例子在指定的目录下寻找文件
+
+```groovy
+task list {
+    doLast {
+        File srcDir
+
+        // Create a file collection using a closure
+        FileCollection collection = layout.files { srcDir.listFiles() }
+
+        srcDir = file('src')
+        println "Contents of $srcDir.name"
+        collection.collect { relativePath(it) }.sort().each { println it }
+
+        srcDir = file('src2')
+        println "Contents of $srcDir.name"
+        collection.collect { relativePath(it) }.sort().each { println it }
+    }
+}
+```
+
+> 文件集合的一些操作
+
+1. 改变集合类型
+
+```groovy
+Set set = collection.files
+Set set2 = collection as Set
+List list = collection as List
+String path = collection.asPath
+File file = collection.singleFile
+```
+
+2. 集合间进行集合操作
+
+```groovy
+def union = collection + layout.files('src/file2.txt')
+def difference = collection - layout.files('src/file2.txt')
+```
+
+groovy 使用+ 表示union操作 使用 - 表示 defference操作
+
+注意如果使用这些集合方法无法满足要求，需要使用filter方法来对集合进行过滤操作
+
+```groovy
+FileCollection textFiles = collection.filter { File f ->
+    f.name.endsWith(".txt")
+}
+```
+
+## 文件树
+
+和文件的区别，其实本质上文件树是文件集合的一种延伸，不过文件树保留了树状结构
+
+1. 创建文件树
+
+简单方法
+
+```groovy
+// Create a file tree with a base directory
+ConfigurableFileTree tree = fileTree(dir: 'src/main')
+// Add include and exclude patterns to the tree
+tree.include '**/*.java'
+tree.exclude '**/Abstract*'
+// Create a tree using closure
+tree = fileTree('src') {
+    include '**/*.java'
+}
+// Create a tree using a map
+tree = fileTree(dir: 'src', include: '**/*.java')
+tree = fileTree(dir: 'src', includes: ['**/*.java', '**/*.xml'])
+tree = fileTree(dir: 'src', include: '**/*.java', exclude: '**/*test*/**')
+```
+
+从zip或者tar中创建文件树
+
+```groovy
+// Create a ZIP file tree using path
+FileTree zip = zipTree('someFile.zip')
+// Create a TAR file tree using path
+FileTree tar = tarTree('someFile.tar')
+//tar tree attempts to guess the compression based on the file extension
+//however if you must specify the compression explicitly you can:
+FileTree someTar = tarTree(resources.gzip('someTar.ext'))
+```
+
+> 引申：文件集合（包括文件树，作为参数进行传递的时候的处理方法）
+
+在gradle 中，很多时候source——资源被解释称一个文件目录或者一个文件集合，如果传入的参数是一个文件集合如JavaCompile任务有一个source属性
+
+在gradle中souce属性可以有很多不同的表现形式，比如下面的例子
+
+```groovy
+task compile(type: JavaCompile) {
+
+    // Use a File object to specify the source directory
+    source = file('src/main/java')
+
+    // Use a String path to specify the source directory
+    source = 'src/main/java'
+
+    // Use a collection to specify multiple source directories
+    source = ['src/main/java', '../shared/java']
+
+    // Use a FileCollection (or FileTree in this case) to specify the source files
+    source = fileTree(dir: 'src/main/java').matching { include 'org/gradle/api/**' }
+
+    // Using a closure to specify the source files.
+    source = {
+        // Use the contents of each zip file in the src dir
+        file('src').listFiles().findAll {it.name.endsWith('.zip')}.collect { zipTree(it) }
+    }
+}
+```
 
 
+
+
+
+2. 使用文件树
+
+```groovy
+// Iterate over the contents of a tree
+tree.each {File file ->
+    println file
+}
+// Filter a tree
+FileTree filtered = tree.matching {
+    include 'org/gradle/api/**'
+}
+// Add trees together
+FileTree sum = tree + fileTree(dir: 'src/test')
+// Visit the elements of the tree
+tree.visit {element ->
+    println "$element.relativePath => $element.file"
+}
+```
 
 
 
 # 文件复制
 
 gradle 提供copy task 实现文件复制的相关功能
+
+copy需要的参数信息
+
+1. from into方法表示文件的复制来源和输出来源，注意这些属性的参数都可以是集合或者文件目录
+```groovy
+task anotherCopyTask (type: Copy) {
+    // Copy everything under src/main/webapp
+    from 'src/main/webapp'
+    // Copy a single file
+    from 'src/staging/index.html'
+    // Copy the output of a task
+    from copyTask
+    // Copy the output of a task using Task outputs explicitly.
+    from copyTaskWithPatterns.outputs
+    // Copy the contents of a Zip file
+    from zipTree('src/main/assets.zip')
+    // Determine the destination directory later
+    into { getDestDir() }
+}
+```
+
+2. include exclude 选择性过滤方法
+
+```groovy
+task copyTaskWithPatterns (type: Copy) {
+    from 'src/main/webapp'
+    into "$buildDir/explodedWar"
+    include '**/*.html'
+    include '**/*.jsp' //包含文件
+    exclude { FileTreeElement details -> // 剔除文件
+        details.file.name.endsWith('.html') &&
+            details.file.text.contains('DRAFT')
+    }
+}
+```
+
+3. 重命名文件
+
+gradle 提供了两种方法，进行重命名文件
+
+-  使用过滤器
+
+```groovy
+// Use a closure to convert all file names to upper case
+rename { String fileName ->
+    fileName.toUpperCase()
+}
+```
+
+- 使用正则表达式
+
+```groovy
+// Use a regular expression to map the file name
+rename '(.+)-staging-(.+)', '$1$2'
+rename(/(.+)-staging-(.+)/, '$1$2')
+```
+
+> 常见用法例子
 
 1. 单文件复制
 
@@ -225,4 +427,3 @@ task cleanTempFiles(type: Delete) {
     }
 }
 ```
-
