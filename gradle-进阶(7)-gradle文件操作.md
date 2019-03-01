@@ -190,7 +190,7 @@ tree.visit {element ->
 
 gradle 提供copy task 实现文件复制的相关功能
 
-copy需要的参数信息
+> copy需要的参数信息
 
 1. from into方法表示文件的复制来源和输出来源，注意这些属性的参数都可以是集合或者文件目录
 ```groovy
@@ -225,7 +225,7 @@ task copyTaskWithPatterns (type: Copy) {
 }
 ```
 
-3. 重命名文件
+3. 重命名文件 rename方法
 
 gradle 提供了两种方法，进行重命名文件
 
@@ -245,6 +245,39 @@ rename { String fileName ->
 rename '(.+)-staging-(.+)', '$1$2'
 rename(/(.+)-staging-(.+)/, '$1$2')
 ```
+
+> copy文件使用模板方法
+
+Gradle提供的一个解决方案是Project.copySpec（org.gradle.api.Action）方法。这允许您在任务之外创建复制规范，然后可以使用CopySpec.with（org.gradle.api.file.CopySpec ...）方法将其附加到适当的任务。
+
+```groovy
+CopySpec webAssetsSpec = copySpec {
+    from 'src/main/webapp'
+    include '**/*.html', '**/*.png', '**/*.jpg'
+    rename '(.+)-staging(.+)', '$1$2'
+}
+
+task copyAssets (type: Copy) {
+    into "$buildDir/inPlaceApp"
+    with webAssetsSpec
+}
+
+task distApp(type: Zip) {
+    archiveFileName = 'my-app-dist.zip'
+    destinationDirectory = file("$buildDir/dists")
+
+    from appClasses
+    with webAssetsSpec
+}
+//共享使用内置模式
+
+task copyAppAssets(type: Copy) {
+    into "$buildDir/inPlaceApp"
+    from 'src/main/webapp', webAssetPatterns
+}
+```
+
+
 
 > 常见用法例子
 
@@ -308,6 +341,26 @@ task copyReportsDirForArchiving2(type: Copy) {
 > 注意一点，使用**/*.java的时候会复制目录结构，包括不包含指定文件的目录结构
 
 > include 指令，如果写在外面就是针对整个copy过程都适用，如果是在from中编写，就只针对这个from语句适用
+
+> 一个复杂的复制构建例子
+
+```groovy
+task nestedSpecs(type: Copy) {
+    into "$buildDir/explodedWar"
+    exclude '**/*staging*'
+    from('src/dist') {
+        include '**/*.html', '**/*.png', '**/*.jpg'
+    }
+    from(sourceSets.main.output) {
+        into 'WEB-INF/classes'
+    }
+    into('WEB-INF/lib') {
+        from configurations.runtimeClasspath
+    }
+}
+```
+
+> 这个例子是将 src/dist中的所有html png jpg文件 添加到 $buildDir/explodeWar文件夹中，而output和 classpath中的所有文件将会考到指定的文件夹中
 
 # zip 压缩文件
 
