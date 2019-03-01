@@ -1,5 +1,47 @@
 其实对于任何一种构建工具来说，针对文件操作的功能是必不可少的，这里整理一下gradle针对文件提供的功能
 
+# gradle 中的文件路径
+
+1. gradle 的 Project.file方法
+
+作用： 指定单个文件或者目录的位置，解析规则（相对路径相对于项目目录进行解析，而绝对路径保持不变）。
+
+例子：
+```groovy
+// 使用相对路径
+File configFile = file('src/config.xml')
+
+//使用绝对路径
+configFile = file(configFile.absolutePath)
+
+```
+
+> 注意：gradle不可使用new File(relative path) 这个方法，），因为new File（relative）会创建相对与运行时的（当时的）路径，gradle不能保证运行时路径相同（内部的守护任务可能会切换路径）
+
+2. Project.getRootDir 
+
+作用： 获取项目的根路径
+
+例子：
+
+```groovy
+File configFile = file("$rootDir/shared/config.xml")
+```
+
+# gradle 文件操作
+
+## 文件集合
+
+gradle这么定义文件集合的-就是一组文件，不考虑目录什么
+
+获取文件集合
+
+gradle推荐使用 ProjectLayout.files（java.lang.Object ...）方法获取文件集合，本方法返回一个FileCollection实例
+
+
+
+
+
 # 文件复制
 
 gradle 提供copy task 实现文件复制的相关功能
@@ -57,7 +99,6 @@ task copyReportsDirForArchiving2(type: Copy) {
         include "reports/**"
         exclude "**/*.exe"
     }
-    
     into "$buildDir/toArchive"
 }
 ```
@@ -132,6 +173,55 @@ task uberJar(type: Jar) {
     dependsOn configurations.runtimeClasspath
     from {
         configurations.runtimeClasspath.findAll { it.name.endsWith('jar') }.collect { zipTree(it) }
+    }
+}
+```
+
+## 文件移动
+
+> Gradle没有用于移动文件和目录的API，但您可以使用Apache Ant集成轻松地执行此操作，如以下示例所示：
+
+```groovy
+task moveReports {
+    doLast {
+        ant.move file: "${buildDir}/reports",
+                 todir: "${buildDir}/toArchive"
+    }
+}
+```
+
+## 重新命名方法
+
+```groovy
+task copyFromStaging(type: Copy) {
+    from "src/main/webapp"
+    into "$buildDir/explodedWar"
+
+    rename '(.+)-staging(.+)', '$1$2'
+}
+//gradle 一切皆可编程，看自己的喜欢了
+task copyWithTruncate(type: Copy) {
+    from "$buildDir/reports"
+    rename { String filename ->
+        if (filename.size() > 10) {
+            return filename[0..7] + "~" + filename.size()
+        }
+        else return filename
+    }
+    into "$buildDir/toArchive"
+}
+```
+
+## 文件删除
+
+```groovy
+task myClean(type: Delete) {
+    delete buildDir //删除指定目录下的文件
+}
+//创建删除的过滤逻辑
+task cleanTempFiles(type: Delete) {
+    delete fileTree("src").matching {
+        include "**/*.tmp"
     }
 }
 ```
