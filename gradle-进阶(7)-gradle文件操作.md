@@ -23,7 +23,7 @@ configFile = file(configFile.absolutePath)
 作用： 获取项目的根路径
 
 例子：
-
+ 
 ```groovy
 File configFile = file("$rootDir/shared/config.xml")
 ```
