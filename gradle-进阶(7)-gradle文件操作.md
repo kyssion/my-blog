@@ -52,7 +52,6 @@ FileCollection collection = layout.files('src/file1.txt',
 task list {
     doLast {
         File srcDir
-
         // Create a file collection using a closure
         FileCollection collection = layout.files { srcDir.listFiles() }
 
