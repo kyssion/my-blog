@@ -75,3 +75,30 @@ println(user.name)
 println(user.@name)
 ```
 
+3. 方法指针
+
+这个算是一个高级特性了,通过这种方法,可以快速的拉取一个对象的方法引用,类似js,function也是变量
+
+```groovy
+class User {
+    public final name
+    User(item){
+        this.name= item
+    }
+
+    def getName() {
+        "this name is $name"
+    }
+}
+
+def user1 = new User("tom")
+def user2 = new User("jerry")
+
+def user1getter = user1.&getName
+def user2getter = user2.&getName
+
+println(user1getter())
+println(user2getter())
+```
+
+> 注意:groovy是引用了对应对象的方法
