@@ -98,6 +98,8 @@ println(user.name)
 println(user.@name)
 ```
 
+注意其实本质上是groovy默认就为每一个参数声明了getter和setter方法罢了,我们可以不使用getxx而是直接使用对象.xxx来调用getter或者setter方法
+
 3. 方法指针
 
 这个算是一个高级特性了,通过这种方法,可以快速的拉取一个对象的方法引用,类似js,function也是变量
@@ -185,6 +187,30 @@ def args = [4,5,6]
 assert function(*args) == 26 //
 ```
 
+2. 函数参数map化映射
+
+在groovy中使用map可以动态的指定相关的参数
+
+```groovy
+def foo(Map args) { "${args.name}: ${args.age}" }
+foo(name: 'Marie', age: 1)//指定参数的名称和对应的信息
+
+//支持命名空间混合
+def foo(Map args, Integer number) { "${args.name}: ${args.age}, and the number is ${number}" }
+foo(name: 'Marie', age: 1, 23)  
+foo(23, name: 'Marie', age: 1) 
+```
+
+注意groovy支持map和其他类型参数混用的逻辑,只有一点需要注意,定义的函数,他的传参的第一个一定是map类型,否则必须显示的指定参数
+
+```groovy
+def foo(Integer number, Map args) { "${args.name}: ${args.age}, and the number is ${number}" }
+foo(23, [name: 'Marie', age: 1])
+```
+
+3. def 返回值参数
+
+groovy是弱类型编程语言,所以返回值支持def弱类型的返回值
 
 ## groovy 相对比java的特殊数组用法
 

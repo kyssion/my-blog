@@ -22,3 +22,46 @@ println(user.name)
 println(user.@name)
 ```
 
+## groovy集成登
+
+groovy的继承和java的非常类似,都拥有private protected public 关键字,都有interface abstract 关键字,并且语义相同
+
+
+Groovy接口不支持Java 8接口等默认实现。但是groovy提供了一个特殊的东西叫做Traits,特征
+
+## groovy对象new
+
+1. groovy既然是脚本语言所以在构建一个新的对象的时候也相当灵活,groovy提供了如下的几种方法来创建对象
+
+```groovy
+class PersonConstructor {
+    String name
+    Integer age
+    PersonConstructor(name, age) {
+        this.name = name
+        this.age = age
+    }
+}
+def person1 = new PersonConstructor('Marie', 1)
+def person2 = ['Marie', 2] as PersonConstructor
+PersonConstructor person3 = ['Marie', 3]
+```
+
+- 传统的java创建方法
+- 使用as指定创建的对象类型
+- 直接定义创建的类型,进行强制转换
+
+2. 如果没有提供构造参数,groovy还提供了参数映射来动态的初始化对应的字段信息
+
+```groovy
+class PersonWOConstructor {                                  
+    String name
+    Integer age
+}
+def person4 = new PersonWOConstructor()
+def person5 = new PersonWOConstructor(name: 'Marie')
+def person6 = new PersonWOConstructor(age: 1)
+def person7 = new PersonWOConstructor(name: 'Marie', age: 2)
+```
+
+注意: 这种方案传递的参数是一个map类型,名称和对象中的变量一一对应
