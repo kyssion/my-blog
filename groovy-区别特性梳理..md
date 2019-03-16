@@ -33,6 +33,29 @@ ${->1+2*10}//插入一个表达式
 -''' ''' : 保留格式,有些地方需要使用\ 来消除 '\n' 换行问题
 -/xx/ : 特殊字符不需要转义(只有/需要使用\进行转义),正则表达式专用
 
+3. 使用~ 或者=~快速创建正则表达匹配式
+
+```groovy
+def pattern = ~/foo/
+```
+
+通过~ 这个方法可以快速的创建java中的java.utilregex.pattern对象,注意这种方法=和~ 之间一定要有空格,否则会解释成~=操作运算符
+
+```groovy
+def text = "some text to matcher"
+def Matcher = text =~ /txt/
+```
+
+引申: 匹配运算符（==~）是find运算符的一个小变体，它不返回Matcher一个布尔值，并且需要输入字符串的严格匹配
+
+```groovy
+def m = text ==~ /match/                                              
+assert m instanceof Boolean                                       
+if (m) {                                                          
+    throw new RuntimeException("Should not reach that point!")
+}
+```
+
 ## groovy中相比较java特殊的变量名称操作
 
 1. groovy中可以使用字符串变量来作为变量名称
@@ -102,3 +125,4 @@ println(user2getter())
 ```
 
 > 注意:groovy是引用了对应对象的方法
+
