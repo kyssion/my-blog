@@ -140,3 +140,93 @@ vertx.deployVerticle("com.mycompany.MyVerticle", options);
 ```
 
 执行此操作后，您会发现echo服务器在功能上与以前完全相同，但您的服务器上的所有核心都可以使用，并且可以处理更多工作。
+
+## vert.x tcp 的SSL/TLS支持
+
+可以将TCP客户端和服务器配置为使用传输层安全性 - 早期版本的TLS称为SSL
+
+> 在服务器上启用SSL/TLS,并指定服务器的密钥/证书
+
+1. 使用JDK附带的keytool实用程序管理Java密钥库
+
+使用密钥文件初始化
+
+```java
+NetServerOptions options = new NetServerOptions()
+            .setSsl(true)
+            .setKeyStoreOptions(
+                new JksOptions().
+                    setPath("/path/to/your/server-keystore.jks").
+                    setPassword("password-of-your-keystore")
+);
+NetServer server = vertx.createNetServer(options);
+```
+
+读取密钥存储区作为缓冲区并直接提供
+
+```java
+Buffer myKeyStoreAsABuffer = vertx.fileSystem().readFileBlocking("/path/to/your/server-keystore.jks");
+JksOptions jksOptions = new JksOptions().
+            setValue(myKeyStoreAsABuffer).
+            setPassword("password-of-your-keystore");
+NetServerOptions options = new NetServerOptions().
+            setSsl(true).
+            setKeyStoreOptions(jksOptions);
+NetServer server = vertx.createNetServer(options);
+``` 
+
+2. PKCS＃12格式的密钥/证书
+
+使用密钥文件初始化
+
+```java
+NetServerOptions options = new NetServerOptions()
+    .setSsl(true).setPfxKeyCertOptions(
+        new PfxOptions().
+            setPath("/path/to/your/server-keystore.pfx").
+            setPassword("password-of-your-keystore")
+);
+NetServer server = vertx.createNetServer(options);
+```
+
+读取密钥存储区作为缓冲区并直接提供
+
+```java
+Buffer myKeyStoreAsABuffer = vertx.fileSystem().readFileBlocking("/path/to/your/server-keystore.pfx");
+PfxOptions pfxOptions = new PfxOptions().
+  setValue(myKeyStoreAsABuffer).
+  setPassword("password-of-your-keystore");
+NetServerOptions options = new NetServerOptions().
+  setSsl(true).
+  setPfxKeyCertOptions(pfxOptions);
+NetServer server = vertx.createNetServer(options);
+```
+
+3. 使用.pem文件分别提供服务器私钥和证书
+
+使用密钥文件初始化
+
+```java
+NetServerOptions options = new NetServerOptions().setSsl(true).setPemKeyCertOptions(
+  new PemKeyCertOptions().
+    setKeyPath("/path/to/your/server-key.pem").
+    setCertPath("/path/to/your/server-cert.pem")
+);
+NetServer server = vertx.createNetServer(options);
+```
+
+还支持缓冲区配置
+
+```java
+Buffer myKeyAsABuffer = vertx.fileSystem().readFileBlocking("/path/to/your/server-key.pem");
+Buffer myCertAsABuffer = vertx.fileSystem().readFileBlocking("/path/to/your/server-cert.pem");
+PemKeyCertOptions pemOptions = new PemKeyCertOptions().
+  setKeyValue(myKeyAsABuffer).
+  setCertValue(myCertAsABuffer);
+NetServerOptions options = new NetServerOptions().
+  setSsl(true).
+  setPemKeyCertOptions(pemOptions);
+NetServer server = vertx.createNetServer(options);
+```
+
+ps:暂时就看这么多吧,改天开个专题专门研究一下这个TSL/SSL
