@@ -76,11 +76,110 @@ public class WebHttpServer {
 - handle : 最基本的请求处理方法,不保证数据完整
 - endHandlle : 最终状态的处理器,这个时候数据完整
 - bodyHandle : 专门处理简单类型大body的请求,相当于handle和endhandle配合使用的情况
+其他的回调
+- loadhandle : 表单文件上下传递御用handle
+- exceptionHandler : 异常御用handle
+
+
 
 2. vert.x 提供了非常方便的参数处理方法,提供了一个特殊的Map--MultiMap,通过这个方法可以很方便的获取header,params,表单(下面会说明名)中的数据,和普通map的不同点是,MultiMap支持相同的key的情况
 
-## vert.x 的文件处理方法
+
+## vert.x 简单响应处理
+
+1. 状态码设置
+
+vert.x的 request对象可以设置setStatusCode来表示对应的状态码
+
+```java
+res.response().setStatusCode(200);
+```
+
+
 
 ## vert.x 的表单处理方法
 
+vert.x如果要开启表单支持需要配置一些req的相关参数(针对使用了application/x-www-form-urlencoded或multipart/form-data协议的表单)
 
+```java
+server.requestHandler(request -> {
+    request.setExpectMultipart(true);//开启表单支持
+    request.endHandler(v -> {
+        // The body has now been fully read, so retrieve the form attributes
+        MultiMap formAttributes = request.formAttributes();
+    });
+});
+```
+
+我们之前讨论过MultiMap是啥,这里不多说了,他将会自动的解析表单中的内容
+
+## vert.x 的文件处理方法
+
+1. 返回文件流
+
+vert.x core并没有提供路径解析的方法,这一点我们需要自己手动模拟,这一段代码实现了输入文件名称返回文件流的信息
+
+```java
+public class WebHttpServer {
+    public static void main(String[] args) {
+        Vertx vertx = Vertx.vertx();
+        HttpServerOptions options = new HttpServerOptions()
+                .setMaxWebsocketFrameSize(1000000)
+                .setLogActivity(true);
+        HttpServer server = vertx.createHttpServer(options);
+        server.requestHandler(res->{
+            String url = res.path();
+            res.setExpectMultipart(true);
+            if(url.endsWith(".html")){
+                res.endHandler(v->{
+                    //文件上传超级容易,只要输入一个相对路径行了
+                    res.response().sendFile(url.substring(1));
+                    //TODO 这里使用substring的原因是vertx获取路径的时候,会多带一个/(比如/text.html)
+                });
+            }else{
+                res.response().end("Hello world");
+            }
+            res.bodyHandler(req->{
+                MultiMap multiMap = res.formAttributes();
+                showMap("form",multiMap.iterator());
+            });
+        });
+        server.listen(8888,"localhost", res -> {
+            if (res.succeeded()) {
+                System.out.println("Server is now listening!");
+            } else {
+                System.out.println("Failed to bind!");
+            }
+        });
+    }
+}
+```
+
+2. 接受文件上传请求
+
+vert.x提供了一个时间loadhandle 专门处理文件上传操作
+
+```java
+server.requestHandler(request -> {
+    request.setExpectMultipart(true);
+    //vert.x提供了专门处理文件上传的handle
+    request.uploadHandler(upload -> {
+        //采用缓存分片,防止文件过大导致缓冲区用尽
+        upload.handler(chunk -> {
+            System.out.println("Received a chunk of the upload of length " + chunk.length());
+        });
+        //直接将上传的文件传输到指定的流中
+        request.uploadHandler(uploadFile -> {
+            uploadFile.streamToFileSystem("myuploads_directory/" + uploadFile.filename());
+        });
+    });
+});
+```
+
+## vert.x 对defaule或者gzip压缩体的支持
+
+vert.x提供一个开关来控制是否解压缩gzip方法
+
+```java
+HttpServerOptions.setDecompressionSupported(true)//开启对压缩体的支持
+```
