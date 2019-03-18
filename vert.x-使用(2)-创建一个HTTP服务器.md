@@ -95,7 +95,7 @@ vert.x的 request对象可以设置setStatusCode来表示对应的状态码
 res.response().setStatusCode(200);
 ```
 
-
+2. 写入相关的信息
 
 ## vert.x 的表单处理方法
 
