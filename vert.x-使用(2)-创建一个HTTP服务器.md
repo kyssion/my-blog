@@ -85,7 +85,7 @@ public class WebHttpServer {
 2. vert.x 提供了非常方便的参数处理方法,提供了一个特殊的Map--MultiMap,通过这个方法可以很方便的获取header,params,表单(下面会说明名)中的数据,和普通map的不同点是,MultiMap支持相同的key的情况
 
 
-## vert.x 简单响应处理
+## vert.x 简单响应发送处理
 
 1. 状态码设置
 
@@ -198,3 +198,110 @@ vert.x提供一个开关来控制是否解压缩gzip方法
 ```java
 HttpServerOptions.setDecompressionSupported(true)//开启对压缩体的支持
 ```
+
+## vert.x http client客户端处理
+
+vert.x 提供了非常方便的http请求处理函数
+
+1. vert.x创建新的httpClient客户端
+
+```java
+Vertx vertx = Vertx.vertx();
+HttpClientOptions options = new HttpClientOptions()
+        .setKeepAlive(false)//keepAlive头
+        .setLogActivity(true)//开启netty 网络日志
+        .setDefaultHost("127.0.0.1");//设置默认host地址
+HttpClient client = vertx.createHttpClient(options);
+```
+
+vert.x 通过使用这种方法,可以更加快速和便利的初始化客户端,并为他初始化指定的host post url等参数
+
+2. vert.x发送简单无body请求
+
+vert.x 为了方便发送简单的http请求,提供了一组方法来处理
+
+```java
+client.getNow("foo.othercompany.com", "/other-uri", response -> {
+    System.out.println("Received response with status code " + response.statusCode());
+});
+
+client.headNow("/other-uri", response -> {
+    System.out.println("Received response with status code " + response.statusCode());
+});
+
+client.optionsNow("/other-uri", response -> {
+    System.out.println("Received response with status code " + response.statusCode());
+});
+```
+
+vert.x 针对三种请求做了特殊化的处理 GET HEAD OPTIONS , 这三种方法都不会带有body参数,而是直接发出请求
+
+方法所有参数如下,其中host port url等可以省略
+
+```java
+client.getNow(8080, "myserver.mycompany.com", "/some-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+});
+```
+
+3.  发送一般请求
+
+vert.x 提供了request方法用来发送一般的请求
+
+```java
+client.request(HttpMethod.GET, "some-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+}).end();
+
+client.request(HttpMethod.POST, "foo-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+}).end("some-data");
+```
+
+这个就很明显了,vert.x 提供了request方法,我们可以指定httpmethod host port url 等等参数
+
+注意最后的end和writer方法,这些方法和server中的类似,将会在body中添加相关的信息数据,并且必须使用了end才会真正的发送数据
+
+4. http客户端拆分写法
+
+```java
+HttpClient client = vertx.createHttpClient();
+
+HttpClientRequest request = client.post("some-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+});
+
+//指定头部信息
+request.putHeader("content-length", "1000");
+request.putHeader("content-type", "text/plain");
+request.write(body);
+
+//写数据的时候指定编码
+request.write("some other data", "UTF-16");
+
+//使用buffer
+Buffer buffer = Buffer.buffer().appendDouble(12.34d).appendLong(432l);
+request.write(buffer);
+
+request.end();
+
+//另一种方法,将头部信息使用串行写法写出来
+
+client.post("some-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+}).putHeader("content-length", "1000").putHeader("content-type", "text/plain").write(body).end();
+
+// Or event more simply:
+client.post("some-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+}).putHeader("content-type", "text/plain").end(body);
+```
+
+注意点:
+1. 当写入请求时，第一次调用write将导致请求标头被写入线路
+2. 实际写入是异步的，可能在调用返回后的某个时间才会发生
+3. 具有请求主体的非分块HTTP请求需要提供Content-Length标头。
+4. 因此，如果您没有使用分块HTTP，则必须Content-Length在写入请求之前设置标头，否则将为时已晚。
+5. 如果您正在调用end带有字符串或缓冲区的方法之一，则Vert.x将Content-Length在写入请求主体之前自动计算并设置标头。
+6. 如果您使用HTTP分块，Content-Length则不需要标头，因此您无需预先计算大小。
+
