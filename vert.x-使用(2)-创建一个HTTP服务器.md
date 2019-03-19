@@ -95,7 +95,22 @@ vert.x的 request对象可以设置setStatusCode来表示对应的状态码
 res.response().setStatusCode(200);
 ```
 
-2. 写入相关的信息
+2. 写入相关的头部信息
+
+vert.x 提供的很方便的消息头部调用
+
+```java
+//使用headerMap直接调用
+HttpServerResponse response = request.response();
+MultiMap headers = response.headers();
+headers.set("content-type", "text/html");
+headers.set("other-header", "wibble");
+//使用response进行调用
+HttpServerResponse response = request.response();
+response.putHeader("content-type", "text/html").putHeader("other-header", "wibble");
+```
+
+3. vert.x 分块http响应支持
 
 ## vert.x 的表单处理方法
 
