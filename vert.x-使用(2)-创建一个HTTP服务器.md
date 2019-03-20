@@ -305,3 +305,163 @@ client.post("some-uri", response -> {
 5. 如果您正在调用end带有字符串或缓冲区的方法之一，则Vert.x将Content-Length在写入请求主体之前自动计算并设置标头。
 6. 如果您使用HTTP分块，Content-Length则不需要标头，因此您无需预先计算大小。
 
+## vert.x 标准头写入
+
+1. 第一种方法,使用head的Multipmap实现
+
+```java
+MultiMap headers = request.headers();
+headers.set("content-type", "application/json").set("other-header", "foo");
+```
+
+2. request 直接写入header
+
+```java
+request.putHeader("content-type", "application/json").putHeader("other-header", "foo");
+```
+
+## 分块的HTTP请求
+
+这允许HTTP请求主体以块的形式写入，并且通常在大型请求主体流式传输到服务器时使用，服务器的大小事先不知道。
+
+您使用HTTP将HTTP请求置于分块模式setChunked。
+
+在chunked模式下，每次调用write都会导致新的块被写入线路。在分块模式下，无需预先设置Content-Length请求。
+
+```java
+request.setChunked(true);
+// Write some chunks
+for (int i = 0; i < 10; i++) {
+  request.write("this-is-chunk-" + i);
+}
+request.end();
+```
+
+## http超时
+
+client 或者 Client的Option可以设置Timeout超时事件
+
+```java
+req.setTimeout();
+HttpClientOption.setConnectTimeout();
+```
+
+## 客户端以文件内容发送请求信息
+
+vert.x 可以将本地文件的内容作为输出,发送出去
+
+```java
+request.setChunked(true);
+Pump pump = Pump.pump(file, request);
+file.endHandler(v -> request.end());
+pump.start();
+```
+
+## 客户端异常处理
+
+vert.x 提供了一个方法可以处理客户端的异常问题
+
+```java
+HttpClientRequest request = client.post("some-uri");
+request.handler(response -> {
+    System.out.println("Received response with status code " + response.statusCode());
+});
+```
+
+## 客户端处理响应
+
+```java
+HttpClientRequest request = client.request(HttpMethod.GET,8888,"127.0.0.1","sdf");
+//设置创建链接的时候使用的回调函数
+request.connectionHandler(con->{
+    System.out.println("connection success!");
+});
+//响应正文处理
+request.handler(res->{
+    //获取相应头信息
+    MultiMap header=res.headers();
+    res.handler(buf->{
+
+    });
+    //和server相同
+    res.bodyHandler(buf->{
+
+    });
+    //和server相同  
+    res.endHandler(buf->{
+
+    });
+});
+//请求结束时候的回调
+request.endHandler(vo->{
+
+});
+//异常出现的回调
+request.exceptionHandler(throwable->{
+   throwable.fillInStackTrace();
+});
+
+//一下三种,佛悉回调,不知道干啥,暂时不研究
+request.pushHandler(req->{
+
+});
+request.continueHandler(vo->{
+
+});
+request.drainHandler(vo->{
+
+});
+```
+
+引申一下:vert.x其实本质上还是能在client中直接编写回调函数的,提供一定的便利性,比如这样
+
+```java
+client.getNow("some-uri", response -> {
+
+  response.bodyHandler(totalBuffer -> {
+    // Now all the body has been read
+    System.out.println("Total response body length is " + totalBuffer.length());
+  });
+});
+```
+
+## vert.x client的cookie获取
+
+```java
+List<String> cookie = res.cookies();
+```
+
+## vert.x 重定向和自定义重定向
+
+1. vert.x默认重定向使用方法
+
+```java
+//vert.x 支持自定义最大重定向次数,值默认是16
+HttpClient client = vertx.createHttpClient(
+    new HttpClientOptions()
+        .setMaxRedirects(32));
+client.get("some-uri", response -> {
+  System.out.println("Received response with status code " + response.statusCode());
+}).setFollowRedirects(true).end();//注意要使用重定向必须开启setFollowRedirects==true
+```
+
+2. 自定义重定向
+
+```java
+client.redirectHandler(response -> {
+    // Only follow 301 code
+    if (response.statusCode() == 301 && response.getHeader("Location") != null) {
+        // Compute the redirect URI
+        String absoluteURI = response.request().absoluteURI();
+        // Create a new ready to use request that the client will use
+        return Future.succeededFuture(client.getAbs(absoluteURI));
+    }
+    // We don't redirect
+    return null;
+});
+```
+
+该政策处理原始HttpClientResponse收到并返回null 或者a Future<HttpClientRequest>。
+- 当null返回，原来的响应被处理
+- 返回Future时，请求将在成功完成后发送
+- 返回future时，将在失败时调用请求中设置的异常处理程序
