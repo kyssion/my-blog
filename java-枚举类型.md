@@ -36,8 +36,6 @@ public class Demo {
 
 ### 使用switch 判断Enum对象
 
-
-
 ```java
 public enum POSITION {
     BEFORE(1), END(2), BEFEND(3), OTHER(4);
