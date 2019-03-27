@@ -29,3 +29,53 @@
 ## 重载和重写的对比
 
 ![](blogimg/java/12.png)
+
+## 重载中产生的桥接方法
+
+重载中可能有这样一种情况:重写方法的返回类型是其父类返回类型的子类型
+
+在这种情况下jvm将会自动的生成桥接方法来作为子类和父类调用之间的桥梁
+
+```java
+public class Merchant {
+    public Number actionPrice(double price) {
+        return price * 0.8;
+    }
+}
+public class NaiveMerchant extends Merchant {
+
+    @Override
+    public Double actionPrice(double price) {
+        return 0.9 * price;
+    }
+    public static void main(String[] args) {
+        Merchant merchant = new NaiveMerchant();
+        // price 必须定义成 Number 类型 
+        Number price = merchant.actionPrice(40);
+        System.out.println(price);
+    }
+}
+```
+
+比如这样的两个类,NaiveMerchant类继承自Merchant,重载了actionPrice方法,并且Double类型是Number类型的子类
+
+这样在jvm编译过程中将会自动生成一个中间方法
+
+```java
+public Number actionPrice(double price) {
+     return this.actionPrice(price);
+}
+```
+
+注意这种情况只是针对,使用父类调用子类重写的逻辑这种情况
+
+```java
+public static void main(String[] args) {
+    Merchant merchant = new NaiveMerchant();
+    // price 必须定义成 Number 类型 
+    Number price = merchant.actionPrice(40);
+    System.out.println(price);
+}
+```
+
+引申一下: 其实在泛型的使用中,同样会出现这种情况
