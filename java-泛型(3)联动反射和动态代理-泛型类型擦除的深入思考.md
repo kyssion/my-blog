@@ -73,3 +73,30 @@ class ReflectorTest2$1 extends ReflectorItem<String> {
 }
 ```
 
+看到这里差不多来了就能知道java虚拟机底层是怎么处理这里的了
+
+我们将代码修改一下变成这样
+
+```java
+public class ReflectorTest2 {
+    public static void main(String[] args) throws NoSuchFieldException {
+        ReflectorItem<String> reflectorItem =new ReflectorItem<>("sdf"){};
+        ReflectorItem<String> reflectorItem2 =new ReflectorItem<>("sdf"){};
+        ReflectorItem<String> reflectorItem3 =new ReflectorItem<>("sdf"){};
+        ReflectorItem<String> reflectorItem4 =new ReflectorItem<>("sdf"){};
+        reflectorItem.setItem("restset");
+    }
+}
+```
+
+再看看生成的class文件信息
+
+![](blogimg/java/12.jpg)
+
+上面的代码中生成了4个泛型类,然后在java的class 文件中同样生成了四个 类名+$+编号的 动态生成class
+
+这里我猜想,java在解决泛型类型问题的时候是通过动态生成带有类型信息的新类,去替代对应位置的进行过类型擦除的原来的类
+
+这样就是为什么在使用的时候能获取到类型的原因,和获取泛型类型的方法是Type superClass = getClass().getGenericSuperclass();使用的是supper 类.
+
+因为java动态生成一个继承了携带泛型真实类型的class类,在运行的时候进行了类型的动态替换
