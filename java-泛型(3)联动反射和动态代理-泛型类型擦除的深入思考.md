@@ -1,3 +1,29 @@
-关于这个类型擦除的机制,不得不思考一下java的反射了,如果jdk在使用泛型的时候进行了类型擦除,那么使用反射的方法将不能获得泛型的类型,那么java的这种泛型实现将会非常的垃圾.
+java的泛型实现因为考虑到兼容型的问题,所以一开始采用了类型擦除的机制实现相关的功能.
 
-但是java提供了一种方法,能够在运行时通过反射获取泛型的类型的机制,这个就是java的类型体系
+但是这种类型擦除的机制又带来了一个新的问题,比如这样的场景
+
+```java
+public class ReflectorTest {
+    public static void main(String[] args) throws NoSuchFieldException {
+        Class<ReflectorItem> reflectorItemClass = ReflectorItem.class;
+        Field f = reflectorItemClass.getDeclaredField("item");
+        System.out.println(f.getType().getName());
+    }
+}
+class ReflectorItem<T> {
+    T item;
+    public T getItem() {
+        return item;
+    }
+    public void setItem(T item) {
+        this.item = item;
+    }
+}
+```
+
+泛型T只有在运行的时候类型才能会被确认到,所以这里输出的内容是Object
+
+```shell
+java.lang.Object
+```
+
