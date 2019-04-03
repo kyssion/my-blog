@@ -27,3 +27,5 @@ class ReflectorItem<T> {
 ```shell
 java.lang.Object
 ```
+
+如果想要获取这个参数的类型,我们可以使用
