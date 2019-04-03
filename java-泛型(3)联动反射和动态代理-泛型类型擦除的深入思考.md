@@ -65,3 +65,11 @@ class  ReflectorItem<T> {
 
 第一个 和最后一个就不用多说了,重点关心一下中间这个,反编译看看
 
+```java
+class ReflectorTest2$1 extends ReflectorItem<String> {
+    ReflectorTest2$1(String s) {
+        super(s);
+    }
+}
+```
+
