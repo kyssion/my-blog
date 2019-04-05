@@ -105,3 +105,12 @@ public class ReflectorTest2 {
 
 ## 下篇,java的类型体系
 
+Type是Java 编程语言中所有类型的公共高级接口（官方解释），也就是Java中所有类型的父类型包括Object
+
+其中，“所有类型”的描述尤为值得关注。它并不是我们平常工作中经常使用的 int、String、List、Map等数据类型，而是从Java语言角度来说，对基本类型、引用类型向上的抽象.
+
+Type体系中类型的包括：原始类型(Class)、参数化类型(ParameterizedType)、数组类型(GenericArrayType)、类型变量(TypeVariable)、基本类型(Class);原始类型，不仅仅包含我们平常所指的类，还包括枚举、数组、注解等；
+
+参数化类型，就是我们平常所用到的泛型List、Map；
+数组类型，并不是我们工作中所使用的数组String[] 、byte[]，而是带有泛型的数组，即T[] ；
+基本类型，也就是我们所说的java的基本类型，即int,float,double等
