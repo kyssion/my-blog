@@ -301,7 +301,7 @@ accessibleObject.setAccessible(true);
 
 3. 子类继承泛型父类
 
-其实这种情况是1 类型的手动实现也就是实现下面这种情况
+其实这种情况是1 类型的手动实现也就是实现下面这种情况d
 
 ```java
 class Item<T>{}
