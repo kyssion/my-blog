@@ -15,4 +15,4 @@ Type体系中类型的包括：
 
 ## 1. ParameterizedType
 
-ParameterizedType表示参数化类型，也就是泛型，例如List<T>、Set<T>等
+ParameterizedType表示参数化类型，也就是泛型，例如List<T>、Set<T>等,

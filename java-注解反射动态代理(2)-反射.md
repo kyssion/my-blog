@@ -284,3 +284,37 @@ accessibleObject.setAccessible(true);
 ```
 
 尤其要注意这个地方setAccessible(true); 正是通过这个配置方法的访问权限
+
+## 这里其实要记录一下有关于泛型反射的一些东西
+
+我们都知道java的泛型实现是基于类型擦除的,这将会会导致这个泛型的类型将在反射的时候返回具体类型(默认是object)但是这种情况并不是绝对了,目前我总结了三种情况下java会保证原来的类型
+
+1. 生成匿名内部类的时候
+
+也就是new一个接口或者new一个抽象类 这种情况下将会保留原来的属性
+
+实现的原理是java针对匿名内部类将会动态的生成新的class 而这个class的泛型是带有参数的
+
+2. 方法的返回值
+
+所有的方法的方法如果使用泛型类,比如 List<String> 这种情况下是能获取到泛型中的类型的
+
+3. 子类继承泛型父类
+
+其实这种情况是1 类型的手动实现也就是实现下面这种情况
+
+```java
+class Item<T>{}
+
+class Itemchildren extends Item<String>{
+    private Class<T> entityClass; //这里将会获取到entityClass中的值
+    public Itemchildren() {
+        entityClass =(Class<T>) ((ParameterizedType) getClass()
+                       .getGenericSuperclass()).getActualTypeArguments()[0];
+    }
+    public T get(Serializable id) {
+        T o = (T) getHibernateTemplate().get(entityClass, id);
+    }
+}
+```
+
