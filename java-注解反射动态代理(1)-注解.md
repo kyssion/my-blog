@@ -19,7 +19,9 @@ java中有很多的注解比如@Override等等，这些注解其实是jdk内部�
 ```java
 @Target({ElementType.FIELD,ElementType.LOCAL_VARIABLE})
 ```
+
 注解类型包括
+
 类型名称|限制范围
 ---|---
 construction|构造函数 
