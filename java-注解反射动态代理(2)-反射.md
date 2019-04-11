@@ -12,17 +12,147 @@
 
 class 是java反射的最粗集合,分装了class对应的各种属性
 
-1. class 继承关系状态获取
+1. 获取class 名称或者类型名称
+
+java的class 对象提供了两个方法获取名称字符串
+
+> getName
+
+这个方法会返回这个class的解析名称,绝提规则如下
+
+如果是对象,就返回对象的全限定名称(没有泛型信息)
+如果是数组返回如下信息,[表示维度
+[Z = boolean 
+[B = byte 
+[S = short 
+[I = int 
+[J = long 
+[F = float 
+[D = double 
+[C = char 
+[L = any non-primitives(Object)
+
+> getTypeName
+
+返回类型通getName方法
+
+如果是数组集合或者对象,返回这个的定义格式
+
+比如如果是int[][][] 将会返回int[][][]
+
+2. class 继承关系状态获取
 
 ```java
-refItem.getSuperclass();//返回直接的父类,如果没有就返回null
-refItem.getDeclaringClass();//返回内部声明的类的包装类,针对内部类的情况返回包装类
-refItem.getEnclosingClass();//DeclaringClass方法的增强版,还可以返回匿名内部类的增强类
-refItem.getSuperclass();//返回接口定义的直接超类
+class.getSuperclass();//返回直接的父类,如果没有就返回null
+class.getDeclaringClass();//返回内部声明的类的包装类,针对内部类的情况返回包装类
+class.getEnclosingClass();//DeclaringClass方法的增强版,还可以返回匿名内部类的增强
+class.getInterfaces();//返回这个class直接实现的接口
 ```
 
+通过这种方法可以快速查找class的继承关系
 
+3. class 有关java Type体系的信息获取
 
+```java
+class.getGenericInterfaces();//返回父接口的Type可以针对java泛型参数化规则进行处理,获取泛型中的真实类型
+class.getGenericSuperclass();//返回父类的Type,可针对java泛型参数化进行特殊处理,获取到泛型中真实的数值
+class.getTypeParameters();//返回这个类的Type类型,符合java 泛型type信息获取规
+```
+
+4. class 有关包信息的方法
+
+```java
+class.getPackageName();//包名
+class.getPackage();//包类
+```
+
+5. class的访问级别
+
+```java
+class.getModifiers();//返回这个class访问级别
+```
+
+6. class 对象或者class类强制转化提供的功能
+
+```java
+class.asSubclass(class);//强制转化成指定的class会生成警告,因为泛型无法确定转化是否成功
+class.cast(new Object());//将传入的类型前置转化成调用的class类型
+```
+
+7. 针对特殊类型比如arr类型枚举的特殊处理方法
+
+```java
+class.getComponentType();//如果这个class是一个数组类型,将会返回这个数组的类型
+class.getEnumConstants();//返回此枚举类的元素，如果此Class对象不表示枚举类型，则返回null
+```
+
+8. 各种is方法
+
+```java
+class.isAnnotation();//是否是注解
+class.isAnnotationPresent(Mapper.class);//是否是指定的注解
+class.isAnonymousClass();//是否是匿名类
+class.isArray();//是否是数组
+class.isAssignableFrom(Test.class);//如果调用类是参数的父类或者同一个类返回true
+class.isEnum();//是否是枚举
+class.isInstance(new Object());//确定指定的Object是否与此Class表示的对象分配兼容。相当于动态等效的instanceof
+class.isInterface();//是否是接口
+class.isLocalClass();//是否是局部类,就是在块中的类
+class.isPrimitive();//这个类是否是基本类型
+class.isSynthetic();//这个是个bug般的东西,看其他人的博客把https://blog.csdn.net/a327369238/article/details/52608805
+```
+
+### field
+
+field是java参数属性的载体.
+
+1. field获取方法
+
+```java
+class.getField("xxx");//获取指定名称的field对象,只针对于public属性,包括父类
+class.getDeclaredField("");//获取名称的field,不限制类型和访问权限,只限于当前类
+class.getFields();//获取所有的public对象Field数组
+class.getDeclaredFields();//获取当前类型所有的field引用
+```
+
+2. field一些属性信息方法
+
+```java
+field.getType();//返回参数的class类型如果是泛型将会返回Object类型
+field.setAccessible(true);//设置为true表示可以对private参数尽心操作
+field.toGenericString();//返回参数名称 比如 T org.ksql.test.Find.test
+field.toString();//返回参数名称 java.lang.Object org.ksql.test.Find.test
+```
+
+3. field设置和获取方法
+
+```java
+field.get();
+field.set(Object);
+
+field.getInt();//field 提供了一系列的方法用来获取指定类型
+field.setInt(12);//field提供了一系列的方法来设置指定的类型
+```
+
+4. field类型获取方法
+
+```java
+field.getType();//获取变量对应的类型
+field.getGenericType();//获取变量对应的类型type
+```
+
+5. 针对注解的方法
+
+```java
+Annotation annotation=field.getDeclaredAnnotation(Mapper.class);
+Annotation[] annotations= field.getDeclaredAnnotations();//获取所有的注解包括重复主机,不保留继承的注解
+Annotation[] annotations2=field.getAnnotations();//获取所有的注解.保留继承
+
+//这两个增加了对java8 重复注解的支持,Declared只是保证非继承
+Annotation[] annotations3= field.getAnnotationsByType(Mapper.class);//支持可重复注解
+Annotation[] annotations1=field.getDeclaredAnnotationsByType(Mapper.class);//返回直接存在于此元素上的所有注解。与此接口中的其他方法不同，该方法将忽略继承的注释
+
+```
 
 ### 1. 获取类的方法
 
@@ -319,8 +449,11 @@ class Itemchildren extends Item<String>{
                        .getGenericSuperclass()).getActualTypeArguments()[0];
     }
     public T get(Serializable id) {
-        T o = (T) getHibernateTemplate().get(entityClass, id);
+        //拿到了参数内部强制转化
+        return entityClass.case(new Object);
     }
 }
 ```
+
+总结一些,如果泛型想要拿到参数,必须在声明类的时候就将泛型对应的参数传递进入
 
