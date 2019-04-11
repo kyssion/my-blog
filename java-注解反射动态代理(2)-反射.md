@@ -4,19 +4,25 @@
 
 在java中反射是基于class信息的
 
-> 关于Class
+> 关于Class:Class是一个类，一个描述类的类（也就是描述类本身），封装了描述方法的Method，描述字段的Filed，描述构造器的Constructor等属性
 
-1. Class是一个类，一个描述类的类（也就是描述类本身），封装了描述方法的Method，描述字段的Filed，描述构造器的Constructor等属性
+## java反射相关的接口方法和最佳实践
 
-2. 对象照镜子后（反射）可以得到的信息：某个类的数据成员名、方法和构造器、某个类到底实现了哪些接口。
+### class
 
-3. 对于每个类而言，JRE 都为其保留一个不变的 Class 类型的对象。一个 Class 对象包含了特定某个类的有关信息。
+class 是java反射的最粗集合,分装了class对应的各种属性
 
-4. Class 对象只能由系统建立对象
+1. class 继承关系状态获取
 
-5. 一个类在 JVM 中只会有一个Class实例
+```java
+refItem.getSuperclass();//返回直接的父类,如果没有就返回null
+refItem.getDeclaringClass();//返回内部声明的类的包装类,针对内部类的情况返回包装类
+refItem.getEnclosingClass();//DeclaringClass方法的增强版,还可以返回匿名内部类的增强类
+refItem.getSuperclass();//返回接口定义的直接超类
+```
 
-## java 通过编程方法应用反射特性
+
+
 
 ### 1. 获取类的方法
 
@@ -110,11 +116,11 @@ Thread.currentThread().getContextClassLoader().getResource(“test.txt”).getFi
 ### method 获取类中的方法
 
 ```java
-//返回名称为xx参数为后面的变长数组的 直接成员方法
+//返回名称为xx参数为后面的变长数组的直接成员方法,包括私有类型和集成类型
 Method method = class1.getDeclaredMethod("xx", Integer.class);
-//方法处理继承的方法
+//获取所有的公共方法
 Method method2 = class1.getMethod("x", Integer.class);
-Annotation[][] annotations = method.getParameterAnnotations();//返回一个注解的二维数组 --同上面
+Annotation[][] annotations = method.getParameterAnnotations();//返回一个注解的二维数组 有的时候method中的一个注解可能会在
 Annotation[] annotations2=method.getAnnotations();
 Class<?>[] class3 = method.getParameterTypes();//返回参数数组
 Class<?> class4 = method.getReturnType();//返回返回值数组
