@@ -102,6 +102,18 @@ class.isPrimitive();//这个类是否是基本类型
 class.isSynthetic();//这个是个bug般的东西,看其他人的博客把https://blog.csdn.net/a327369238/article/details/52608805
 ```
 
+9. 注解使用方法
+
+```java
+item.getAnnotations();//获取所有的注解(包括继承的注解,但是并不包括重复注解)
+item.getAnnotation(Mapper.class);//返回指定类型的注解
+item.getDeclaredAnnotations();//返回这个类的直接注解
+item.getDeclaredAnnotation(Mapper.class);//返回这个类的指定类型的直接注解
+
+item.getAnnotationsByType(Mapper.class);//返回这个这个累的指定类型的注解,包括重复注解
+item.getDeclaredAnnotationsByType(Mapper.class);//返回这各类指定类型的注解包括重复注解,不可返回继承的
+```
+
 ### field
 
 field是java参数属性的载体.
@@ -153,6 +165,23 @@ Annotation[] annotations3= field.getAnnotationsByType(Mapper.class);//支持可�
 Annotation[] annotations1=field.getDeclaredAnnotationsByType(Mapper.class);//返回直接存在于此元素上的所有注解。与此接口中的其他方法不同，该方法将忽略继承的注释
 
 ```
+
+### method
+
+1. 获取方法
+
+```java
+item.getMethod("",new Class[]{});
+item.getMethods();
+item.getDeclaredMethod("",new Class[]{});
+item.getDeclaredMethods();
+//这些方法和上面的规则相同Declared表示不受访问权限限制但是只能访问当前的类的信息没有表示受但是会返回所有
+item.getEnclosingMethod();//返回这个封闭类的所有方法
+```
+
+2.
+
+
 
 ### 1. 获取类的方法
 
