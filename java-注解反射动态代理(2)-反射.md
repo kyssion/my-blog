@@ -179,8 +179,30 @@ item.getDeclaredMethods();
 item.getEnclosingMethod();//返回这个封闭类的所有方法
 ```
 
-2. 
+2. method参数相关操作方法方法
 
+```java
+method.getGenericParameterTypes();//返回参类型的数组
+method.getParameterTypes();//返回参数类型class数组
+
+method.getTypeParameters();//返回 <S> T method S对应的信息
+method.getParameterCount();//返回参数数量
+```
+
+3. method返回值相关参数方法
+
+```java
+method.getGenericReturnType();//获取变量的type类型
+method.getReturnType();//获取变量的返回值class
+```
+
+4. 运行方法
+
+```java
+method.invoke(new Object(),new Object[]{});//运行方法
+```
+
+5. 
 
 
 ### 1. 获取类的方法
