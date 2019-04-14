@@ -1,116 +1,130 @@
-## 上篇java针对泛型类型实现方法的猜想
 
-java的泛型实现因为考虑到兼容型的问题,所以一开始采用了类型擦除的机制实现相关的功能.
 
-但是这种类型擦除的机制又带来了一个新的问题,比如这样的场景
+# Java Type体系简介
+
+Type是Java 编程语言中所有类型的公共高级接口,注意这个类型并不是我们传统上常说的int、String、List、Map等数据类型而是从Java语言角度来说，对基本类型、引用类型向上的抽象
+
+Type体系中类型的包括：
+
+- 原始类型\基本类型(Class) : 常所指的类，还包括枚举、数组、注解等
+- 参数化类型(ParameterizedType) : 指泛型,如泛型List、Map或泛型类
+- 数组类型(GenericArrayType) : 指带有泛型的数组，即T[] 
+- 类型变量(TypeVariable) : 类型变量，即泛型中的变量；例如：T、K、V等变量，可以表示任何类
+- 泛型表达式(WildcardType) : 这个type类型是解决泛型? extend Number、? super Integer这样的表达式,相关类型的特殊Type子类(这个类和TypeVariable对应,TypeVariable相当于具体的类型而WildcardType相当于真实的类型)
+
+这里具体的介绍一下相关的内容
+
+## 1. ParameterizedType
+
+ParameterizedType表示参数化类型，也就是泛型，例如List<T>、Set<T>等,
+
+在ParameterizedType接口中，有3个方法，分别是getActualTypeArguments()、 getRawType()、 getOwnerType();
+
+1. getActualTypeArguments()
+
+获取泛型中的实际类型，可能会存在多个泛型，例如Map<K,V>,所以会返回Type[]数组
+
+![](/blogimg/java/t/1.png)
+
+值得注意的是，无论<>中有几层嵌套(List<Map<String,Integer>)，getActualTypeArguments()方法永远都是脱去最外层的<>(也就是List<>)，将口号内的内容（Map<String,Integer>）返回；我们经常遇到的List<T>，通过getActualTypeArguments()方法，得到的返回值是TypeVariableImpl对象，也就是TypeVariable类型(后面介绍);
+
+
+2. getRawType()
+
+获取声明泛型的类或者接口，也就是泛型中<>前面的那个值；
+
+![](/blogimg/java/t/2.png)
+
+3. getOwnerType()
+
+通过方法的名称，我们大概了解到，此方法是获取泛型的拥有者，那么拥有者是个什么意思？Returns a {@code Type} object representing the type that this type     * is a member of.  For example, if this type is {@code O.I},     * return a representation of {@code O}.  （摘自JDK注释）通过注解，我们得知，“拥有者”表示的含义--内部类的“父类”，通过getOwnerType()方法可以获取到内部类的“拥有者”；例如： Map  就是 Map.Entry<String,String>的拥有者；
+
+![](/blogimg/java/t/3.png)
+
+## 2. GenericArrayType
+
+泛型数组类型，例如List<String>[] 、T[]等；
+
+![](/blogimg/java/t/4.png)
+
+在GenericArrayType接口中，仅有1个方法，就是getGenericComponentType()；
+
+![](/blogimg/java/t/5.png)
+
+1. getGenericComponentType()
+
+返回泛型数组中元素的Type类型，即List<String>[] 中的 List<String>（ParameterizedTypeImpl）、T[] 中的T（TypeVariableImpl）；
+
+![](/blogimg/java/t/6.png)
+
+值得注意的是，无论是几维数组，getGenericComponentType()方法都只会脱去最右边的[]，返回剩下的值
+
+## 3. TypeVariable
+
+泛型的类型变量，指的是List<T>、Map<K,V>中的T，K，V等值，实际的Java类型是TypeVariableImpl（TypeVariable的子类）；此外，还可以对类型变量加上extend限定，这样会有类型变量对应的上限
+
+![](/blogimg/java/t/7.png)
+
+在TypeVariable接口中，有3个方法，分别为getBounds()、getGenericDeclaration()、getName()
+
+1.  getBounds()
+
+获得该类型变量的上限，也就是泛型中extend右边的值；例如 List<T extends Number> ，Number就是类型变量T的上限；如果我们只是简单的声明了List<T>（无显式定义extends），那么默认为Object；
+
+![](/blogimg/java/t/8.png)
+
+无显式定义extends：
+
+![](/blogimg/java/t/9.png)
+
+值得注意的是，类型变量的上限可以为多个，必须使用&符号相连接，例如 List<T extends Number & Serializable>；其中，& 后必须为接口；
+
+2. getGenericDeclaration()
+
+获取声明该类型变量实体，也就是TypeVariableTest<T>中的TypeVariableTest
+
+![](/blogimg/java/t/10.png)
+
+3. getName()
+
+获取类型变量在源码中定义的名称
+
+![](/blogimg/java/t/11.png)
+
+说到TypeVariable类，就不得不提及Java-Type体系中另一个比较重要的接口---GenericDeclaration；含义为：声明类型变量的所有实体的公共接口；也就是说该接口定义了哪些地方可以定义类型变量（泛型）；
+
+通过查看源码发现，GenericDeclaration下有三个子类，分别为Class、Method、Constructor；也就是说，我们定义泛型只能在一个类中这3个地方自定义泛型；
+
+![](/blogimg/java/t/12.png)
+
+此时，我们不禁要问，我们不是经常在类中的属性声明泛型吗，怎么Field没有实现 GenericDeclaration接口呢？
+
+其实，我们在Field中并没有声明泛型，而是在使用泛型而已
 
 ```java
-public class ReflectorTest2 {
-    public static void main(String[] args) throws NoSuchFieldException {
-        ReflectorItem<String> reflectorItem =new ReflectorItem<>();
-        Class<ReflectorItem<String>> reflectorItemClass = (Class<ReflectorItem<String>>) reflectorItem.getClass();
-        Field f = reflectorItemClass.getDeclaredField("item");
-        System.out.println(f.getType().getName());
-    }
-}
-class ReflectorItem<T> {
+class Item<T>{
     T item;
-    public T getItem() {
-        return item;
-    }
-    public void setItem(T item) {
-        this.item = item;
-    }
 }
 ```
 
-因为T会在java运行的时候进行擦除,所以这里输出的内容是Object
+正因为是使用泛型，所以Field并没有实现GenericDeclaration接口
 
-```shell
-java.lang.Object
-```
+## 4. WildcardType
 
-如果想要获取这个参数的类型,我们只能在泛型类的内部获取到
+？---通配符表达式，表示通配符泛型，但是WildcardType并不属于Java-Type中的一钟；例如：List<? extends Number> 和 List<? super Integer>
 
-```java
-public class ReflectorTest2 {
-    public static void main(String[] args) throws NoSuchFieldException {
-        ReflectorItem<String> reflectorItem =new ReflectorItem<>("sdf"){};
-        reflectorItem.setItem("restset");
-    }
-}
-class  ReflectorItem<T> {
-    Type _type;
-    ReflectorItem(T s){
-        Type superClass = getClass().getGenericSuperclass();
-        if (superClass instanceof Class<?>) { // sanity check, should never happen
-            throw new IllegalArgumentException("Internal error: TypeReference constructed without actual type information");
-        }
-        _type = ((ParameterizedType) superClass).getActualTypeArguments()[0];
-        TypeVariable<? extends Class<?>>[] typeParameters =s.getClass().getTypeParameters();
-    }
-    T item;
-    public T getItem() {
-        return item;
-    }
-    public void setItem(T item) {
-        this.item = item;
-    }
-}
-```
+在WildcardType接口中，有2个方法，分别为getUpperBounds()、getLowerBounds();
 
-为什么会这样的呢,这里没有得到权威的答案,但是按照我的猜想,应该是这样的过程
+![](/blogimg/java/t/13.png)
 
-我们看一下java生成的class文件,发现上面这个类其实生成了三个类
+1. getUpperBounds()
 
-![](blogimg/java/11.jpg)
+获取泛型变量的上边界（extends）
 
-第一个 和最后一个就不用多说了,重点关心一下中间这个,反编译看看
+![](/blogimg/java/t/14.png)
 
-```java
-class ReflectorTest2$1 extends ReflectorItem<String> {
-    ReflectorTest2$1(String s) {
-        super(s);
-    }
-}
-```
+2. getLowerBounds
 
-看到这里差不多来了就能知道java虚拟机底层是怎么处理这里的了
+获取泛型变量的下边界（super）
 
-我们将代码修改一下变成这样
-
-```java
-public class ReflectorTest2 {
-    public static void main(String[] args) throws NoSuchFieldException {
-        ReflectorItem<String> reflectorItem =new ReflectorItem<>("sdf"){};
-        ReflectorItem<String> reflectorItem2 =new ReflectorItem<>("sdf"){};
-        ReflectorItem<String> reflectorItem3 =new ReflectorItem<>("sdf"){};
-        ReflectorItem<String> reflectorItem4 =new ReflectorItem<>("sdf"){};
-        reflectorItem.setItem("restset");
-    }
-}
-```
-
-再看看生成的class文件信息
-
-![](blogimg/java/12.jpg)
-
-上面的代码中生成了4个泛型类,然后在java的class 文件中同样生成了四个 类名+$+编号的 动态生成class
-
-这里我猜想,java在解决泛型类型问题的时候是通过动态生成带有类型信息的新类,去替代对应位置的进行过类型擦除的原来的类
-
-这样就是为什么在使用的时候能获取到类型的原因,和获取泛型类型的方法是Type superClass = getClass().getGenericSuperclass();使用的是supper 类.
-
-因为java动态生成一个继承了携带泛型真实类型的class类,在运行的时候进行了类型的动态替换
-
-## 下篇,java的类型体系
-
-Type是Java 编程语言中所有类型的公共高级接口（官方解释），也就是Java中所有类型的父类型包括Object
-
-其中，“所有类型”的描述尤为值得关注。它并不是我们平常工作中经常使用的 int、String、List、Map等数据类型，而是从Java语言角度来说，对基本类型、引用类型向上的抽象.
-
-Type体系中类型的包括：原始类型(Class)、参数化类型(ParameterizedType)、数组类型(GenericArrayType)、类型变量(TypeVariable)、基本类型(Class);原始类型，不仅仅包含我们平常所指的类，还包括枚举、数组、注解等；
-
-参数化类型，就是我们平常所用到的泛型List、Map；
-数组类型，并不是我们工作中所使用的数组String[] 、byte[]，而是带有泛型的数组，即T[] ；
-基本类型，也就是我们所说的java的基本类型，即int,float,double等
+![](/blogimg/java/t/15.png)
