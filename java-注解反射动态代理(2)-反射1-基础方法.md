@@ -169,6 +169,7 @@ field.getType();//返回参数的class类型如果是泛型将会返回Object类
 field.setAccessible(true);//设置为true表示可以对private参数尽心操作
 field.toGenericString();//返回参数名称 比如 T org.ksql.test.Find.test
 field.toString();//返回参数名称 java.lang.Object org.ksql.test.Find.test
+field.getDeclaringClass();//返回包裹这个参数的类的类型
 ```
 
 3. field设置和获取方法
