@@ -143,7 +143,6 @@ System.out.println("JDK提供的Object类由哪个类加载器加载-->" + class
 11. 资源获取
 
 ```java
-```java
 // /(左划线)表示使用classpath根目录进行下过关属性的查找
 TestRelativePath.class.getResource(“/test.txt”).getFile()
 Thread.currentThread().getContextClassLoader().getResource(“test.txt”).getFile()
@@ -354,4 +353,3 @@ class Itemchildren extends Item<String>{
 ```
 
 总结一些,如果泛型想要拿到参数,必须在声明类的时候就将泛型对应的参数传递进入
-
