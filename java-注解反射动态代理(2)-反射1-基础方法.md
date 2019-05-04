@@ -220,7 +220,7 @@ item.getEnclosingMethod()//该类是在哪个方法中定义的，比如方法�
 ```java
 method.getGenericParameterTypes();//返回参类型的数组
 method.getParameterTypes();//返回参数类型class数组
-
+method.getParams(); //返回参数数组
 method.getTypeParameters();//返回 <S> T method S对应的信息
 method.getParameterCount();//返回参数数量
 ```
