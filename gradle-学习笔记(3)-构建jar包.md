@@ -27,7 +27,6 @@ Implementation-Title: create-java-library
 Implementation-Version: 1.0-SNAPSHOT
 ```
 
-
 ##  version 制定生成的jar包版本号
 
 我们配置一个参数
