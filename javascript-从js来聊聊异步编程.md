@@ -1,15 +1,32 @@
 # 异步编程-js实现
 
-## promise异步
+## P0异步执行和异步IO的区别
+
+1. 异步执行没有解决性能的问题,只解决了用户体验的问题
+2. 提高并发能力的是异步IO,只不过异步IO使用的时候需要异步编程辅助(因为异步IO必须使用回调来获取返回值(epoll)) (硬件上是DMA(直接内存访问支持的))
+3. eventLoop只是解决了异步IO的通知问题,异步执行是由主线程和调度器解决的(有的框架将这个和而为一了,本质上是分离的)
+   一个负责程序本身的运行，称为"主线程"；另一个负责主线程与其他进程（主要是各种I/O操作）的通信，被称为"Event Loop线程"(可以译为"消息线程")
+![](/blogimg/js/01.png)
+
+## 文章的目的
+
+揭开go的 gorouter,c#的 async/await等 使用同步的写法写异步代码的神秘面纱 , 证明其本质就是一个语法糖
+
+## 为什么使用js来讲异步编程
+
+因为js可以通过编程语言自己的语法特性,实现原生语言不提供的同步化异步编程
+
+## js异步最底层写法promise
 
 ```javascript
 const promise = new Promise(function(resolve, reject) {
-  // ... some code
-  if (/* 异步操作成功 */){
-    resolve(value);
-  } else {
-    reject(error);
-  }
+  xxxxx.异步IO操作((res)=>{
+      if(res成功){
+          resolve(res)
+      }else{
+          reject(res)
+      }
+  })
 });
 ```
 
@@ -19,7 +36,7 @@ promise出入的回调函数有一定的要求
 
 - reject函数的作用是，将Promise对象的状态从“未完成”变为“失败”（即从 pending 变为 rejected），在异步操作失败时调用，并将异步操作报出的错误，作为参数传递出去。
 
-> Promise实例生成以后，可以用then方法分别指定resolved状态和rejected状态的回调函数。
+> Promise实例生成以后，可以用then方法分别指定resolved状态和rejected状态的回调函数(处理返回的结果)。
 
 
 ```javascript
@@ -30,7 +47,7 @@ promise.then(function(value) {
 });
 ```
 
-> 注意: promise对象在js中非常特殊,比如下面的例子
+> 引申-注意: promise对象在js中非常特殊,比如下面的例子
 
 ```JavaScript
 const p1 = new Promise(function (resolve, reject) {
@@ -47,22 +64,42 @@ p2
 
 > 这个的结果是failt 因为 p2中resolve返回一个promise对象,这个操作将会导致p2的状态升级成p1的状态(标准)
 
-### promise的then 链式写法
+### promise的then链式写法
 
 promise then方法将会返回一个promise,所以js支持链式异步
 
 ```javascript
-function getJson(path){
-    return new Promise((r,v)=>{
-        r("123123");
+var getJSON = function (url, callback) {
+    var promise = new Promise(function (resolve, reject) {
+        var client = new XMLHttpRequest();
+        client.open("GET", url);
+        client.onreadystatechange = handler;//readyState属性的值由一个值变为另一个值时，都会触发readystatechange事件
+        client.responseType = "json";
+        client.setRequestHeader("Accept", "application/json");
+        client.send();
+
+        function handler() {
+            if (this.readyState !== 4) {
+                return;
+            }
+            if (this.status === 200) {
+                callback(this.response);
+                resolve(this.response);
+            } else {
+                reject(new Error(this.statusText))
+            }
+        };
+    });
+    return promise;
+};
+getJSON("./e2e-tests/get.json", function (resp) {
+    console.log("get:" + resp.name);
+}).then(function (json) {
+    getJSON("./e2e-tests/get2.json", function (resp) {
+        console.log("get2:" + resp.name);
     })
-}
-getJson("/post/1.json").then(function(post) {
-    return getJson(post.commentURL);
-}).then(function funcA(comments) {
-    console.log("resolved: ", comments);
-}, function funcB(err){
-    console.log("rejected: ", err);
+}).catch(function (error) {
+    console.log("error1：" + error);
 });
 ```
 
@@ -97,11 +134,11 @@ Promise.resolve('foo')
 new Promise(resolve => resolve('foo'))
 ```
 
-> 注意: promise异步化结果只能在回调函数中获得,这样会产生回调地狱
+> 注意: promise异步化结果只能在回调函数中获得,如果异步的操作太多,将会调至调用链路过长
 
 ## 如何解决js的promise异步编程的问题?
 
-promise 写法有什么问题? ---- 回调地狱
+promise 写法有什么问题? ---- 调用链路过长
 
 比如: 使用promise 实现 异步ajax请求
 ```javascript
@@ -138,13 +175,13 @@ getJSON("./e2e-tests/get.json", function (resp) {
 });
 ```
 
-代码嵌套了好多层,不停的promise调用
+调用链太长,不停的promise调用
 
 ## js如何解决回调地狱---同步方法写异步
 
-### 解决方法1 使用js的协程 --Generator
+### 解决方法 使用js的协程 --Generator
 
-简单的说: generator 是使用yield 关键字将函数分块了,然后可以使用遍历器手动控制执行
+> generator:js的特殊语法,使用yield 关键字将函数分块了,然后可以使用遍历器手动控制执行
 
 例子:
 
@@ -163,9 +200,11 @@ console.log(start.next(2));
 console.log(start.next(3));
 ```
 
+> 本质上是函数分片
+
 js在每次yield的时候都会获得当前位置的表达式,然后再手动的嵌入就可以实现分片控制的效果了
 
-### 怎么实现呢? -- yield配合promise实现异步
+### 怎么用generator实现异步化呢 -- yield配合promise实现异步
 
 看一下这个方法
 
@@ -213,7 +252,7 @@ function runAsync(fn,value) {
                 runAsync(fn,fn.valueOf()).then(res);
             }
         } else {
-            res(item.value);
+            res(item.value);//这个res方法其实是所有人的res方法
         }
     })
 }
