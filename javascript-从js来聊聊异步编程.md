@@ -97,4 +97,249 @@ Promise.resolve('foo')
 new Promise(resolve => resolve('foo'))
 ```
 
-> 注意: 
+> 注意: promise异步化结果只能在回调函数中获得,这样会产生回调地狱
+
+## 如何解决js的promise异步编程的问题?
+
+promise 写法有什么问题? ---- 回调地狱
+
+比如: 使用promise 实现 异步ajax请求
+```javascript
+var getJSON = function (url, callback) {
+    var promise = new Promise(function (resolve, reject) {
+        var client = new XMLHttpRequest();
+        client.open("GET", url);
+        client.onreadystatechange = handler;//readyState属性的值由一个值变为另一个值时，都会触发readystatechange事件
+        client.responseType = "json";
+        client.setRequestHeader("Accept", "application/json");
+        client.send();
+        function handler() {
+            if (this.readyState !== 4) {
+                return;
+            }
+            if (this.status === 200) {
+                callback(this.response);
+                resolve(this.response);
+            } else {
+                reject(new Error(this.statusText))
+            }
+        };
+    });
+    return promise;
+};
+getJSON("./e2e-tests/get.json", function (resp) {
+    console.log("get:" + resp.name);
+}).then(function (json) {
+    getJSON("./e2e-tests/get2.json", function (resp) {
+        console.log("get2:" + resp.name);
+    })
+}).catch(function (error) {
+    console.log("error1：" + error);
+});
+```
+
+代码嵌套了好多层,不停的promise调用
+
+## js如何解决回调地狱---同步方法写异步
+
+### 解决方法1 使用js的协程 --Generator
+
+简单的说: generator 是使用yield 关键字将函数分块了,然后可以使用遍历器手动控制执行
+
+例子:
+
+```javascript
+function * gen(){
+    let a= 123;
+    let b = yield a;
+    let c = yield a+b;
+    return a+b+c;
+}
+
+let start = gen();
+
+console.log(start.next());
+console.log(start.next(2));
+console.log(start.next(3));
+```
+
+js在每次yield的时候都会获得当前位置的表达式,然后再手动的嵌入就可以实现分片控制的效果了
+
+### 怎么实现呢? -- yield配合promise实现异步
+
+看一下这个方法
+
+```javascript
+function* asyncFn(value) {
+    let a = yield promiseOne(value);
+    let b = yield promiseTwo(a);
+    return a + b;
+}
+```
+
+想让他能异步执行,只要能让前一个promise的结果是下一个promise的输入就可以了
+
+这里有两种写法
+
+#### 写法一
+
+递归方程: f(最终结果) = f(到目前的结果)+f(接下来执行的结果)
+
+```javascript
+function promiseOne(xxx) {
+    return new Promise((res, rej) => {
+        res(xxx + 1);
+    })
+}
+function promiseTwo(xxx) {
+    return new Promise((res, rej) => {
+        res(xxx + 1);
+    })
+}
+function* asyncFn(value) {
+    let a = yield promiseOne(value);
+    let b = yield promiseTwo(a);
+    return a + b;
+}
+function runAsync(fn,value) {
+    let item = fn.next(value);
+    return new Promise((res, rej) => {
+        if (!item.done) {
+            if (item.value instanceof Promise) {
+                item.value.then((re)=>{
+                    runAsync(fn,re).then(res);
+                })
+            } else {
+                runAsync(fn,fn.valueOf()).then(res);
+            }
+        } else {
+            res(item.value);
+        }
+    })
+}
+runAsync(asyncFn(12)).then(res=>{
+    console.log(res);
+});
+```
+
+> co 工具包的写法
+
+```javascript
+function run (gen) {
+  gen = gen()
+  return next(gen.next())
+  function next ({done, value}) {
+    return new Promise(resolve => {
+     if (done) { // finish
+       resolve(value)
+     } else { // not yet
+       value.then(data => {
+         next(gen.next(data)).then(resolve)
+       })
+     }
+   })
+  }
+}
+function getRandom () {
+  return new Promise(resolve => {
+    setTimeout(_ => resolve(Math.random() * 10 | 0), 1000)
+  })
+}
+function * main () {
+  let num1 = yield getRandom()
+  let num2 = yield getRandom()
+ 
+  return num1 + num2
+}
+run(main).then(data => {
+  console.log(`got data: ${data}`);
+})
+```
+
+#### 写法二
+
+递归方程 f(最终结果) = f(之前所有的结果)+f(最后一步的结果)
+
+```javascript
+//同步方式写异步
+function asyncRun(resf, fn, value) {
+    let a = fn(value);
+    go(value);
+    function go(value) {
+        let next = a.next(value);
+        if (!next.done) {
+            if (next.value instanceof Promise) {
+                next.value.then((res) => {
+                    go(res);
+                });
+            } else {
+                return go(next.value);
+            }
+        } else {
+            resf(next.value);
+        }
+    }
+}
+function* asyncFn(value) {
+    let a = yield promiseOne(value);
+    let b = yield promiseTwo(a);
+    return a + b;
+}
+function show(item) {
+    console.log(item)
+}
+asyncRun(show, asyncFn, 12);
+function promiseOne(xxx) {
+    return new Promise((res, rej) => {
+        res(xxx + 1);
+    })
+}
+function promiseTwo(xxx) {
+    return new Promise((res, rej) => {
+        res(xxx + 1);
+    })
+}
+```
+
+## 更简单的方法 async/await
+
+上面复杂的代码如果变成async/await要怎么做呢
+
+很简单
+
+```javascript
+// function* asyncFn(value) {
+//     let a = yield promiseOne(value);
+//     let b = yield promiseTwo(a);
+//     return a + b;
+// }
+function promiseOne(xxx) {
+    return new Promise((res, rej) => {
+        res(xxx + 1);
+    })
+}
+function promiseTwo(xxx) {
+    return new Promise((res, rej) => {
+        res(xxx + 1);
+    })
+}
+async function asyncFn(value) {
+    let a = await promiseOne(value);
+    let b = await promiseTwo(a);
+    return a + b;
+}
+asyncFn(12).then((res)=>{
+    console.log(res)
+});
+```
+
+通过上面的例子,我们可以发现其实async/await本质上其实是 generator的一个语法糖
+
+await就是yield , async 的作用就是将函数编程语法糖
+
+如果背的话很简答两条规则:
+
+1. await后面必须是promise函数
+2. async 标记过得函数执行后返回的promise
+
+通过这种方法就可以简单的实现异步了
