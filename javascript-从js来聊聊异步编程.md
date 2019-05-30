@@ -89,3 +89,12 @@ p.then((val) => console.log('fulfilled:', val))
 Promise.resolve(2).finally(() => {})
 ```
 
+### 更加方便的编写异步使用Promise.resolve(xxx)
+
+```JavaScript
+Promise.resolve('foo')
+// 等价于
+new Promise(resolve => resolve('foo'))
+```
+
+> 注意: 
