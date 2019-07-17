@@ -29,7 +29,7 @@ pub fn test2(){
 ```
 在 rust 中 所有变量都默认像java的final关键字，是不可改变的如果需要改变需要指定mut 参数,表示这个值是可以变的
 
-###3. 所有权和引用
+### 3. 所有权和引用
 
 这个和c语言是类似的
 
@@ -74,11 +74,11 @@ pub fn ownership(){
 
 > ps ： 猜测 其实在这里发现一个问题，rust的字符串本身其实返回的就是一个内存地址，而"".to_string() 返回就是一个对象，move是针对对象的
 
-### 3. 函数
+## 函数
 
 rust的函数其实还是很标准的没啥特殊的语法
 
-> 函数定义 参数使用类型：名称分割，返回值写在-> 后面
+### 1.  函数定义 参数使用类型：名称分割，返回值写在-> 后面
 
 ```rust
 pub fn test5(i32:a,i8:b)->i32{
@@ -89,7 +89,7 @@ pub fn test6(){
 }
 ```
 
-> 函数指针
+### 2. 函数指针
 
 rust 的函数是一等公民，可以函数化传参或者作为返回值（注意函数参数定义必须是变量名：类型）
 
@@ -115,3 +115,93 @@ pub fn test9()->fn()->i32{
     return ff2;
 }
 ```
+
+### 3. 函数闭包
+
+rust 闭包的特点
+
+- 可以像函数一样被调用
+- 可以捕获上下文环境中的自由变量
+- 可以自动推断输入和返回的类型
+
+#### 1. 闭包传参
+
+```rust
+pub fn  test_fun<F: Fn(i32,i32)->i32>(op:F,a:i32,b:i32)->i32{
+    return op(a,b);
+}
+
+pub fn test(){
+    let c = 2;
+    let d = 3;
+    let a= test_fun(|a,b|->i32 {return a+b }, 0, 1);
+
+    let b = test_fn2(||c+d);
+    println!("{:?}",a);
+    println!("{:?}",b);
+}
+
+pub fn math<F: Fn() -> i32>(op: F) -> i32 {
+    op()
+}
+pub fn test_fn2<F: Fn()->i32>(op:F)->i32{
+    return op();
+}
+
+pub fn test2(){
+    let a = 2;
+    let b = 3;
+    println!("{:?}",math(|| a + b));
+    println!("{:?}",math(|| a * b));
+}
+```
+
+不知道为啥函数传参数函数名称必须带上类似范型的东西
+
+#### 2. 闭包返回值
+
+玄学了。。。。。
+
+```rust
+
+//动态分发
+fn two_times() -> Box<Fn(i32) -> i32> {
+    let i = 2;
+    Box::new(move |j| j * i)
+}
+let result = two_times();
+assert_eq!(result(2), 4);
+
+//动态分发2018
+fn two_times_dyn() -> Box<dyn Fn(i32) -> i32> {
+    let i = 2;
+    Box::new(move |j| j * i)
+}
+let result = two_times_dyn();
+assert_eq!(result(2), 4);
+
+//静态分发
+fn two_times_impl() -> impl Fn(i32) -> i32{
+    let i = 2;
+    move |j| j * i
+}
+let result = two_times_impl();
+assert_eq!(result(2), 4);
+```
+
+## rust 的 CTFE机制
+
+rust 支持在编译期运行函数来进行求值操作
+
+```rust
+pub fn init_arr_leng()->i32{
+    return 123;
+}
+
+pub fn init_arr(){
+    let arr = [0,init_arr_leng()];
+    println!("{:?}",arr[1]);
+}
+```
+
+ps 如果使用的rust2015 需要加上
