@@ -193,7 +193,14 @@ assert_eq!(result(2), 4);
 
 rust 支持在编译期运行函数来进行求值操作
 
-```rust
+```rustpub fn test3(){
+    let a=0;
+    let aa = if(a>12){
+        12
+    }else{
+        8
+    };
+}
 pub fn init_arr_leng()->i32{
     return 123;
 }
@@ -205,3 +212,40 @@ pub fn init_arr(){
 ```
 
 ps 如果使用的rust2015 需要加上
+
+## rust流程控制
+
+### 1. if else
+
+rust 没有提供三元表达式运算符
+
+```rust
+pub fn test3(){
+    let a=0;
+    let aa = if(a>12){
+        12
+    }else{
+        8
+    };
+}
+```
+
+### 2. where,for...in,loop
+
+rust 提供了三种
+
+```rust
+pub fn test4(){
+    let a =0;
+    while a<10{
+        a+=1;
+    }
+    loop{
+        break;
+    }
+    for a in 1..1000{
+        
+    }
+    return;
+}
+```
