@@ -249,3 +249,63 @@ pub fn test4(){
     return;
 }
 ```
+
+### 3. match 
+
+rust的match 模式匹配相当的强大，匹配是在 rust 中很强的东西，可以匹配所有类型
+
+=> 后面跟的是表达式，不能是语句
+
+#### (1) 基本形式类似这样
+
+```rust
+fn match_test(num: u8) {
+    match num {
+        13 => println!("正确"),
+        3 | 4 | 5 | 6 => println!("3 或 4 或 5 或 6"),
+        14...20 => println!("14..20"),
+        _ => println!("不正确"),
+    }
+}
+```
+#### (2) match中可以应用解构
+
+match 中可以应用解构
+
+```rust
+// 元组
+fn match_test2(){
+    let pair = (0, -2);
+    match pair {
+        (0, y) => println!("y={}", y),
+        (x, 0) => println!("x={}", x),
+        _ => println!("default")
+    }
+}
+```
+
+ps : 同样可以作用于结构体，指针，枚举
+
+#### (3) 可以加上if来守卫
+
+```rust
+fn match_test3(num:i32){
+    match num {
+        x if x != 20 => println!("14..20"),
+        _=> println!("不正确"),
+    }
+}
+```
+
+#### (4) 绑定变量
+
+```rust
+fn match_test4(num:i32){
+    match num {
+        13 => println!("正确"),
+        3|4|5|6 => println!("3 或 4 或 5 或 6"),
+        n @ 14...20 => println!("{}", n),
+        _=> println!("不正确"),
+    }
+}
+```
