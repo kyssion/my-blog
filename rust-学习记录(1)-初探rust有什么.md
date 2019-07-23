@@ -309,3 +309,38 @@ fn match_test4(num:i32){
     }
 }
 ```
+### if let 和 where let 表达式
+
+#### (1) if let 和 match 相同的地方是
+
+```rust
+fn match_test5(){
+    let boolean = true;
+    if let true = boolean{
+        println!("sdfsdf");
+    }
+}
+```
+
+#### (2) while let 
+
+个人感觉while let 语法是为了简化如下的一种方法使用loop循环的一种方法
+
+```rust
+fn match_test6(){
+    let mut v = vec![1,2,3,4];
+    //使用loop 进行pop出参数替换
+    loop{
+        match v.pop()  {
+            Some(x)=>{
+                print!(":{}",v)
+            },
+            None => break
+        }
+    }
+    //使用while方法 获取 v.pop() 出参队列
+    while let Some(x) = v.pop(){
+        print!(x);
+    }
+}
+```
