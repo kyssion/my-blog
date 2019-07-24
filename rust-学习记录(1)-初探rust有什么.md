@@ -422,6 +422,28 @@ rust 支持三种结构体
 
 具体名结构体
 
+```rust
+struct People{
+    name:str,
+    gender:u32
+}
+impl  People{
+    fn new(name:&'static str,genter:u32){
+        return People(name:name,genter:genter);
+    }
+    fn name(&mut self){
+
+    }
+    fn set_name(&mut self,name:String){
+        self.name = name;
+    }
+    fn gender(&self){
+        let gender = if (self.gender == 1) {"boy"} else {"girl"};
+        println!("gender: {:?}", gender);
+    }
+}
+```
+
 
 元组结构体
 
