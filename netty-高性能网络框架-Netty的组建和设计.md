@@ -29,6 +29,7 @@ Channel、EventLoop、Thread、EventLoopGroup之间的关系如下图：
 ### 三.ChannelFuure接口
 
 在netty中处理I/O操作异步返回值的方法就是ChannelFutrue接口，这个接口的addListener方法可以注册一个ChannelFutureListener方法，方便在某个操作完成的时候得到通知
+
 ### 四.ChannelHandler接口
 
 管理数据流和执行应用程序逻辑的重要组件，ChannelHandler充当了所有处理入站和出站相关应用的逻辑处理的容器
