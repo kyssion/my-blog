@@ -80,3 +80,5 @@ serializeTypeCurrentRPC=JSON
 
  ![](blogimg/rocketmq/3.png)
 
+
+
