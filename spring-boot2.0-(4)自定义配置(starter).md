@@ -9,3 +9,6 @@ spring的自动配置是使用上面的两个bean提供功能的
 - @Configuration 标记这个类是一个config配置类
 - @Conditional 这个是控制自动配置条件的类
 
+## spring boot spi 
+
+spring boot自己实现了一套spi机制,名字叫做你 
