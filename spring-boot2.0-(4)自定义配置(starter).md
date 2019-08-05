@@ -11,4 +11,4 @@ spring的自动配置是使用上面的两个bean提供功能的
 
 ## spring boot spi 
 
-spring boot自己实现了一套spi机制,名字叫做你 
+spring boot自己实现了一套spi机制, spring boot 要求在META-INF中生成一个配置文件
