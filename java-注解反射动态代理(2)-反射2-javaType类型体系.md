@@ -18,10 +18,10 @@ Type体系中类型的包括：
 
 ParameterizedType表示参数化类型，也就是泛型，例如List<T>、Set<T>等,
 
-在ParameterizedType接口中，有3个方法，分别是getActualTypeArguments()、 getRawType()、 getOwnerType();
+在ParameterizedType接口中，有3个方法，分别是getActualTypeArgumen   ts()、 getRawType()、 getOwnerType();
 
 1. getActualTypeArguments()
-
+ 
 获取泛型中的实际类型，可能会存在多个泛型，例如Map<K,V>,所以会返回Type[]数组
 
 ![](/blogimg/java/t/1.png)
