@@ -473,3 +473,40 @@ Id: 7是正在处理存储在中继日志中的更新的SQL线程
 # 常见主从复制问题
 
 [官方文档常见问题](https://dev.mysql.com/doc/refman/5.7/en/faqs-replication.html)
+
+## 描述msyql replication 机制的实现原理，如何在不停掉mysql主库的情况下，恢复数据不一致的slave的数据库节点？
+
+MySQL的复制（replication）是一个异步的复制，从一个MySQL instace（称之为Master）复制到另一个MySQL instance（称之Slave）。实现整个复制操作主要由三个进程完成的，其中两个进程在Slave（Sql进程和IO进程），另外一个进程在Master（IO进程）上。
+
+引用新浪某位大牛的话：mysql复制就是一句话：基于binlog的单线程异步复制过程。
+MySQL Replication复制的基本过程如下：
+1、Slave上面的IO进程连接上Master，并请求从指定日志文件的指定位置（或者从最开始的日志）之后的日志内容；
+
+
+代码如下:
+```
+mysql> CHANGE MASTER TO
+            ->     MASTER_HOST='master_host_name',
+            ->     MASTER_USER='replication_user_name',
+            ->     MASTER_PASSWORD='replication_password',
+            ->     MASTER_LOG_FILE='recorded_log_file_name',
+            ->     MASTER_LOG_POS=recorded_log_position;
+```
+2、Master接收到来自Slave的IO进程的请求后，通过负责复制的IO进程根据请求信息读取制定日志指定位置之后的日志信息，返回给Slave的IO进程。返回信息中除了日志所包含的信息之外，还包括本次返回的信息已经到Master端的bin-log文件的名称以及bin-log的位置；
+
+3、Slave的IO进程接收到信息后，将接收到的日志内容依次添加到Slave端的relay-log文件的最末端，并将读取到的Master端的bin-log的文件名和位置记录到master-info文件中，以便在下一次读取的时候能够清楚的高速Master“我需要从某个bin-log的哪个位置开始往后的日志内容，请发给我”；
+
+4、Slave的Sql进程检测到relay-log中新增加了内容后，会马上解析relay-log的内容成为在Master端真实执行时候的那些可执行的内容，并在自身执行
+
+### 操作过程：
+（1）登陆主服务器，查看主服务器的状态 
+mysql>show master status；
+找到现阶段master的数据偏移量的值。
+
+（2）登陆从服务器，执行同步操作。
+mysql>stop slave;
+mysql > change master to 直接定位到这个值得位置； 这里也就相当于给slave指明了相应的位置。
+mysql > start slave;
+
+（3）从服务器上查看状态
+mysql > show slave status
