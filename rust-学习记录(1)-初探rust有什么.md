@@ -423,27 +423,37 @@ rust 支持三种结构体
 具体名结构体
 
 ```rust
-struct People{
-    name:str,
-    gender:u32
+#[derive(Debug, PartialEq)]
+struct People {
+    name:  &'static str,
+    gender: u32,
 }
-impl  People{
-    fn new(name:&'static str,genter:u32){
-        return People(name:name,genter:genter);
+impl People {
+    fn new(name: &'static str, gender: u32) -> Self{
+        return People{name: name, gender: gender};
     }
-    fn name(&mut self){
 
+    fn name(&self) {
+        println!("name: {:?}", self.name);
     }
-    fn set_name(&mut self,name:String){
+
+    fn set_name(&mut self, name: &'static str)  {
         self.name = name;
     }
+
     fn gender(&self){
-        let gender = if (self.gender == 1) {"boy"} else {"girl"};
-        println!("gender: {:?}", gender);
+      let gender = if (self.gender == 1) {"boy"} else {"girl"};
+      println!("gender: {:?}", gender);
     }
 }
+
+//使用方法
+let alex = People::new( "Alex", 1);
+alex.name();
+alex.gender();
 ```
 
+> 注意: &self 方法表示的是这个结构体自己的引用
 
 元组结构体
 
