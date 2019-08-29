@@ -158,4 +158,3 @@ BITCOUNT key
 ```
 BITOP and res key1 key2
 ```
-
