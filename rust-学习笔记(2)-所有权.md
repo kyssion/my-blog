@@ -257,3 +257,61 @@ fn no_dangle() -> String {
 
 # 另一个突破所有权的方法,切片
 
+切片其实本是上是连续数据的引用
+
+比如一个 数组  0 1 2 3 4 5 6 
+
+其中变量x 指向 0 
+
+然后生成x的切片 y 指向 3
+
+这个时候y就是x的一部分引用，注意所有的切片都是只读的不可以进行修改(类型是&str)，相当于给上面的arr开了一个口子可以看见数据
+
+```rust
+fn main() {
+    let mut str = String::from("one");
+    let p = test(&mut str);
+    println!("{}",p);
+    str.clear();
+}
+fn test(st:&mut String)->&str{
+    st.push_str("sdfsdf");
+    &st[..]
+}
+```
+
+注意一个地方，如果代码这样写将会报错
+
+```rust
+fn main() {
+    let mut str = String::from("one");
+    let p = test(&mut str);
+    str.clear();
+    println!("{}",p);
+}
+
+fn test(st:&mut String)->&str{
+    st.push_str("sdfsdf");
+    &st[..]
+}
+```
+
+```rust
+ --> src/main.rs:4:5
+  |
+3 |     let p = test(&mut str);
+  |                  -------- first mutable borrow occurs here
+4 |     str.clear();
+  |     ^^^ second mutable borrow occurs here
+5 |     println!("{}",p);
+  |                   - first borrow later used here
+```
+
+原因时数据产生了脏数据，多个引用在使用前发生了变化
+
+# rust 数组切片
+
+```rust
+let a = [1, 2, 3, 4, 5];
+let slice = &a[1..3];
+```
