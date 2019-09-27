@@ -176,3 +176,20 @@ match some_u8_value {
 这种情况下我们需要写一个_ 来匹配其他情况
 
 注意: rust 会 判断 match 可能匹配的所有情况,如果不满足情况,将会自动报错,这个时候我们需要 使用_ 来匹配所有的其他情况
+
+# if let 语法本质上其实和 if|else if|else 相同的
+
+```rust
+let b= if let Some(3) = a{
+    println!("three");
+    3
+}else if let Some(4)= a{
+    println!("four");
+    4
+}else{
+    println!("other");
+    -1
+};
+println!("{}",b);
+```
+
