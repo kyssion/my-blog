@@ -91,3 +91,21 @@ crate
 
 # 模块定义时路径和访问限制
 
+```rust
+mod front_of_house {
+    pub mod hosting {
+       pub fn add_to_waitlist() {}
+    }
+}
+
+pub fn eat_at_restaurant() {
+    // Absolute path
+    crate::front_of_house::hosting::add_to_waitlist();
+
+    // Relative path
+    front_of_house::hosting::add_to_waitlist();
+}
+```
+
+- 上面例子中我从eat_at_restaurant() 方法中引用了front_of_house作用域下的hosting作用域的add_to_waitlist()方法,使用crate表示从项目跟路径的开始向上搜索的绝对路径,没有带上的表示使用以当前文件为跟路径的绝对路径
+- 注意add_to_waitlist的pub 关键字, 如果没有这个关键字表示是私有的方法,只有自己和子类可以实用
