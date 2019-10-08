@@ -219,3 +219,6 @@ for _, value := range pow
 ```golang
 for i := range pow
 ```
+
+# map
+
