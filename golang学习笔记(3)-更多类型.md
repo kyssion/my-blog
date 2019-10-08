@@ -81,6 +81,47 @@ func main() {
 3. 默认赋值
 4. 快速指针
 
+## 结构体默认方法
+
+golang的结构体支持默认支持的方法，用来表示对象
+
+```golang
+type Vertex struct {
+	X, Y float64
+}
+func (v Vertex) Abs() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+func main() {
+	v := Vertex{3, 4}
+	fmt.Println(v.Abs())
+}
+```
+
+注意这种方法是只读的，修改将不会生效，如果需要修改需要使用指针接收方法
+
+```golang
+type Vertex struct {
+	X, Y float64
+}
+func (v Vertex) Abs() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+func (v *Vertex) Scale(f float64) {
+	v.X = v.X * f
+	v.Y = v.Y * f
+}
+func main() {
+	v := Vertex{3, 4}
+	v.Scale(10)
+	fmt.Println(v.Abs())
+}
+```
+
+使用指针接收者的原因有二：
+首先，方法能够修改其接收者指向的值。
+其次，这样可以避免在每次调用方法时复制该值。若值的类型为大型结构体时，这样做会更加高效。
+
 # 数组
 
 ```golang
@@ -221,4 +262,135 @@ for i := range pow
 ```
 
 # map
+
+map 使用make 方法生成，两个参数 类型和值
+
+```golang
+type Vertex struct {
+	Lat, Long float64
+}
+
+var m map[string]Vertex
+
+func main() {
+	m = make(map[string]Vertex)
+	m["Bell Labs"] = Vertex{
+		40.68433, -74.39967,
+	}
+	fmt.Println(m["Bell Labs"])
+}
+```
+
+golang支持初始化映射语法
+
+映射的文法与结构体相似，不过必须有键名。
+
+```golang
+type Vertex struct {
+	Lat, Long float64
+}
+
+var m = map[string]Vertex{
+	"Bell Labs": Vertex{
+		40.68433, -74.39967,
+	},
+	"Google": Vertex{
+		37.42202, -122.08408,
+	},
+}
+
+func main() {
+	fmt.Println(m)
+}
+```
+
+若顶级类型只是一个类型名，你可以在文法的元素中省略它。
+
+```golang
+type Vertex struct {
+	Lat, Long float64
+}
+var m = map[string]Vertex{
+	"Bell Labs": {40.68433, -74.39967},
+	"Google":    {37.42202, -122.08408},
+}
+func main() {
+	fmt.Println(m)
+}
+```
+
+在映射 m 中插入或修改元素：
+```golang
+m[key] = elem
+```
+
+获取元素：
+
+```golang
+elem = m[key]
+```
+
+删除元素：
+
+```golang
+delete(m, key)
+```
+
+通过双赋值检测某个键是否存在：
+
+```golang
+elem, ok = m[key]
+```
+
+若 key 在 m 中，ok 为 true ；否则，ok 为 false。
+若 key 不在映射中，那么 elem 是该映射元素类型的零值。
+同样的，当从映射中读取某个不存在的键时，结果是映射的元素类型的零值。
+注 ：若 elem 或 ok 还未声明，你可以使用短变量声明：
+
+```golang
+elem, ok := m[key]
+```
+
+# 函数值传参
+
+golang中函数也是顶级的变量
+
+它们可以像其它值一样传递。可以用作函数的参数或返回值。
+
+```golang
+func compute(fn func(float64, float64) float64) float64 {
+	return fn(3, 4)
+}
+
+func main() {
+	hypot := func(x, y float64) float64 {
+		return math.Sqrt(x*x + y*y)
+	}
+	fmt.Println(hypot(5, 12))
+
+	fmt.Println(compute(hypot))
+	fmt.Println(compute(math.Pow))
+}
+```
+
+# 函数闭包
+
+```golang
+func adder() func(int) int {
+	sum := 0
+	return func(x int) int {
+		sum += x
+		return sum
+	}
+}
+func main() {
+	pos, neg := adder(), adder()
+	for i := 0; i < 10; i++ {
+		fmt.Println(
+			pos(i),
+			neg(-2*i),
+		)
+	}
+}
+```
 
