@@ -81,6 +81,7 @@ func main() {
 3. 默认赋值
 4. 快速指针
 
+
 ## 结构体默认方法
 
 golang的结构体支持默认支持的方法，用来表示对象
@@ -394,8 +395,254 @@ func main() {
 }
 ```
 
+# 函数多态
+
+golang支持定义多个函数，每个函数要保证方法签名不同，名称可以相同
+
 # 接口
 
+```golang
+type Abser interface {
+	Abs() float64
+}
+func main() {
+	var a Abser
+	f := MyFloat(-math.Sqrt2)
+	v := Vertex{3, 4}
+	a = f  // a MyFloat 实现了 Abser
+	a = &v // a *Vertex 实现了 Abser
 
+	// 下面一行，v 是一个 Vertex（而不是 *Vertex）
+	// 所以没有实现 Abser。
+	a = v
 
+	fmt.Println(a.Abs())
+}
+type MyFloat float64
+func (f MyFloat) Abs() float64 {
+	if f < 0 {
+		return float64(-f)
+	}
+	return float64(f)
+}
+type Vertex struct {
+	X, Y float64
+}
+func (v *Vertex) Abs() float64 {
+	return math.Sqrt(v.X*v.X + v.Y*v.Y)
+}
+```
 
+其实 goalng的接口编程是针对类型方法来说的，比如使用golang的前缀函数声明绑定使用对象
+
+```golang
+func (T type) methodName(param type) return_type{
+	xxxxx
+}
+```
+
+golang的这种设计其实更像一种声明，这种声明是全局通用的，也就是说如果用接口声明了一种类型那么只要实现了相同的方法就可以重用了，golang支持方法重载所以这种方法其实更能提高通用性
+
+注意：golang在这里又限制了一个条件就是，在全局环境中同一个包名中不能有相同的方法接口声明
+
+-----
+
+# 引申 ： golang的type关键字
+
+Golang语言中存在一个关键字type，type又有两种使用方式，一种是类型别名，一种是类型定义
+
+类型定义
+
+```golang
+type Student struct {
+  name String
+  age int
+}
+```
+
+```golang
+type I int
+类型别名
+type Sdt = Student
+type I = int
+```
+
+# golang 接口可以做变量传参，注意如果接口指向的一定是一个指针，因为他不可能需要复制的
+
+```golang
+import (
+	"fmt"
+	"math"
+)
+type I interface {
+	M()
+}
+type T struct {
+	S string
+}
+func (t *T) M() {
+	fmt.Println(t.S)
+}
+type F float64
+func (f F) M() {
+	fmt.Println(f)
+}
+func main() {
+	var i I
+	i = &T{"Hello"}
+	describe(i)
+	i.M()
+	i = F(math.Pi)
+	describe(i)
+	i.M()
+}
+func describe(i I) {
+	fmt.Printf("(%v, %T)\n", i, i)
+}
+```
+
+# 如果接口被null 调用了
+
+如果接口被null 调用了，golang不会报错，而是继续以nil为入参运行，比如下面的例子，将会输出 nil
+
+```golang
+type I interface {
+	M()
+}
+type T struct {
+	S string
+}
+func (t *T) M() {
+	if t == nil {
+		fmt.Println("<nil>")
+		return
+	}
+	fmt.Println(t.S)
+}
+func main() {
+	var i I
+	var t *T
+	i = t
+	i.M()
+}
+```
+
+注意:如果接口没有找到对应的函数，将会报错
+
+```golang
+type I interface {
+	M()
+}
+func main() {
+	var i I
+	describe(i)
+	i.M()
+}
+func describe(i I) {
+	fmt.Printf("(%v, %T)\n", i, i)
+}
+```
+
+# 空接口
+
+指定了零个方法的接口值被称为 *空接口：*
+
+interface{}
+空接口可保存任何类型的值。（因为每个类型都至少实现了零个方法。）
+
+空接口被用来处理未知类型的值。例如，fmt.Print 可接受类型为 interface{} 的任意数量的参数。
+
+# 空接口承载接口类型判断类型断言
+类型断言 提供了访问接口值底层具体值的方式。
+
+```golang
+t := i.(T)
+```
+
+该语句断言接口值 i 保存了具体类型 T，并将其底层类型为 T 的值赋予变量 t。
+若 i 并未保存 T 类型的值，该语句就会触发一个恐慌。
+为了 判断 一个接口值是否保存了一个特定的类型，类型断言可返回两个值：其底层值以及一个报告断言是否成功的布尔值。
+```golang
+t, ok := i.(T)
+```
+
+若 i 保存了一个 T，那么 t 将会是其底层值，而 ok 为 true。
+否则，ok 将为 false 而 t 将为 T 类型的零值，程序并不会产生恐慌。
+请注意这种语法和读取一个映射时的相同之处。
+
+# 上面的问题的简化版
+
+类型选择
+类型选择 是一种按顺序从几个类型断言中选择分支的结构。
+
+类型选择与一般的 switch 语句相似，不过类型选择中的 case 为类型（而非值）， 它们针对给定接口值所存储的值的类型进行比较。
+
+```golang
+switch v := i.(type) {
+case T:
+    // v 的类型为 T
+case S:
+    // v 的类型为 S
+default:
+    // 没有匹配，v 与 i 的类型相同
+}
+```
+类型选择中的声明与类型断言 i.(T) 的语法相同，只是具体类型 T 被替换成了关键字 type。
+
+此选择语句判断接口值 i 保存的值类型是 T 还是 S。在 T 或 S 的情况下，变量 v 会分别按 T 或 S 类型保存 i 拥有的值。在默认（即没有匹配）的情况下，变量 v 与 i 的接口类型和值相同。
+
+```golang
+func do(i interface{}) {
+	switch v := i.(type) {
+	case int:
+		fmt.Printf("Twice %v is %v\n", v, v*2)
+	case string:
+		fmt.Printf("%q is %v bytes long\n", v, len(v))
+	default:
+		fmt.Printf("I don't know about type %T!\n", v)
+	}
+}
+
+func main() {
+	do(21)
+	do("hello")
+	do(true)
+}
+```
+
+# 特殊接口Error
+
+golang有一个特殊的接口表示错误Error ，其实没啥鸟用。。。。
+
+```golang
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+type MyError struct {
+	When time.Time
+	What string
+}
+
+func (e *MyError) Error() string {
+	return fmt.Sprintf("at %v, %s",
+		e.When, e.What)
+}
+
+func run() error {
+	return &MyError{
+		time.Now(),
+		"it didn't work",
+	}
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Println(err)
+	}
+}
+
+```
