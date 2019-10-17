@@ -200,9 +200,25 @@ Resource template = ctx.getResource("https://myhost.com/resource/path/myTemplate
 
 ## 还可以使用ResourceLoaderAware 接口直接获得上下文的ResourceLooader
 
+类似applicationAware的模式
+
 ```java
 public interface ResourceLoaderAware {
     void setResourceLoader(ResourceLoader resourceLoader);
 }
 ```
+
+# spring 自动化配置
+
+## @Required
+
+注释适用于bean属性setter方法， 5.1 弃用
+
+## @Autoweiter
+
+适用于属性 构造函数
+
+从Spring Framework 4.3开始，@Autowired如果目标bean只定义一个构造函数，则不再需要在该构造函数上添加注释。但是，如果有几个构造函数可用，则必须至少注释一个构造函数，@Autowired以指示容器使用哪个构造函数。
+
+
 
