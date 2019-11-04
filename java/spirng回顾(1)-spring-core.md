@@ -200,8 +200,477 @@ Resource template = ctx.getResource("https://myhost.com/resource/path/myTemplate
 
 ## 还可以使用ResourceLoaderAware 接口直接获得上下文的ResourceLooader
 
+类似applicationAware的模式
+
 ```java
 public interface ResourceLoaderAware {
     void setResourceLoader(ResourceLoader resourceLoader);
 }
 ```
+
+# spring 自动化配置
+
+## @Required
+
+注释适用于bean属性setter方法， 5.1 弃用
+
+## @Autoweiter
+
+### 使用位置
+
+这个注解是spring 推荐使用的注解,支持三个位置的注入
+
+- 属性
+
+```java
+public class MovieRecommender {
+    private final CustomerPreferenceDao customerPreferenceDao;
+    @Autowired
+    private MovieCatalog movieCatalog;
+    // ...
+}
+```
+
+- 构造函数
+
+```java
+public class MovieRecommender {
+    private final CustomerPreferenceDao customerPreferenceDao;
+    @Autowired
+    public MovieRecommender(CustomerPreferenceDao customerPreferenceDao) {
+        this.customerPreferenceDao = customerPreferenceDao;
+    }
+    // ...
+}
+```
+
+> 注意 : 从Spring Framework 4.3开始，@Autowired如果目标bean只定义一个构造函数，则不再需要在该构造函数上添加注释。但是，如果有几个构造函数可用，则必须至少注释一个构造函数，@Autowired以指示容器使用哪个构造函数。
+
+
+
+- 普通方法
+
+```java
+public class MovieRecommender {
+    private MovieCatalog movieCatalog;
+    private CustomerPreferenceDao customerPreferenceDao;
+    @Autowired
+    public void prepare(MovieCatalog movieCatalog,
+            CustomerPreferenceDao customerPreferenceDao) {
+        this.movieCatalog = movieCatalog;
+        this.customerPreferenceDao = customerPreferenceDao;
+    }
+    // ...
+}
+```
+
+### 多个相同的类型支持
+
+实用AutoWrite 默认情况下是使用类型进行注入的,如果有多个类型就会报错,所有spring支持数组接收方法
+
+```java
+@Autowired
+private MovieCatalog[] movieCatalogs;
+```
+
+spring 还支持map 注入的方法
+
+```java
+public class MovieRecommender {
+    private Map<String, MovieCatalog> movieCatalogs;
+    @Autowired
+    public void setMovieCatalogs(Map<String, MovieCatalog> movieCatalogs) {
+        this.movieCatalogs = movieCatalogs;
+    }
+    // ...
+}
+```
+
+默认情况下，当给定注入点没有匹配的候选bean可用时，自动装配将失败。对于声明的数组，集合或映射，至少应有一个匹配元素。???/
+
+###  @AutoWrite spring5 新注解
+
+从Spring Framework 5.0开始，您还可以使用@Nullable注释（任何包中的任何注释，例如，javax.annotation.Nullable来自JSR-305 的注释）
+
+### 其他
+
+您还可以使用@Autowired对于那些众所周知的解析依赖接口：BeanFactory，ApplicationContext，Environment，ResourceLoader， ApplicationEventPublisher，和MessageSource。这些接口及其扩展接口（例如ConfigurableApplicationContext或ResourcePatternResolver）将自动解析，而无需进行特殊设置。以下示例自动装配ApplicationContext对象：
+
+```java
+public class MovieRecommender {
+
+    @Autowired
+    private ApplicationContext context;
+
+    public MovieRecommender() {
+    }
+
+    // ...
+}
+```
+
+### @AutoWrite 其他内容
+
+@AutoWrite注解在方法上的场景???
+
+## @Primary
+
+用于当有多个候选者的时候进行装配优先是使用的标记
+
+```java
+@Configuration
+public class MovieConfiguration {
+    @Bean
+    @Primary
+    public MovieCatalog firstMovieCatalog() { ... }
+    @Bean
+    public MovieCatalog secondMovieCatalog() { ... }
+    // ...
+}
+```
+
+## @Qualifier
+
+可用于自定义构造限制条件的注解,相当于一个自定义构造注入的扩展点
+
+比如针对如下的定义
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        https://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        https://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:annotation-config/>
+
+    <bean class="example.SimpleMovieCatalog1">
+        <qualifier value="main"/> 
+
+        <!-- inject any dependencies required by this bean -->
+    </bean>
+    <bean class="example.SimpleMovieCatalog2">
+        <qualifier type="Genre" value="Action"/>
+        <!-- inject any dependencies required by this bean -->
+    </bean>
+</beans>
+```
+
+```java
+
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Qualifier
+public @interface Genre {
+
+    String value();
+}
+
+public class MovieRecommender {
+
+    //使用自定义的规则注入对象
+    @Autowired
+    @Genre("Action")
+    private SimpleMovieCatalog2 actionCatalog;
+
+
+    @Autowired
+    @Qualifier("main")
+    private SimpleMovieCatalog1 actionCatalog;
+
+    // ...
+}
+```
+
+## 自动装配泛型支持
+
+spring 其实还支持泛型的自动装配,不同的泛型类型在java中算是不同的类型???
+
+## Resource
+
+和 @AutoWrite 类型相同 , 只是这个可以携带上name关键字表示实用名称来进行注入
+
+# spring 注解高级玩法
+
+## 元注解组合
+
+在spring中可以讲一些注解进行任意的组合生成新的注解,并包含组合的注解的功能
+
+```java
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Scope(WebApplicationContext.SCOPE_SESSION)
+public @interface SessionScope {
+    /**
+     * Alias for {@link Scope#proxyMode}.
+     * <p>Defaults to {@link ScopedProxyMode#TARGET_CLASS}.
+     */
+    @AliasFor(annotation = Scope.class)
+    ScopedProxyMode proxyMode() default ScopedProxyMode.TARGET_CLASS;
+}
+```
+
+@AliasFor注解表示使用继承的注解的哪个属性,对外暴漏,这个时候暴漏的熟悉属性可以在外层被覆盖掉
+
+```java
+@Service
+@SessionScope(proxyMode = ScopedProxyMode.INTERFACES)
+public class SessionScopedUserService implements UserService {
+    // ...
+}
+```
+
+## spring 自动化扫描功能支持 @Configuration  @ComponentScan(basePackages = "org.example")
+
+## 注意这个功能必须@Configuration和ComponentScan连用才可以
+
+```java
+@Configuration
+@ComponentScan(basePackages = "org.example")
+public class AppConfig  {
+    ...
+}
+```
+
+## 指定扫描范围
+
+```java
+@Configuration
+@ComponentScan(basePackages = "org.example", nameGenerator = MyNameGenerator.class)
+public class AppConfig {
+    ...
+}
+```
+
+## 指定范围扫描自定义策略 ???
+
+```java
+@Configuration
+@ComponentScan(basePackages = "org.example", scopeResolver = MyScopeResolver.class)
+public class AppConfig {
+    ...
+}   
+```
+
+## scoped-proxy ???
+
+```java
+@Configuration
+@ComponentScan(basePackages = "org.example", scopedProxy = ScopedProxyMode.INTERFACES)
+public class AppConfig {
+    ...
+}
+```
+
+## 注意: 这个还支持过滤功能
+
+```java
+@Configuration
+@ComponentScan(basePackages = "org.example",
+        includeFilters = @Filter(type = FilterType.REGEX, pattern = ".*Stub.*Repository"),
+        excludeFilters = @Filter(Repository.class))
+public class AppConfig {
+    ...
+}
+```
+
+
+??? 增加支持过滤的表格信息
+
+## @Bean 注册bean
+
+```java
+@Component
+public class FactoryMethodComponent {
+
+    private static int i;
+
+    @Bean
+    @Qualifier("public")
+    public TestBean publicInstance() {
+        return new TestBean("publicInstance");
+    }
+
+    // use of a custom qualifier and autowiring of method parameters
+    @Bean
+    protected TestBean protectedInstance(
+            @Qualifier("public") TestBean spouse,
+            @Value("#{privateInstance.age}") String country) {
+        TestBean tb = new TestBean("protectedInstance", 1);
+        tb.setSpouse(spouse);
+        tb.setCountry(country);
+        return tb;
+    }
+
+    @Bean
+    private TestBean privateInstance() {
+        return new TestBean("privateInstance", i++);
+    }
+
+    @Bean
+    @RequestScope
+    public TestBean requestScopedInstance() {
+        return new TestBean("requestScopedInstance", 3);
+    }
+}
+```
+
+## 定义的时候提供限制符号
+
+```java
+@Component
+@Qualifier("Action")
+public class ActionMovieCatalog implements MovieCatalog {
+    // ...
+}
+```
+
+
+# spring 自动化配置 ??? 移动到上面和bean整理到一起
+
+## spring bean自动化配置的承载类 AnnotationConfigApplicationContext 
+
+这个ApplicationContext其实承载了java config类的解析功能
+
+```java
+public static void main(String[] args) {
+    ApplicationContext ctx = new AnnotationConfigApplicationContext(MyServiceImpl.class, Dependency1.class, Dependency2.class);
+    MyService myService = ctx.getBean(MyService.class);
+    myService.doStuff();
+}
+//第二种方法使用 编程的方法构建
+public static void main(String[] args) {
+    AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
+    ctx.register(AppConfig.class, OtherConfig.class);
+    ctx.register(AdditionalConfig.class);
+    ctx.refresh();
+    MyService myService = ctx.getBean(MyService.class);
+    myService.doStuff();
+}
+```
+
+## @bean 描述依赖关系
+
+在使用@Bean来描述依赖关系的时候,可以使用对应方法中的参数来进行依赖
+
+```java
+@Configuration
+public class AppConfig {
+
+    @Bean
+    public TransferService transferService(AccountRepository accountRepository) {
+        return new TransferServiceImpl(accountRepository);
+    }
+}
+```
+
+## @Bean 生命周期依赖
+
+
+```java
+public class BeanOne {
+
+    public void init() {
+        // initialization logic
+    }
+}
+
+public class BeanTwo {
+
+    public void cleanup() {
+        // destruction logic
+    }
+}
+
+@Configuration
+public class AppConfig {
+
+    @Bean(initMethod = "init")
+    public BeanOne beanOne() {
+        return new BeanOne();
+    }
+
+    @Bean(destroyMethod = "cleanup")
+    public BeanTwo beanTwo() {
+        return new BeanTwo();
+    }
+}
+```
+
+## bean范围???
+
+```java
+@Configuration
+public class MyConfiguration {
+
+    @Bean
+    @Scope("prototype")
+    public Encryptor encryptor() {
+        // ...
+    }
+}
+```
+
+@Scope 和 scoped-proxy
+Spring提供了一种通过作用域代理处理作用域依赖性的便捷方法 。使用XML配置时创建此类代理的最简单方法是<aop:scoped-proxy/>元素。使用@Scope注释在Java中配置bean 可以为该proxyMode属性提供同等的支持。默认值为无代理（ScopedProxyMode.NO），但您可以指定ScopedProxyMode.TARGET_CLASS或ScopedProxyMode.INTERFACES。
+
+## 自定义Bean命名
+
+```java
+@Configuration
+public class AppConfig {
+
+    @Bean(name = "myThing")
+    public Thing thing() {
+        return new Thing();
+    }
+}
+```
+
+## bean @Description
+
+提供bean的描述功能
+
+```java
+@Configuration
+public class AppConfig {
+
+    @Bean
+    @Description("Provides a basic example of a bean")
+    public Thing thing() {
+        return new Thing();
+    }
+}
+```
+
+# @Configuration
+
+## configuration import 加载其他类定义
+
+```java
+@Configuration
+public class ConfigA {
+
+    @Bean
+    public A a() {
+        return new A();
+    }
+}
+
+@Configuration
+@Import(ConfigA.class)
+public class ConfigB {
+
+    @Bean
+    public B b() {
+        return new B();
+    }
+}
+```
+
+## 灵活的注入配置@Conditional 
+
