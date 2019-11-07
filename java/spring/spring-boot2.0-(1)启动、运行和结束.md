@@ -58,9 +58,9 @@ springBoot提供了一系列的starter方便进行自动化配置，比如spring
 
 ```xml
 <dependency>  
-    <groupId>org.springframework.boot</groupId>  
-    <artifactId>spring-boot-starter-actuator</artifactId>  
-</dependency>  
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-actuator</artifactId>
+</dependency>
 ```
 
 > spring boot 提供了非常多的配置选项，具体的可以到官网上查询
