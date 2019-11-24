@@ -67,8 +67,10 @@ springBoot提供了一系列的starter方便进行自动化配置，比如spring
 
 ### spring boot 热部署工具  Developer Tools 
 
+
 spring boot 实现了一定程度下的热部署功能，暂时不做过多的讨论
 配置
+
 ```xml配置
 <dependencies>配置
 	<dependency>配置
