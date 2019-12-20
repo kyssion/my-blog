@@ -14,8 +14,9 @@
 举个例子： 一个实行了夏令时和冬令时的国家在夏令有一个活动，每天11点到1一点参加，为期七天，而这7天正好过了令时变化的这一天， 这样会导致什么问题呢？
 
 因为跨过令时所以跨令时之前一天的12点20分和后一天的12点20分之间相隔的并不是24小时，因为令时的变化携带的时区的变化，因为时区变化了，所以相同的12点20分对应的毫秒数是不同的（毫秒没有时区问题）
-
 所以为期七天这个过程不能简单使用+24小时来处理了，因为这样就可能导致跨令时前是11点到1点，跨令时之后就是12点到2点了
+
+-------
 
 # 怎么解决
 
@@ -23,7 +24,7 @@ java提供了一个非常牛逼的api TimeZone ，专门用来处理时区问题
 
 有两个api
 
-```
+```java
 TimeZone itemTimeZone = TimeZone.getTimeZone(时区名);
 itemTimeZone.getOffset(long data);//显示当前时区和0时区的偏移量,和令时制相关
 itemTimeZone.getRawOffset();//显示当前时区和0时区的偏移量,和令时制无关
@@ -33,7 +34,39 @@ itemTimeZone.getRawOffset();//显示当前时区和0时区的偏移量,和令时
 
 # 进阶一下,解决一下上面的需求,跨令时的时候保证日期是+1的
 
-这里就不说这么做了,直接上代码,其实就是一个很简单的算法题了
+解释一下这个需求, 直接用一个最基本的例子来说
+
+我用西班牙国家的时区来做一个+24小时的天数迭代,理论上应该让2019-10-26 4点和6点,变成2019-10-27 4点和6点
+但是应为夏令时的问题,其实变成的是成2019-10-27 3点和5点
+
+跑一下下面的代码
+
+```java
+long oneData = 24*60*60*1000;
+//2019-10-26 04:00:00
+long startTime = 1572055200000L;
+//2019-10-26 06:00:00
+long endTime = 1572062400000L;
+SimpleDateFormat bjSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+TimeZone timeZone = TimeZone.getTimeZone("Europe/Madrid");
+bjSdf.setTimeZone(timeZone);
+System.out.println(bjSdf.format(new Date(startTime)));
+System.out.println(bjSdf.format(new Date(endTime)));
+System.out.println(bjSdf.format(new Date(startTime+oneData)));
+System.out.println(bjSdf.format(new Date(endTime+oneData)));
+```
+
+输出:
+
+```
+2019-10-26 04:00:00
+2019-10-26 06:00:00
+//跨夏令时了出现问题....
+2019-10-27 03:00:00
+2019-10-27 05:00:00
+```
+
+所以不能这么做,直接上代码,其实就是一个很简单的算法题了
 
 ```java
 
@@ -83,3 +116,4 @@ public List<long[]> createTimeInterval(ScopeTimeDO scopeTimeDO,String timeZeno) 
 }
 ```
 
+上面的算法简单的说就是补偿时差,当前的时间和之后的进行比较,如果有差别就+上差距就行了 , 这样就能保证在跨夏令时的时候保证时间统一
