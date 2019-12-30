@@ -77,5 +77,27 @@ private T createAdaptiveExtension() {
 
 有点恶心了 先看看getAdaptiveExtensionClass方法干嘛了吧
 
+```java
+private Class<?> getAdaptiveExtensionClass() {
+    getExtensionClasses();
+    if (cachedAdaptiveClass != null) {
+        return cachedAdaptiveClass;
+    }
+    return cachedAdaptiveClass = createAdaptiveExtensionClass();
+}
 ```
+
+tmd 又有一个方法 getExtensionClasses ， 不过这个方法很重要 ， 下面的所有的逻辑都是为了加载扩展类的
+
+不看源码了 ， 直接说结论 从一个指定的文件夹中的文件中获取像下面这样文本
+
 ```
+adaptive=org.apache.dubbo.common.compiler.support.AdaptiveCompiler
+jdk=org.apache.dubbo.common.compiler.support.JdkCompiler
+javassist=org.apache.dubbo.common.compiler.support.JavassistCompiler
+```
+
+将这个文本整合出一套k v 结构的map 注意一种注解和一种类型@Adaptive和WrapperClass（ps 以当前类型为构造函数的类）
+
+
+
