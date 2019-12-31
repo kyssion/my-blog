@@ -4,7 +4,76 @@
 
 总结：dubbo 并没有使用java的spi而是实现了一种更加强悍的spi机制（自动类加载机制）
 
-# 核心类ExtensionLoader
+> 核心类ExtensionLoader
+
+# dubbo 自己实现SPI机制
+
+其实这一块的逻辑很简单,定位到了核心类ExtensionLoader的两个方法中
+
+```java
+public T getExtension(String name) {
+    if (name == null || name.length() == 0)
+        throw new IllegalArgumentException("Extension name == null");
+    if ("true".equals(name)) {
+        // 获取默认的拓展实现类
+        return getDefaultExtension();
+    }
+    // Holder，顾名思义，用于持有目标对象
+    Holder<Object> holder = cachedInstances.get(name);
+    if (holder == null) {
+        cachedInstances.putIfAbsent(name, new Holder<Object>());
+        holder = cachedInstances.get(name);
+    }
+    Object instance = holder.get();
+    // 双重检查
+    if (instance == null) {
+        synchronized (holder) {
+            instance = holder.get();
+            if (instance == null) {
+                // 创建拓展实例
+                instance = createExtension(name);
+                // 设置实例到 holder 中
+                holder.set(instance);
+            }
+        }
+    }
+    return (T) instance;
+}
+```
+
+第二个核心方法 createExtension 这个是真正创建类型的方法
+
+```java
+@SuppressWarnings("unchecked")
+private T createExtension(String name) {
+    Class<?> clazz = getExtensionClasses().get(name);
+    if (clazz == null) {
+        throw findException(name);
+    }
+    try {
+        T instance = (T) EXTENSION_INSTANCES.get(clazz);
+        if (instance == null) {
+            EXTENSION_INSTANCES.putIfAbsent(clazz, clazz.newInstance());
+            instance = (T) EXTENSION_INSTANCES.get(clazz);
+        }
+        injectExtension(instance);
+        Set<Class<?>> wrapperClasses = cachedWrapperClasses;
+        if (CollectionUtils.isNotEmpty(wrapperClasses)) {
+            for (Class<?> wrapperClass : wrapperClasses) {
+                instance = injectExtension((T) wrapperClass.getConstructor(type).newInstance(instance));
+            }
+        }
+        initExtension(instance);
+        return instance;
+    } catch (Throwable t) {
+        throw new IllegalStateException("Extension instance (name: " + name + ", class: " +
+                type + ") couldn't be instantiated: " + t.getMessage(), t);
+    }
+}
+```
+
+
+# 自适应扩展
 
 这个类在整个dubbo中算是一个硬核的类了，总计1000多行代码，看名称就能知道这个类其实承载了dubbo整个动态加载的逻辑
 
@@ -101,6 +170,14 @@ javassist=org.apache.dubbo.common.compiler.support.JavassistCompiler
 
 将这个文本整合出一套k v 结构的map 注意一种注解和一种类型@Adaptive和WrapperClass（ps 以当前类型为构造函数的类）
 
+getAdaptiveExtensionClass 方法同样包含了三个逻辑，如下：
+
+调用 getExtensionClasses 获取所有的拓展类
+检查缓存，若缓存不为空，则返回缓存
+若缓存为空，则调用 createAdaptiveExtensionClass 创建自适应拓展类
+这三个逻辑看起来平淡无奇，似乎没有多讲的必要。但是这些平淡无奇的代码中隐藏了着一些细节，需要说明一下。首先从第一个逻辑说起，getExtensionClasses 这个方法用于获取某个接口的所有实现类。比如该方法可以获取 Protocol 接口的 DubboProtocol、HttpProtocol、InjvmProtocol 等实现类。在获取实现类的过程中，如果某个某个实现类被 Adaptive 注解修饰了，那么该类就会被赋值给 cachedAdaptiveClass 变量。此时，上面步骤中的第二步条件成立（缓存不为空），直接返回 cachedAdaptiveClass 即可
+
+
 > 还有一个方法 createAdaptiveExtensionClass 这个方法非常特殊 , 是自动化生成扩展类的参数校验类...
 
 ```java
@@ -113,5 +190,75 @@ private Class<?> createAdaptiveExtensionClass() {
 }
 ```
 
+> 注意这里的一端代码---自动生成Adaptive方法String code = new AdaptiveClassCodeGenerator(type, cachedDefaultName).generate();,其中的generate这一块应该是整个dubbo最难理解的地方了
+
+```java
+public String generate() {
+    // no need to generate adaptive class since there's no adaptive method found.
+    if (!hasAdaptiveMethod()) {
+        throw new IllegalStateException("No adaptive method exist on extension " + type.getName() + ", refuse to create the adaptive class!");
+    }
+
+    StringBuilder code = new StringBuilder();
+    code.append(generatePackageInfo());
+    code.append(generateImports());
+    code.append(generateClassDeclaration());
+
+    Method[] methods = type.getMethods();
+    for (Method method : methods) {
+        code.append(generateMethod(method));
+    }
+    code.append("}");
+
+    if (logger.isDebugEnabled()) {
+        logger.debug(code.toString());
+    }
+    return code.toString();
+}
+```
+
+获取这个类依赖的spi扩展属性 , 使用set注入到这个类中
+
+```java
+private T injectExtension(T instance) {
+
+    if (objectFactory == null) {
+        return instance;
+    }
+
+    try {
+        for (Method method : instance.getClass().getMethods()) {
+            if (!isSetter(method)) {
+                continue;
+            }
+            /**
+                * Check {@link DisableInject} to see if we need auto injection for this property
+                */
+            if (method.getAnnotation(DisableInject.class) != null) {
+                continue;
+            }
+            Class<?> pt = method.getParameterTypes()[0];
+            if (ReflectUtils.isPrimitives(pt)) {
+                continue;
+            }
+
+            try {
+                String property = getSetterProperty(method);
+                Object object = objectFactory.getExtension(pt, property);
+                if (object != null) {
+                    method.invoke(instance, object);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to inject via method " + method.getName()
+                        + " of interface " + type.getName() + ": " + e.getMessage(), e);
+            }
+
+        }
+    } catch (Exception e) {
+        logger.error(e.getMessage(), e);
+    }
+    return instance;
+}
+```
 
 
