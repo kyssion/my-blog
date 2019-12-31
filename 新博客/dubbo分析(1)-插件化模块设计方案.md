@@ -89,7 +89,7 @@ private Class<?> getAdaptiveExtensionClass() {
 }
 ```
 
-tmd 又有一个方法 getExtensionClasses ， 不过这个方法很重要 ， 下面的所有的逻辑都是为了加载扩展类的
+> 有一个方法 getExtensionClasses ， 不过这个方法很重要 ， 下面的所有的逻辑都是为了加载扩展类的并缓存在自己的内存数组上
 
 不看源码了 ， 直接说结论 从一个指定的文件夹中的文件中获取像下面这样文本
 
@@ -100,6 +100,18 @@ javassist=org.apache.dubbo.common.compiler.support.JavassistCompiler
 ```
 
 将这个文本整合出一套k v 结构的map 注意一种注解和一种类型@Adaptive和WrapperClass（ps 以当前类型为构造函数的类）
+
+> 还有一个方法 createAdaptiveExtensionClass 这个方法非常特殊 , 是自动化生成扩展类的参数校验类...
+
+```java
+private Class<?> createAdaptiveExtensionClass() {
+    //这里为什么用代码生成器来实现呢 type 是默认的接口 ,  通过一些逻辑动态的生成代码 , 以后再看
+    String code = new AdaptiveClassCodeGenerator(type, cachedDefaultName).generate();
+    ClassLoader classLoader = findClassLoader();
+    org.apache.dubbo.common.compiler.Compiler compiler = ExtensionLoader.getExtensionLoader(org.apache.dubbo.common.compiler.Compiler.class).getAdaptiveExtension();
+    return compiler.compile(code, classLoader);
+}
+```
 
 
 
