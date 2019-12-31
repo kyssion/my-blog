@@ -195,6 +195,7 @@ private Class<?> createAdaptiveExtensionClass() {
 ```java
 public String generate() {
     // no need to generate adaptive class since there's no adaptive method found.
+    //必须使用使用还有Adaptive注解包括的类才能实现
     if (!hasAdaptiveMethod()) {
         throw new IllegalStateException("No adaptive method exist on extension " + type.getName() + ", refuse to create the adaptive class!");
     }
@@ -216,6 +217,8 @@ public String generate() {
     return code.toString();
 }
 ```
+
+
 
 获取这个类依赖的spi扩展属性 , 使用set注入到这个类中
 
