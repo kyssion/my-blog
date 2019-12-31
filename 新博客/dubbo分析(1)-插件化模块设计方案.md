@@ -14,6 +14,8 @@ Extension在dubbo的使用方法一般是这样的
 Xxx xxx = ExtensionLoader.getExtensionLoader(Xxx.class).getAdaptiveExtension();
 ```
 
+这种方法获取的是这个类的自定义扩展信息,并且带上了参数校验 , 注意必须是被spi注解标记的类才可以进行使用
+
 核心其实就是两个方法，getExtensionLoader和getAdaptiveExtension，前者负责实例化一个ExtensionLoader 后者进行动态加载
 
 ## getExtensionLoader
