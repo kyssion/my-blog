@@ -220,6 +220,7 @@ public String generate() {
 
 
 
+
 获取这个类依赖的spi扩展属性 , 使用set注入到这个类中
 
 ```java
@@ -263,5 +264,8 @@ private T injectExtension(T instance) {
     return instance;
 }
 ```
+
+> 注意这个方法，dubbo的默认objectFactory使用的是ExtendsObjectFactory 所以，只能加载SPI的类型
+
 
 
