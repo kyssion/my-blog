@@ -218,10 +218,142 @@ public String generate() {
 }
 ```
 
+spi这里其实写的并不是很合理，存在大量的问题，其实本质上dubbo在生成自适应类的时候，一个核心就是使用url作为参数，各种数据其实都是在url中获取的， 然后遍历
+
+看一个编译之后的代码
+
+```java
+package org.apache.dubbo.rpc;
+
+import org.apache.dubbo.common.extension.ExtensionLoader;
 
 
+public class Protocol$Adaptive implements org.apache.dubbo.rpc.Protocol {
+    public org.apache.dubbo.rpc.Exporter export(
+        org.apache.dubbo.rpc.Invoker arg0)
+        throws org.apache.dubbo.rpc.RpcException {
+        if (arg0 == null) {
+            throw new IllegalArgumentException(
+                "org.apache.dubbo.rpc.Invoker argument == null");
+        }
 
-获取这个类依赖的spi扩展属性 , 使用set注入到这个类中
+        if (arg0.getUrl() == null) {
+            throw new IllegalArgumentException(
+                "org.apache.dubbo.rpc.Invoker argument getUrl() == null");
+        }
+
+        org.apache.dubbo.common.URL url = arg0.getUrl();
+        String extName = ((url.getProtocol() == null) ? "dubbo"
+                                                      : url.getProtocol());
+
+        if (extName == null) {
+            throw new IllegalStateException(
+                "Failed to get extension (org.apache.dubbo.rpc.Protocol) name from url (" +
+                url.toString() + ") use keys([protocol])");
+        }
+
+        org.apache.dubbo.rpc.Protocol extension = (org.apache.dubbo.rpc.Protocol) ExtensionLoader.getExtensionLoader(org.apache.dubbo.rpc.Protocol.class)
+                                                                                                 .getExtension(extName);
+
+        return extension.export(arg0);
+    }
+
+    public java.util.List getServers() {
+        throw new UnsupportedOperationException(
+            "The method public default java.util.List org.apache.dubbo.rpc.Protocol.getServers() of interface org.apache.dubbo.rpc.Protocol is not adaptive method!");
+    }
+
+    public org.apache.dubbo.rpc.Invoker refer(java.lang.Class arg0,
+        org.apache.dubbo.common.URL arg1)
+        throws org.apache.dubbo.rpc.RpcException {
+        if (arg1 == null) {
+            throw new IllegalArgumentException("url == null");
+        }
+        org.apache.dubbo.common.URL url = arg1;
+        String extName = ((url.getProtocol() == null) ? "dubbo"
+                                                      : url.getProtocol());
+
+        if (extName == null) {
+            throw new IllegalStateException(
+                "Failed to get extension (org.apache.dubbo.rpc.Protocol) name from url (" +
+                url.toString() + ") use keys([protocol])");
+        }
+
+        org.apache.dubbo.rpc.Protocol extension = (org.apache.dubbo.rpc.Protocol) ExtensionLoader.getExtensionLoader(org.apache.dubbo.rpc.Protocol.class)
+                                                                                                 .getExtension(extName);
+
+        return extension.refer(arg0, arg1);
+    }
+    public void destroy() {
+        throw new UnsupportedOperationException(
+            "The method public abstract void org.apache.dubbo.rpc.Protocol.destroy() of interface org.apache.dubbo.rpc.Protocol is not adaptive method!");
+    }
+    public int getDefaultPort() {
+        throw new UnsupportedOperationException(
+            "The method public abstract int org.apache.dubbo.rpc.Protocol.getDefaultPort() of interface org.apache.dubbo.rpc.Protocol is not adaptive method!");
+    }
+}
+```
+
+注意上面的逻辑重点其实是 extName这个方法 ，  这个方法使用自动生成逻辑中的generateExtNameAssignment生成的
+
+```java
+private String generateExtNameAssignment(String[] value, boolean hasInvocation) {
+    // TODO: refactor it
+    String getNameCode = null;
+    for (int i = value.length - 1; i >= 0; --i) {
+        if (i == value.length - 1) {
+            if (null != defaultExtName) {
+                if (!"protocol".equals(value[i])) {
+                    if (hasInvocation) {
+                        getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                    } else {
+                        getNameCode = String.format("url.getParameter(\"%s\", \"%s\")", value[i], defaultExtName);
+                    }
+                } else {
+                    getNameCode = String.format("( url.getProtocol() == null ? \"%s\" : url.getProtocol() )", defaultExtName);
+                }
+            } else {
+                if (!"protocol".equals(value[i])) {
+                    if (hasInvocation) {
+                        getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                    } else {
+                        getNameCode = String.format("url.getParameter(\"%s\")", value[i]);
+                    }
+                } else {
+                    getNameCode = "url.getProtocol()";
+                }
+            }
+        } else {
+            if (!"protocol".equals(value[i])) {
+                if (hasInvocation) {
+                    getNameCode = String.format("url.getMethodParameter(methodName, \"%s\", \"%s\")", value[i], defaultExtName);
+                } else {
+                    getNameCode = String.format("url.getParameter(\"%s\", %s)", value[i], getNameCode);
+                }
+            } else {
+                getNameCode = String.format("url.getProtocol() == null ? (%s) : url.getProtocol()", getNameCode);
+            }
+        }
+    }
+
+    return String.format(CODE_EXT_NAME_ASSIGNMENT, getNameCode);
+}
+
+/**
+    * @return
+    */
+private String generateExtensionAssignment() {
+    return String.format(CODE_EXTENSION_ASSIGNMENT, type.getName(), ExtensionLoader.class.getSimpleName(), type.getName());
+}
+```
+
+其中value是在Adaptive注解中标记的名称，dubbo将会对这些名称在url中进行自动化获取，如果是protocal类型将会直接从url协议参数中获取
+
+>ps 注意，dubbo在这里做的其实并不好 ，  逻辑非常的混乱 ， 其中有一个非常重要的参数就是ExtName , 他的默认值是从AdaptiveClassCodeGenerator的构造函数中传入的，并且
+调用这个构造函数的ExtendLoad是在初始化ExtendLoad class 的时候，解析SPI注解中的参数进行默认注入的 。。。 其实注意，这里本质上就是封装一层从url中获取参数然后给SPI实现类调用的逻辑
+
+> 其他重要方法injectExtension获取这个类依赖的spi扩展属性 , 使用set注入到这个类中
 
 ```java
 private T injectExtension(T instance) {
