@@ -263,8 +263,25 @@ public void execute(Runnable command) {
 }
 ```
 
-不过这个问题貌似在java11 中解决了,相同的代码在java11中没有bug
+这个方法保证了只有在调用了reachabilityFence之后,java的gc才能回收这个class -- 估计是javajdk的一些特殊的编译逻辑保证了这个特性........
 
-通过这种方法我们就可以在java9+ 肆无忌惮的实用new xxx().dddd(); 而不用担心被gc了
+比如这个代码在java11中就不会出问题了
 
-因为按照之前的jvm的可达性分析 new xxx().dddd();完全可以被gc回收的
+```java
+public static void main(String[] args) {
+    JavaGCTestMain a = new JavaGCTestMain();
+    System.out.println("Created " + a);
+    for (int i = 0; i < 1_000_000_000; i++) {
+        //制定一定的时间间隔触发gc
+        if (i % 1_000_00 == 0) {
+            System.gc();
+        }
+    }
+    Reference.reachabilityFence(a);
+    System.out.println("done.");
+}
+```
+
+不过这个问题貌似在java11 中解决了,相同的代码在java11中没有bug 一脸蒙蔽 , 其实本质上还是jvm的bug jvm没有考虑到这种应用情况
+
+[](https://www.infoq.cn/article/BAMG55WHQt1iYrNSBRRh)
