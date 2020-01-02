@@ -285,3 +285,6 @@ public static void main(String[] args) {
 不过这个问题貌似在java11 中解决了,相同的代码在java11中没有bug 一脸蒙蔽 , 其实本质上还是jvm的bug jvm没有考虑到这种应用情况
 
 [](https://www.infoq.cn/article/BAMG55WHQt1iYrNSBRRh)
+
+
+> 其实就是jvm的一个bug , 可以实用强制引用规避...... 写代码的时候不要使用finilly
