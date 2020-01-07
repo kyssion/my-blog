@@ -112,3 +112,12 @@ class MyRecursiveTask extends RecursiveTask<Integer> {
     }
 }
 ```
+
+# 原理这里就不说了 , 主要是几个特性
+
+1. 自动的线程扩展
+    - 很多线程池都有这种能力,通过监控cpu核心数量来创建线程数量
+2. 工作窃取
+    - 空闲的线程去窃取其他工作线程队列中的任务 类似WorkStealingPool 多工作队列线程池
+3. 任务分片
+    - forkjoin框架的核心
