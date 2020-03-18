@@ -1,5 +1,6 @@
 一说到java的阻塞队列，我们就会想到在java的jdk中的那么多的类
 
+
 1.ArrayDeque, （数组双端队列） 
 2.PriorityQueue, （优先级队列） 
 3.ConcurrentLinkedQueue, （基于链表的并发队列） 
