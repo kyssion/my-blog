@@ -29,6 +29,82 @@ spring 框架是个啥? -> 本质上是一个IOC框架,解决依赖问题的玩�
 
 ## bean什么时候初始化的
 
-### ClassPathXmlApplicationContext
+spring中bean的初始化的过程 ， 我认为分为如下的几个过程
 
-这个类的是spring最原始的支持 , 所有逻辑比较清晰 , 直接贴一下源码
+1. java bean 加载进容器 ， 并且根据类型进行一定的初始化
+2. 处理 java bean的依赖关系
+
+> 这里梳理一下他们的过程
+
+### javabean加载进容器， 并且根据类型进行一定的初始化操作
+
+> 这一步中 ClassPathXMLApplicationContext和 AnnotationConfigApplicationContext的操作是不同的
+
+#### 1. ClassPathXMLApplication 
+
+> ClassPathApplicationContext 在spring中属于元老了 ， 他的着一块的支持是在AbstractApplicationContext中的refresh()方法（下面会给出源码）中实现的
+
+最核心的逻辑是在ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();这一行中
+
+```java
+protected ConfigurableListableBeanFactory obtainFreshBeanFactory() {
+    refreshBeanFactory();
+    return getBeanFactory();
+}
+```
+
+这里其实知道结论就好了 ，没有必要追究细节 ， 这里spring将会通过spring的xml文件生成一系列的javabean的包装bean -> BeanDefinition , 然后放入默认生成的DefaultListableBeanFactory之中
+
+#### 2. AnnotionAppicationContext
+
+> 这个需要重点关注一下 ， 这个地方石
+
+
+```java
+@Override
+public void refresh() throws BeansException, IllegalStateException {
+    synchronized (this.startupShutdownMonitor) {
+        // Prepare this context for refreshing.
+        prepareRefresh();
+        // Tell the subclass to refresh the internal bean factory.
+        ConfigurableListableBeanFactory beanFactory = obtainFreshBeanFactory();
+        // Prepare the bean factory for use in this context.
+        prepareBeanFactory(beanFactory);
+        try {
+            // Allows post-processing of the bean factory in context subclasses.
+            postProcessBeanFactory(beanFactory);
+            // Invoke factory processors registered as beans in the context.
+            invokeBeanFactoryPostProcessors(beanFactory);
+            // Register bean processors that intercept bean creation.
+            registerBeanPostProcessors(beanFactory);
+            // Initialize message source for this context.
+            initMessageSource();
+            // Initialize event multicaster for this context.
+            initApplicationEventMulticaster();
+            // Initialize other special beans in specific context subclasses.
+            onRefresh();
+            // Check for listener beans and register them.
+            registerListeners();
+            // Instantiate all remaining (non-lazy-init) singletons.
+            finishBeanFactoryInitialization(beanFactory);
+            // Last step: publish corresponding event.
+            finishRefresh();
+        } catch (BeansException ex) {
+            if (logger.isWarnEnabled()) {
+                logger.warn("Exception encountered during context initialization - " +
+                        "cancelling refresh attempt: " + ex);
+            }
+            // Destroy already created singletons to avoid dangling resources.
+            destroyBeans();
+            // Reset 'active' flag.
+            cancelRefresh(ex);
+            // Propagate exception to caller.
+            throw ex;
+        } finally {
+            // Reset common introspection caches in Spring's core, since we
+            // might not ever need metadata for singleton beans anymore...
+            resetCommonCaches();
+        }
+    }
+}
+```
