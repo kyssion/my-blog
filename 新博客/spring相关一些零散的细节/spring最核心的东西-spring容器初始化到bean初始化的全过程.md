@@ -411,3 +411,4 @@ protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 > 如何解决循环引用就很简单了 , 如果A依赖了B 并且B依赖了A , 当A初始化了B的时候, B初始化时将会从第三层引用中获取当前的提早曝光的类,从而实现了解决循环引用,并且spring的实现,还实现了多线程模式下也可以进行循环应用的逻辑
 
 > 还没完,整个生命周期还没有彻底搞懂
+
