@@ -9,6 +9,7 @@ update mysql.user set authentication_string=password('123qwe') where user='root'
 ```sql
 update mysql.user set plugin = 'mysql_native_password' where user='root'
 ```
+mysql 8.0 使用alter user 'root'@'localhost' identified by '设置的新密码' 修改密码
 
 生效和刷新
 
