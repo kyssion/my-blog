@@ -95,3 +95,12 @@ func TestT() {
 ```
 
 > golang 截取语法 ， [1:2], 从1 ->2 不包括2 ， 长度和容量都是按照原来的数组的容量和长度截断
+
+# golang 切片类型的底层实现
+
+```golang
+type Slice struct{
+	Elem *Type // element type
+}
+```
+
