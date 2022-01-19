@@ -24,7 +24,7 @@ func TestS() {
 
 ```golang
 func TestS() {
-	arr1 := []int{1, 2, 3, 4, 5, 6, 7, 8}
+	arr1 := [...]int{1, 2, 3, 4, 5, 6, 7, 8}
 	arr2 := arr1
 	arr1[0] = 100
 	arr2[0] = 99
@@ -35,13 +35,21 @@ func TestS() {
 	fmt.Printf("c|b:%p value:%+v\n", &arr2, arr2)
 }
 
-func CopyArray(c []int) {
+func CopyArray(c [8]int) {
 	c[0] = 98
 	fmt.Printf("c:%p value:%+v\n", &c, c)
 }
 ```
+输出
+```
+a:0xc0004d20c0 value:[100 2 3 4 5 6 7 8]
+b:0xc0004d2100 value:[99 2 3 4 5 6 7 8]
+c:0xc0004d21c0 value:[98 2 3 4 5 6 7 8]
+c|a:0xc0004d20c0 value:[100 2 3 4 5 6 7 8]
+c|b:0xc0004d2100 value:[99 2 3 4 5 6 7 8]
+```
 
-> golang 赋值和函数传参 或生成一个新的指针变量， 指向相同的数组内存地址
+> golang 数组赋值和函数引用都是
 
 
 # golang 数组内部数据格式
