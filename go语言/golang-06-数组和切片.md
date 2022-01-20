@@ -103,5 +103,33 @@ type Slice struct{
 	Elem *Type // element type
 }
 ```
+## golang make 初始化切片大小支持
+
+golang 在初始化的时候会动态检测是分配到栈区中还是分配到堆区中 ， 默认大小是64 KB 可以在在编译期指定 smallframes 标识进行更新
+
+so make([]int64 ,1023) 和 make([]int64,1024)细节上是截然不同的
+## golang 复制
+
+```golang
+func TestU() {
+	arr := []int{1, 2, 3, 4}
+	var arrC [4]int
+	// 前面表示复制进 , 后面表示复制出
+	copy(arrC[2:], arr[3:])
+	// 输出 : [0 0 4 0]
+	fmt.Printf("%+v\n", arrC)
+}
+```
+
+> 注意： 如果才用了协程调用的方法或者加入了 race检测， 就会运行 slicestringcopy或者slicecopy函数进行额外的检查， 默认使用的memmove 函数实现内存复制
+
+> 引申： race 检测 -> go 工具链集成了 race 检测 ， 用于检测golang竞争的问题
+
+```golang
+go test -race mypkg
+go run -race
+go build -race
+go install -race
+```
 
 
