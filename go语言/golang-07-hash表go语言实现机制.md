@@ -15,3 +15,4 @@ hash[123] =123 // panic 这里会报错
 v, ok := map[key]
 ```
 
+3. golang  map 实现底层原理
