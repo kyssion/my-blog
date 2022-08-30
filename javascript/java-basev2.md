@@ -275,6 +275,40 @@ js 的函数现在和一些基本语言的函数没啥区别 ， 主要要注意
 
 0. 箭头函数
 
+箭头函数需要和this 关键字一起说 
+```javascript
+
+let o = {
+    color : "red"
+}
+
+let p = {
+    color : "red"
+}
+
+global.color = "blue"
+
+function item(){
+    console.log(this.color)
+}
+
+let pp = ()=>{
+    console.log(this.color)
+}
+
+
+item() // blue
+o.item = item;
+o.item() // red
+
+pp() // underfind
+p.pp = pp
+p.pp() // underfind
+
+```
+
+> 没有箭头函数的时候 this是运行时确定的， 如果有箭头函数， this是声明时候定义的
+
 1. 函数内部的特殊对象
 
 ```javascript
@@ -295,3 +329,86 @@ function factorial(num){ // 递归相加
 
 > js支持这个的原因是js支持函数重命名 ， 重命名的函数递归会有问题 ， 所以一般内部使用这个方法
 
+2. new target => 这个用来检测当前函数是不是使用new 方法创建对象了
+```javascript
+function Test(){
+    if (!new.target){
+        console.log("start new")
+    }
+    console.log("start end")
+}
+
+let a = new Test()
+Test()
+```
+
+3. js 函数 apply call bind 区别
+
+call 、bind 、 apply 这三个函数的第一个参数都是 this 的指向对象，第二个参数差别就来了：
+call 的参数是直接放进去的，第二第三第 n 个参数全都用逗号分隔，直接放到后面 obj.myFun.call(db,'成都', ... ,'string' )。
+apply 的所有参数都必须放在一个数组里面传进去 obj.myFun.apply(db,['成都', ..., 'string' ])。
+bind 除了返回是函数以外，它 的参数和 call 一样。
+
+4. 函数使用的时候需要特殊注意的地方
+
+```javascript
+// js 不建议使用这种方法创建动态函数，而是推荐使用函数表达式来创建
+let sayHello;
+let boolItem = 12>13;
+if (boolItem){
+    function sayHell0(){
+        console.log("ffff")
+    }
+}else{
+    function sayHell0(){
+        console.log("xxxx")
+    }
+}
+if (boolItem){
+   sayHell0 = function (){
+        console.log("ffff")
+    }
+}else{
+    sayHell0 = function (){
+        console.log("xxxx")
+    }
+}
+```
+6. js尾调用优化例子-菲薄纳妾数列
+
+```javascript
+function sum(a){
+    if(a<2){
+        return a;
+    }
+    return sum(a-1)+sum(a-2)
+}
+```
+
+7. 匿名函数的作用域范围
+
+1. 匿名函数会继承父函数所有可以访问的变量（作用域）
+2. 匿名函数是永远没有办法访问到外部函数的this， this 一定是声明时候确认的
+
+
+
+```javascript
+function create(){
+    return ()=>{
+        console.log(this.name)
+    }
+}
+
+let a = {
+    name:"ffff"
+}
+// a.say = function (){
+//     console.log(this.name)
+// }
+
+a.say = create()
+
+a.say()
+```
+
+红包书 10.16 再支持
