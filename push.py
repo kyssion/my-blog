@@ -1,141 +1,173 @@
 import os
 import shutil
-import sys
+import argparse
 from datetime import datetime
-import re
+from pathlib import Path
 
-def slugify(value):
+# --- 配置区域 ---
+# 请修改为你自己的 Hexo 源文件夹路径 (通常是 hexo/source/_posts)
+DEFAULT_HEXO_POSTS_DIR = Path("~/my-hexo-blog/source/_posts").expanduser()
+# --- 配置结束 ---
+
+def get_categories_and_tags(source_path: Path, file_path: Path):
     """
-    将字符串转换为 URL 友好的 slug。
-    简单处理，可按需增强。
+    根据源路径和文件路径计算 categories 和 tags。
     """
-    # 替换空格和特殊字符为连字符，并转为小写
-    value = re.sub(r'[^\w\s-]', '', value).strip().lower()
-    value = re.sub(r'[-\s]+', '-', value)
-    return value
-
-def get_user_input_for_file(filepath):
-    """获取用户对单个文件的输入信息"""
-    filename = os.path.splitext(os.path.basename(filepath))[0]
+    # 获取相对于源路径的相对路径
+    rel_path = file_path.relative_to(source_path)
     
-    print(f"\n正在处理文件: {os.path.basename(filepath)}")
+    parts = list(rel_path.parent.parts)
     
-    # 1. 获取 Title (默认为文件名)
-    title = input(f"请输入文章标题 (回车使用文件名 '{filename}') : ").strip()
-    if not title:
-        title = filename
+    if not parts or parts == ['.']: # 文件在源路径根目录下
+        return [], []
+    elif len(parts) == 1: # 文件在一级子目录下
+        category = [parts[0]]
+        tag = [parts[0]]
+    else: # 文件在多级子目录下
+        category = [parts[0]] # 第一层为 category
+        tag = parts[1:] + [parts[0]] # 其余层及第一层都作为 tag
     
-    # 2. 获取 Categories (多个类别用逗号分隔)
-    categories_input = input("请输入分类 (多个分类用逗号','分隔): ").strip()
-    categories = [cat.strip() for cat in categories_input.split(',') if cat.strip()]
-    # 如果没有输入，则使用一个默认分类或留空
-    if not categories:
-        print("未输入分类，将使用 '未分类'。")
-        categories = ['未分类']
-        
-    # 3. 获取 Tags (多个标签用逗号分隔)
-    tags_input = input("请输入标签 (多个标签用逗号','分隔): ").strip()
-    tags = [tag.strip() for tag in tags_input.split(',') if tag.strip()]
-    # 如果没有输入，则使用一个默认标签或留空
-    if not tags:
-        print("未输入标签，将使用 'default'。")
-        tags = ['default']
+    return category, tag
 
-    return title, categories, tags
+def generate_front_matter(title, date_str, categories, tags, author):
+    """
+    生成 Hexo 兼容的 front-matter 字符串。
+    """
+    fm_parts = ["---"]
+    fm_parts.append(f"title: {title}")
+    fm_parts.append(f"date: {date_str}")
+    fm_parts.append("categories:")
+    for cat in categories:
+        fm_parts.append(f"  - {cat}")
+    fm_parts.append("tags:")
+    for tag in tags:
+        fm_parts.append(f"  - {tag}")
+    if author:
+        fm_parts.append(f"author: {author}")
+    fm_parts.append("---\n") # 添加一个换行以与内容分开
+    return "\n".join(fm_parts)
 
-def add_hexo_front_matter(content, title, categories, tags):
-    """在 Markdown 内容前添加 Hexo Front-matter"""
-    # 检查原内容是否已有 front-matter
-    existing_front_matter_match = re.match(r'^---\n(.*?)\n---\n(.*)', content, re.DOTALL)
-    if existing_front_matter_match:
-        existing_front_matter_content = existing_front_matter_match.group(1)
-        rest_of_content = existing_front_matter_match.group(2)
-        # 解析现有 front-matter (这里简化处理，实际可能需要更复杂的解析器如 ruamel.yaml)
-        # 为了简单起见，我们直接替换整个 front-matter
-        # 或者，如果只想更新特定字段，逻辑会更复杂。
-        # 这里我们选择替换，因为这是最常见的场景。
-        pass
+def process_markdown_file(src_file: Path, dest_dir: Path, source_root: Path, args):
+    """
+    处理单个 Markdown 文件：读取、添加 front-matter、写入目标目录。
+    """
+    print(f"正在处理文件: {src_file}")
 
-    # 构建新的 front-matter
-    date_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    # 处理列表格式
-    categories_str = '\n'.join([f'  - {cat}' for cat in categories])
-    tags_str = '\n'.join([f'  - {tag}' for tag in tags])
-    
-    new_front_matter = f"""---
-title: {title}
-date: {date_str}
-categories:
-{categories_str}
-tags:
-{tags_str}
----
+    # 1. 确定标题
+    default_title = src_file.stem # 去掉 .md 后缀的文件名
+    title = args.title or default_title
 
-"""
+    # 2. 确定日期
+    date_str = args.date or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # 返回新 front-matter + 原内容 (去掉旧 front-matter)
-    if existing_front_matter_match:
-        return new_front_matter + rest_of_content
-    else:
-        return new_front_matter + content
+    # 3. 确定分类和标签
+    default_categories, default_tags = get_categories_and_tags(source_root, src_file)
+    categories = args.categories.split(',') if args.categories else default_categories
+    tags = args.tags.split(',') if args.tags else default_tags
+
+    # 4. 生成最终文件名 (修改：直接使用原始文件名)
+    final_filename = src_file.name # 直接使用原始文件名，例如 'my_note.md'
+    final_dest_path = dest_dir / final_filename
+
+    # 5. 读取原文件内容
+    with open(src_file, 'r', encoding='utf-8') as f:
+        original_content = f.read()
+
+    # 6. 生成新的 front-matter
+    new_front_matter = generate_front_matter(
+        title=title,
+        date_str=date_str,
+        categories=categories,
+        tags=tags,
+        author=args.author
+    )
+
+    # 7. 写入新文件
+    try:
+        with open(final_dest_path, 'w', encoding='utf-8') as f:
+            f.write(new_front_matter)
+            f.write(original_content) # 写入原始内容
+        print(f"  -> 成功复制并处理到: {final_dest_path}")
+    except Exception as e:
+        print(f"  -> 写入文件失败: {e}")
+
 
 def main():
-    # --- 配置区 ---
-    # 请修改为你自己的 Hexo 博客 source/_posts 目录路径
-    HEXO_POSTS_DIR = r"C:\Users\14099\Documents\my-blog\hexo-blog\source\_posts"
-    # --- 配置结束 ---
+    parser = argparse.ArgumentParser(
+        description="将 Markdown 文件复制到 Hexo _posts 目录，并自动生成 front-matter。\n注意：此版本保留原始文件名。",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "source",
+        type=str,
+        help="源文件路径或源文件夹路径。如果是指向文件，则处理该文件；如果是指向文件夹，则递归处理文件夹内所有 .md 文件。"
+    )
+    parser.add_argument(
+        "-d", "--dest",
+        type=str,
+        default=str(DEFAULT_HEXO_POSTS_DIR),
+        help=f"目标 Hexo _posts 文件夹路径 (默认: {DEFAULT_HEXO_POSTS_DIR})"
+    )
+    parser.add_argument(
+        "-t", "--title",
+        type=str,
+        help="手动指定文章标题。如果不提供，则使用文件名 (不含 .md)。"
+    )
+    parser.add_argument(
+        "--date",
+        type=str,
+        help="手动指定发布日期 (格式: YYYY-MM-DD HH:MM:SS)。如果不提供，则使用当前时间。"
+    )
+    parser.add_argument(
+        "-c", "--categories",
+        type=str,
+        help="手动指定分类，多个分类用逗号分隔 (e.g., '技术,Python')。如果不提供，则按规则自动生成。"
+    )
+    parser.add_argument(
+        "-T", "--tags",
+        type=str,
+        help="手动指定标签，多个标签用逗号分隔 (e.g., '编程,学习')。如果不提供，则按规则自动生成。"
+    )
+    parser.add_argument(
+        "-a", "--author",
+        type=str,
+        help="指定作者名字。"
+    )
 
-    if len(sys.argv) < 2:
-        print("用法: python md_to_hexo.py <markdown_file1.md> [markdown_file2.md ...]")
-        print("或者将文件拖拽到此脚本上。")
-        sys.exit(1)
+    args = parser.parse_args()
 
-    markdown_files = []
-    for arg in sys.argv[1:]:
-        if os.path.isfile(arg) and arg.lower().endswith('.md'):
-            markdown_files.append(arg)
-        else:
-            print(f"警告: '{arg}' 不是有效的 .md 文件，已跳过。")
+    source_path = Path(args.source).resolve()
+    dest_dir = Path(args.dest).resolve()
 
-    if not markdown_files:
-        print("错误: 没有找到有效的 Markdown 文件。")
-        sys.exit(1)
+    # 确保目标目录存在
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"找到 {len(markdown_files)} 个 Markdown 文件待处理。")
+    if not source_path.exists():
+        print(f"错误: 源路径不存在 -> {source_path}")
+        return
 
-    for src_file_path in markdown_files:
-        try:
-            # 获取用户输入
-            title, categories, tags = get_user_input_for_file(src_file_path)
+    # 如果源是一个单独的文件
+    if source_path.is_file() and source_path.suffix.lower() == '.md':
+        # 在这种情况下，source_root 是其父目录
+        source_root_for_file = source_path.parent
+        process_markdown_file(source_path, dest_dir, source_root_for_file, args)
+        return
 
-            # 读取原文件内容
-            with open(src_file_path, 'r', encoding='utf-8') as f:
-                original_content = f.read()
+    # 如果源是一个目录
+    if source_path.is_dir():
+        # 在这种情况下，source_root 就是该目录本身
+        source_root_for_dir = source_path
+        md_files_found = False
+        for md_file in source_path.rglob("*.md"): # 递归查找所有 .md 文件
+            md_files_found = True
+            process_markdown_file(md_file, dest_dir, source_root_for_dir, args)
+        
+        if not md_files_found:
+            print(f"在目录 '{source_path}' 及其子目录中未找到任何 .md 文件。")
+        return
 
-            # 添加或修改 front-matter
-            updated_content = add_hexo_front_matter(original_content, title, categories, tags)
+    print(f"错误: 源路径不是一个有效的 .md 文件或目录 -> {source_path}")
 
-            # 确定目标文件名 (slugified_title.md)
-            dest_filename = slugify(title) + '.md'
-            dest_file_path = os.path.join(HEXO_POSTS_DIR, dest_filename)
-
-            # 检查目标文件是否存在，避免覆盖
-            if os.path.exists(dest_file_path):
-                counter = 1
-                name_part, ext = os.path.splitext(dest_filename)
-                while os.path.exists(os.path.join(HEXO_POSTS_DIR, f"{name_part}_{counter}{ext}")):
-                    counter += 1
-                dest_file_path = os.path.join(HEXO_POSTS_DIR, f"{name_part}_{counter}{ext}")
-                print(f"  -> 目标文件已存在，重命名为: {os.path.basename(dest_file_path)}")
-
-            # 将新内容写入目标文件
-            with open(dest_file_path, 'w', encoding='utf-8') as f:
-                f.write(updated_content)
-
-            print(f"  -> 成功复制并处理: {src_file_path} -> {dest_file_path}")
-
-        except Exception as e:
-            print(f"  -> 处理文件 '{src_file_path}' 时出错: {e}")
 
 if __name__ == "__main__":
     main()
