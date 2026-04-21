@@ -1,0 +1,126 @@
+replicaCount: 1
+
+# ✅ 吸收：固定镜像版本
+image:
+  rustfs:
+    repository: rustfs/rustfs
+    tag: "1.0.0-alpha.89"       # ← 固定版本
+    pullPolicy: IfNotPresent
+  initImage:
+    repository: busybox
+    tag: "stable"
+    pullPolicy: IfNotPresent
+
+mode:
+  standalone:
+    enabled: true
+  distributed:
+    enabled: false
+
+secret:
+  existingSecret: ""
+  rustfs:
+    access_key: rustfsadmin
+    secret_key: "14159265jkl"
+
+config:
+  rustfs:
+    volumes: ""
+    address: ":5052"
+    console_enable: "true"
+    console_address: ":5053"
+    log_level: "info"
+    region: "us-east-1"
+    obs_log_directory: "/logs"
+    obs_environment: "production"
+    domains: "s3.rustfs.k3s"
+    ec:
+      storage_class_standard: ""
+    log_rotation:
+      size: 100
+      time: day
+      keep_files: 7
+
+service:
+  type: ClusterIP
+  endpoint:
+    port: 5052
+  console:
+    port: 5053
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /health
+    port: 5052
+    scheme: HTTP
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /health/ready
+    port: 5052
+    scheme: HTTP
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+ingress:
+  enabled: true
+  className: "traefik"
+  # ✅ 吸收：显式指定 Traefik entrypoint
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+  hosts:
+    - host: s3.rustfs.k3s
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    enabled: false
+
+mtls:
+  enabled: false
+
+# ✅ 吸收：调度约束全部清空，单机更稳
+affinity: {}
+topologySpreadConstraints: []
+nodeSelector: {}
+tolerations: []
+
+storageclass:
+  name: local-path
+  dataStorageSize: 500Gi
+  logStorageSize: 5Gi
+
+pdb:
+  create: false
+
+# 先关只读根文件系统，排查完再开
+containerSecurityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+
+
+# LIIsJrPlrGUio2hPNNvK
+# Mrc5qZfSnHIXdMRIeSqmexAtVEfifvvDtBQN3oux

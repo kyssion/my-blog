@@ -1,173 +1,36 @@
-import os
-import shutil
-import argparse
-from datetime import datetime
-from pathlib import Path
-
-# --- 配置区域 ---
-# 请修改为你自己的 Hexo 源文件夹路径 (通常是 hexo/source/_posts)
-DEFAULT_HEXO_POSTS_DIR = Path("~/my-hexo-blog/source/_posts").expanduser()
-# --- 配置结束 ---
-
-def get_categories_and_tags(source_path: Path, file_path: Path):
+def combine_names(str1, str2):
     """
-    根据源路径和文件路径计算 categories 和 tags。
+    对两个逗号分隔的字符串进行笛卡尔积排列组合
+
+    示例:
+    str1 = "入(rù),七(qī)"
+    str2 = "朦(méng),霜(shuāng)"
+    输出: "入(rù)朦(méng),入(rù)霜(shuāng),七(qī)朦(méng),七(qī)霜(shuāng)"
     """
-    # 获取相对于源路径的相对路径
-    rel_path = file_path.relative_to(source_path)
-    
-    parts = list(rel_path.parent.parts)
-    
-    if not parts or parts == ['.']: # 文件在源路径根目录下
-        return [], []
-    elif len(parts) == 1: # 文件在一级子目录下
-        category = [parts[0]]
-        tag = [parts[0]]
-    else: # 文件在多级子目录下
-        category = [parts[0]] # 第一层为 category
-        tag = parts[1:] + [parts[0]] # 其余层及第一层都作为 tag
-    
-    return category, tag
+    list1 = [s.strip() for s in str1.split(',')]
+    list2 = [s.strip() for s in str2.split(',')]
+    result = [a + b for a in list1 for b in list2]
+    return ','.join(result)
 
-def generate_front_matter(title, date_str, categories, tags, author):
+
+def combine_and_save(str1, str2, output_file='result.txt'):
     """
-    生成 Hexo 兼容的 front-matter 字符串。
+    计算笛卡尔积并将结果写入文件
     """
-    fm_parts = ["---"]
-    fm_parts.append(f"title: {title}")
-    fm_parts.append(f"date: {date_str}")
-    fm_parts.append("categories:")
-    for cat in categories:
-        fm_parts.append(f"  - {cat}")
-    fm_parts.append("tags:")
-    for tag in tags:
-        fm_parts.append(f"  - {tag}")
-    if author:
-        fm_parts.append(f"author: {author}")
-    fm_parts.append("---\n") # 添加一个换行以与内容分开
-    return "\n".join(fm_parts)
-
-def process_markdown_file(src_file: Path, dest_dir: Path, source_root: Path, args):
-    """
-    处理单个 Markdown 文件：读取、添加 front-matter、写入目标目录。
-    """
-    print(f"正在处理文件: {src_file}")
-
-    # 1. 确定标题
-    default_title = src_file.stem # 去掉 .md 后缀的文件名
-    title = args.title or default_title
-
-    # 2. 确定日期
-    date_str = args.date or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # 3. 确定分类和标签
-    default_categories, default_tags = get_categories_and_tags(source_root, src_file)
-    categories = args.categories.split(',') if args.categories else default_categories
-    tags = args.tags.split(',') if args.tags else default_tags
-
-    # 4. 生成最终文件名 (修改：直接使用原始文件名)
-    final_filename = src_file.name # 直接使用原始文件名，例如 'my_note.md'
-    final_dest_path = dest_dir / final_filename
-
-    # 5. 读取原文件内容
-    with open(src_file, 'r', encoding='utf-8') as f:
-        original_content = f.read()
-
-    # 6. 生成新的 front-matter
-    new_front_matter = generate_front_matter(
-        title=title,
-        date_str=date_str,
-        categories=categories,
-        tags=tags,
-        author=args.author
-    )
-
-    # 7. 写入新文件
-    try:
-        with open(final_dest_path, 'w', encoding='utf-8') as f:
-            f.write(new_front_matter)
-            f.write(original_content) # 写入原始内容
-        print(f"  -> 成功复制并处理到: {final_dest_path}")
-    except Exception as e:
-        print(f"  -> 写入文件失败: {e}")
+    result = combine_names(str1, str2)
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(result)
+    print(f"结果已保存到: {output_file}")
+    print(f"共 {result.count(',') + 1} 种组合")
+    return result
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="将 Markdown 文件复制到 Hexo _posts 目录，并自动生成 front-matter。\n注意：此版本保留原始文件名。",
-        formatter_class=argparse.RawTextHelpFormatter
-    )
-    parser.add_argument(
-        "source",
-        type=str,
-        help="源文件路径或源文件夹路径。如果是指向文件，则处理该文件；如果是指向文件夹，则递归处理文件夹内所有 .md 文件。"
-    )
-    parser.add_argument(
-        "-d", "--dest",
-        type=str,
-        default=str(DEFAULT_HEXO_POSTS_DIR),
-        help=f"目标 Hexo _posts 文件夹路径 (默认: {DEFAULT_HEXO_POSTS_DIR})"
-    )
-    parser.add_argument(
-        "-t", "--title",
-        type=str,
-        help="手动指定文章标题。如果不提供，则使用文件名 (不含 .md)。"
-    )
-    parser.add_argument(
-        "--date",
-        type=str,
-        help="手动指定发布日期 (格式: YYYY-MM-DD HH:MM:SS)。如果不提供，则使用当前时间。"
-    )
-    parser.add_argument(
-        "-c", "--categories",
-        type=str,
-        help="手动指定分类，多个分类用逗号分隔 (e.g., '技术,Python')。如果不提供，则按规则自动生成。"
-    )
-    parser.add_argument(
-        "-T", "--tags",
-        type=str,
-        help="手动指定标签，多个标签用逗号分隔 (e.g., '编程,学习')。如果不提供，则按规则自动生成。"
-    )
-    parser.add_argument(
-        "-a", "--author",
-        type=str,
-        help="指定作者名字。"
-    )
 
-    args = parser.parse_args()
-
-    source_path = Path(args.source).resolve()
-    dest_dir = Path(args.dest).resolve()
-
-    # 确保目标目录存在
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    if not source_path.exists():
-        print(f"错误: 源路径不存在 -> {source_path}")
-        return
-
-    # 如果源是一个单独的文件
-    if source_path.is_file() and source_path.suffix.lower() == '.md':
-        # 在这种情况下，source_root 是其父目录
-        source_root_for_file = source_path.parent
-        process_markdown_file(source_path, dest_dir, source_root_for_file, args)
-        return
-
-    # 如果源是一个目录
-    if source_path.is_dir():
-        # 在这种情况下，source_root 就是该目录本身
-        source_root_for_dir = source_path
-        md_files_found = False
-        for md_file in source_path.rglob("*.md"): # 递归查找所有 .md 文件
-            md_files_found = True
-            process_markdown_file(md_file, dest_dir, source_root_for_dir, args)
-        
-        if not md_files_found:
-            print(f"在目录 '{source_path}' 及其子目录中未找到任何 .md 文件。")
-        return
-
-    print(f"错误: 源路径不是一个有效的 .md 文件或目录 -> {source_path}")
-
-
+# ========== 使用示例 ==========
 if __name__ == "__main__":
-    main()
+    # s1 = "入(rù),七(qī),小(xiǎo),千(qiān),三(sān),心(xīn),书(shū),双(shuāng),少(shǎo),兮(xī),仙(xiān),丝(sī),仟(qiān),邛(qióng),乍(zhà),如(rú),妆(zhuāng),奾(xiān),成(chéng),页(yè),曳(yè),伞(sǎn),而(ér),旬(xún),伝(yún),纤(xiān),字(zì),旪(xié),秀(xiù),时(shí),纯(chún),孜(zī),赤(chì),忱(chén),辛(xīn),纾(shū),姒(sì),译(yì),诏(zhào),囩(yún),妕(zhòng),妟(yàn),肙(yuān),妡(xīn),佋(zhāo),昔(xī),诗(shī),青(qīng),祄(xiè),环(huán),姗(shān),姌(rǎn),叔(shū),妶(xián),钗(chāi),叁(sān),织(zhī),姓(xìng),侞(rú),姃(zhēng),妰(zhuó),姁(xǔ),妯(zhóu),衫(shān),舍(shě),钕(nǚ),妱(zhāo),钎(qiān),妴(yuàn),肬(yóu),刹(chà),事(shì),怰(xuàn),忥(xì),星(xīng),思(sī),钥(yuè),秋(qiū),珊(shān),施(shī),春(chūn),珎(zhēn),柔(róu),信(xìn),珃(rǎn),姿(zī),俞(yú),恞(yí),绒(róng),姝(shū),怷(shù),昣(zhěn),娀(sōng),俙(xī),娍(chéng),拾(shí),欨(xū),胗(zhēn),叙(xù),娫(yán),姹(chà),轵(zhǐ),埩(zhēng),舢(shān),盺(xīn),姺(shēn),砂(shā),钫(fāng),胝(zhī),盶(yuǎn),郝(hǎo),钡(bèi),矨(yǐng),姫(zhěn),侺(shèn),恊(xié),姭(xiàn),悦(yuè),铃(líng),珠(zhū),钰(yù),倩(qiàn),钿(diàn),真(zhēn),倪(ní),素(sù),资(zī),脂(zhī),绣(xiù),脆(cuì),宰(zǎi),笑(xiào),挐(rú),眞(zhēn),乘(chéng),袗(zhěn),俹(yà),袖(xiù),袡(rán),瓷(cí),钶(kē),娕(chuò),珨(xiá),娙(xíng),眩(xuàn),悕(xī),眕(zhěn),谂(shěn),蚕(cán),羞(xiū),铌(ní),畛(zhěn),娎(xiē),倖(xìng),莀(chén),莐(chén),晨(chén),婵(chán),银(yín),谕(yù),情(qíng),爽(shuǎng),琋(xī),敒(shēn),彩(cǎi),悉(xī),偲(cāi),琇(xiù),偆(chǔn),惜(xī),媖(yīng),铷(rú),谌(chén),船(chuán),悫(què),雀(què),铟(yīn),悆(yù),脜(róu),婋(xiāo),婐(wǒ),铰(jiǎo),婌(shū),惞(xīn),谖(xuān),偠(yǎo),铼(lái),舒(shū),愉(yú),善(shàn),晳(xī),靓(jìng),然(rán),晰(xī),赏(shǎng),紫(zǐ),愃(xuān),腴(yú),絮(xù),谢(xiè),暎(yìng),锈(xiù),锌(xīn),葇(róu),晱(shǎn),裁(cái),傛(róng),装(zhuāng),愋(xuān),睎(xī),喧(xuān),媙(wēi),朠(yīng),媃(róu),鹇(xián),童(tóng),婹(yǎo),筎(rú),琗(cuì),寊(zhēn),疏(shū),媋(chūn),媑(zhòng),黍(shǔ),琡(chù),媶(róng),窗(chuāng),媣(rǎn),散(sàn),粟(sù),旑(yǐ),翙(huì),瑜(yú),瑞(ruì),暄(xuān),歆(xīn),锦(jǐn),皗(chóu),靖(jìng),慈(cí),煦(xù),新(xīn),想(xiǎng),暙(chūn),鹊(què),雏(chú),愫(sù),瑈(róu),锳(yīng),瑃(chūn),锩(juǎn),锚(máo),像(xiàng),酮(tóng),腬(róu),裟(shā),瑏(chuān),瑆(xīng),睢(huī),罭(yù),睬(cǎi),嫈(yīng),搈(róng),媱(yáo),锘(nuò),韶(sháo),暚(yáo),静(jìng),翠(cuì),瑧(zhēn),嫦(cháng),赛(sài),嫙(xuán),禛(zhēn),睻(xuān),僖(xī),鲜(xiān),锶(sī),镁(měi),镅(méi),需(xū),锹(qiāo),蝉(chán),褆(tí),睱(xià),睮(yú),瑦(wǔ),朄(yǐn),穁(róng),酸(suān),瑢(róng),瞁(xù),酾(shī),谮(zèn),蜻(qīng),僐(shàn),嫺(xián),聪(cōng),暶(xuán),踩(cǎi),瑺(cháng),儃(chán),褣(róng),憧(chōng),慾(yù),磉(sǎng),醋(cù),镓(jiā),憘(xǐ),熟(shú),谵(zhān),谴(qiǎn),羲(xī),歚(shàn),朣(tóng),膳(shàn),膧(tóng),圛(yì),嬟(yǐ),镘(màn),窸(xī),璕(xún),暿(xī),嬑(yì),曎(yì),鳃(sāi),瞫(shěn),镧(lán),瞦(xī),鎏(liú),韾(yīn),馨(xīn),鳝(shàn)"
+    # s2 = "下(xià),文(wén),云(yún),方(fāng),幻(huàn),贝(bèi),凤(fèng),比(bǐ),仆(pū),禾(hé),氷(bīng),玄(xuán),汀(tīng),汁(zhī),邗(hán),母(mǔ),乎(hū),好(hǎo),兴(xīng),华(huá),妃(fēi),冰(bīng),会(huì),欢(huān),红(hóng),凫(fú),米(mǐ),汝(rǔ),汤(tāng),汕(shàn),汘(qiān),访(fǎng),孖(zī),汋(zhuó),佢(qú).妙(miào),妤(yú),妍(yán),妞(niū),沐(mù),希(xī),沛(pèi),忻(xīn),沁(qìn),沂(yí),沅(yuán),含(hán),麦(mài),沉(chén),诃(hē),玛(mǎ),妘(yún),妧(wàn),否(fǒu),沣(fēng),佛(fó),怀(huái),泛(fàn),妏(wèn),妚(fǒu),沨(fēng),曵(yè).明(míng),玟(mín),雨(yǔ),非(fēi),玢(bīn),玫(méi),佩(pèi),玭(pín),沫(mò),函(hán),浅(qiǎn),肤(fū),帔(pèi),侔(móu),鱼(yú),玞(fū),妼(bì),弦(xián),昘(fǎng),郁(yù),肥(féi),妺(mò),姇(fū),姏(mán),妭(bá),或(huò),肸(xī),妳(nǐ),侎(mǐ).香(xiāng),洛(luò),点(diǎn),眉(méi),洁(jié),秒(miǎo),诲(huì),绘(huì),盈(yíng),活(huó),祜(hù),迷(mí),玶(píng),卸(xiè),姳(mǐng),脉(mài),品(pǐn),昲(fèi),玸(fú),洺(míng),胖(pàng),俜(pīng),怤(fū),畉(fú),柒(qī),娆(ráo),盼(pàn),姕(zī),姵(pèi),盻(xì),骉(biāo),洙(zhū),鸨(bǎo),盷(xián),钚(bù),郗(xī),美(měi),荂(fū).皌(mò),消(xiāo),娉(pīng),娥(é),舫(fǎng),般(bān),俾(bǐ),淽(zhǐ),悧(lì),娑(suō),耘(yún),眛(mèi),砪(mǔ),袝(fù),眪(bǐng),莯(mù),晈(jiǎo),敉(mǐ),娏(máng),俵(biào),羙(měi).曼(màn),淇(qí),晚(wǎn),清(qīng),菏(hé),敏(mǐn),淑(shū),雪(xuě),萍(píng),凰(huáng),淅(xī),皏(pěng),淋(lín),眯(mī),酛(yuán),渔(yú),淡(dàn),偭(miǎn),盕(fàn),猫(māo),盒(hé),排(pái),啵(bo),脖(bó),珼(bèi),隈(wēi),淦(gàn),婄(pǒu),婞(xìng).惠(huì),媚(mèi),颍(yǐng),湘(xiāng),雯(wén),琵(pí),傍(bàng),渝(yú),缈(miǎo),跗(fū),落(là),媔(mián),腓(féi),媥(piān),蛮(mán),湉(tián),媉(wò),媫(jié),寐(mèi),甁(píng),琲(bèi),媄(měi).楳(méi),雾(wù),溪(xī),瑚(hú),滢(yíng),煝(mèi),源(yuán),溶(róng),缤(bīn),瑂(méi),漓(lí),微(wēi),聘(pìn),媲(pì),艀(fú),蒗(làng),腼(miǎn),裶(fēi),媐(yí),谩(mán),睰(mà),僈(màn),鲆(píng),貊(mò),嫇(míng),瞄(miáo).熙(xī),碧(bì),舞(wǔ),慕(mù),蜜(mì),翡(fěi),漩(xuán),潇(xiāo),潆(yíng),漾(yàng),漪(yī),鼻(bí),缦(màn),酶(méi),褐(hè),缥(piǎo),熏(xūn),摹(mó),潍(wéi),稪(fú),鹛(méi),嫢(guī),稨(biǎn),瞀(mào),睸(mèi),僶(mǐn),貍(lí),鹕(hú),蜚(fēi),嫳(piè).皛(xiǎo),慧(huì),歓(huān),翩(piān),澜(lán),醇(chún),慜(mǐn),嬉(xī),霈(pèi),潘(pān),霂(mù),瞐(mò),璜(huáng),鲩(huàn).禧(xǐ),霓(ní),凝(níng),霏(fēi),默(mò),潞(lù),辨(biàn),醐(hú),辩(biàn),懞(méng),歕(pēn),薄(báo),瓢(piáo).朦(méng),霜(shuāng),霞(xiá),繁(fán),穗(suì),曚(méng),辫(biàn),鼾(hān),馥(fù),鹱(hù),懯(fū),瓣(bàn),鳕(xuě),寳(bǎo),霦(bīn),鳗(mán),鳖(biē),羹(gēng),矊(mián),露(lòu),黯(àn),颦(pín)"
+    s1 = "(chén)忱,(shū)纾,(sì)姒,(zhào)诏,(rú)如"
+    s2 = "(yú)妤,(xī)希,(yuán)沅,(qīng)清,(xī)淅,(lí)漓,(wēi)微,(xī)熙,(yī)漪,(mù)慕,(fěi)翡"
+    print(combine_names(s1,s2))
+    combine_and_save(s1, s2, 'result.txt')    # 输出: 入(rù)朦(méng),入(rù)霜(shuāng),七(qī)朦(méng),七(qī)霜(shuāng)
