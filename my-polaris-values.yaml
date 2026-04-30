@@ -1,0 +1,75 @@
+# ==========================================
+# Apache Polaris 单机 + 宿主机 PG 持久化配置
+# ==========================================
+
+# -- 保持单副本，适合单机资源
+replicaCount: 1
+
+# -- 镜像配置
+image:
+  repository: apache/polaris
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# -- 服务暴露配置：使用 NodePort 以便在单机/本地直接访问
+service:
+  type: NodePort
+  ports:
+    - name: polaris-http
+      port: 8181
+      targetPort: 8181
+      nodePort: 30181 # 部署后可通过 http://<NodeIP>:30181 访问
+
+# -- 管理与健康检查接口 (内部使用，保持 ClusterIP)
+managementService:
+  type: ClusterIP
+  ports:
+    - name: polaris-mgmt
+      port: 8182
+  clusterIP: None
+
+# -- 关闭不必要的云原生路由和高可用组件
+ingress:
+  enabled: false
+autoscaling:
+  enabled: false
+podDisruptionBudget:
+  enabled: false
+
+# ==========================================
+# 核心修改：持久化配置 (关联你的 Secret)
+# ==========================================
+persistence:
+  type: relational-jdbc
+  relationalJdbc:
+    secret:
+      name: polaris-persistence  # 你刚才通过 kubectl create secret 创建的名称
+      username: username         # Secret 中的用户名 key
+      password: password         # Secret 中的密码 key
+      jdbcUrl: jdbcUrl           # Secret 中的 JDBC URL key (包含 192.168.5.98)
+
+# -- 认证配置：使用内置认证并自动生成 RSA 密钥对
+authentication:
+  type: internal
+  authenticator:
+    type: default
+  tokenBroker:
+    type: rsa-key-pair
+
+# -- 关闭观测性组件以节省本地 CPU/内存 资源
+tracing:
+  enabled: false
+metrics:
+  enabled: false
+serviceMonitor:
+  enabled: false
+
+# -- 日志配置：单机调试保留控制台输出即可
+logging:
+  level: INFO
+  console:
+    enabled: true
+    threshold: ALL
+    json: false
+  file:
+    enabled: false

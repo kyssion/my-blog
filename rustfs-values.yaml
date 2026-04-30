@@ -124,3 +124,14 @@ resources:
 
 # LIIsJrPlrGUio2hPNNvK
 # Mrc5qZfSnHIXdMRIeSqmexAtVEfifvvDtBQN3oux
+
+
+NwsUkRVszGGnqUYAoWqi
+ZnHdpbC1WHRF4p1Okh3M3hDsACPOXrKKMnmGEpot
+
+
+1kubectl create secret generic polaris-persistence \
+2  --namespace polaris \
+3  --from-literal=username=postgres \
+4  --from-literal=password=14159265jkl \
+5  --from-literal=jdbcUrl=jdbc:postgresql://192.168.5.98:5432/polaris
