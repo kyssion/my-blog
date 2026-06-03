@@ -1,0 +1,1000 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}.pk{background:#FBEAF0;color:#72243E}.pgy{background:#F1EFE8;color:#444441}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">特征生产执行引擎 — 构建逻辑全解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature Engine / 阿里 PAI-FeatureStore Materializer — 从 Feature View 定义到可运行 Job 的完整构建链路</div>
+
+<!-- ==================== SECTION 0 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+执行引擎的本质 — 它解决什么问题
+</div>
+
+<div class="sub">之前我们讨论了 Feature View "定义什么"、三条管线"跑什么"。本节要回答的核心问题是：<strong>Feature View 的声明式配置，如何被执行引擎自动"翻译"为可以在 Spark/Flink/C++ 上运行的具体 Job？</strong> 这个过程类似数据库的 Query Planner — SQL 是声明式的，引擎将其翻译为物理执行计划。</div>
+
+<div class="I">
+<strong>一个类比理解执行引擎的角色</strong>:<br><br>
+Feature View 配置 ≈ <strong>SQL 查询语句</strong> (声明"我要什么")<br>
+执行引擎 ≈ <strong>数据库的 Query Planner + Executor</strong> (决定"怎么算"并执行)<br>
+DSL Compiler ≈ <strong>SQL Parser + Optimizer</strong> (语法解析 + 逻辑优化)<br>
+Job Builder ≈ <strong>Physical Plan Generator</strong> (生成物理执行计划)<br>
+Job Deployer ≈ <strong>Executor</strong> (调度到具体计算引擎执行)<br><br>
+算法工程师只需要写 Feature View 配置 (声明式)。执行引擎的职责是将其自动转化为在 Spark/Flink/YARN/K8s 上运行的具体作业，并管理作业的全生命周期。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 1: Architecture ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+执行引擎内部架构 — 七大核心子系统
+</div>
+
+<div class="sub">执行引擎是一个 Java/Go 微服务 (字节内部名: ByteFeature Engine; 阿里: PAI-FeatureStore Materializer)，部署在 K8s 集群中，暴露 gRPC/REST API。</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#534AB7">
+<div class="ct" style="color:#534AB7">1.1 Plan Resolver (计划解析器)</div>
+<div class="cd">
+接收 Feature View 变更事件 (来自元数据服务)，解析出需要构建/更新/删除的 Job 列表。<br><br>
+<strong>输入</strong>: Feature View 配置 (含 Entity、source、transform、store、schedule)<br>
+<strong>输出</strong>: ExecutionPlan (一个或多个 JobSpec 的有向无环图)<br><br>
+<strong>核心决策</strong>:<br>
+• source_type=BATCH → 生成 SparkJobSpec + AirflowDAGSpec<br>
+• source_type=STREAM → 生成 FlinkJobSpec<br>
+• source_type=ON_DEMAND → 生成 CppOperatorSpec<br>
+• 多个 Feature View 共享数据源 → 合并为一个 Job (Job Fusion)<br><br>
+<span class="p pp">Plan Resolver</span> <span class="p pp">Metadata Service gRPC</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">1.2 DSL Compiler (编译器)</div>
+<div class="cd">
+将 Transform DSL 编译为目标引擎的可执行代码。这是执行引擎最核心的技术组件。<br><br>
+<strong>编译器前端</strong> (与引擎无关):<br>
+• Lexer (ANTLR4 生成) → Token Stream<br>
+• Parser → CST (Concrete Syntax Tree)<br>
+• AST Builder → AST (Abstract Syntax Tree)<br>
+• Semantic Analyzer → 类型推导 + 校验<br>
+• IR Generator → 中间表示 (Logical Plan)<br><br>
+<strong>编译器后端</strong> (引擎特定):<br>
+• Spark CodeGen → SQL String + UDF Jar<br>
+• Flink CodeGen → Java Operator Class<br>
+• C++ CodeGen → Header + Source 文件<br>
+• Python CodeGen → UDF 函数<br><br>
+<span class="p pp">ANTLR4</span> <span class="p pp">Code Generator</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#D85A30">
+<div class="ct" style="color:#D85A30">1.3 Job Builder (作业构建器)</div>
+<div class="cd">
+接收 DSL 编译产物 + Feature View 配置，构建完整的可提交作业。<br><br>
+<strong>对 Spark Job</strong>: 生成 JAR 包 + spark-submit 参数 + 资源配置<br>
+<strong>对 Flink Job</strong>: 生成 JobGraph (Source→Operator→Sink 的 DAG) + Flink 集群配置<br>
+<strong>对 C++ Operator</strong>: 编译为 .so 动态链接库<br><br>
+Job Builder 不只是"打包"，它负责:<br>
+• <strong>资源估算</strong>: 根据数据量估算 executor/parallelism<br>
+• <strong>Sink 注入</strong>: 自动注入 Tair Sink + HDFS Snapshot Sink<br>
+• <strong>Quality Gate 注入</strong>: 自动在计算后插入质量校验步骤<br>
+• <strong>监控埋点注入</strong>: 自动在 Job 中注入 Prometheus metrics<br><br>
+<span class="p po">Job Builder</span> <span class="p po">Artifact Builder</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#BA7517">
+<div class="ct" style="color:#854F0B">1.4 Job Deployer (作业部署器)</div>
+<div class="cd">
+将构建好的 Job Artifact 部署到目标执行环境。<br><br>
+<strong>Spark Job</strong>: → Airflow DAG 注册 + JAR 上传到 HDFS<br>
+<strong>Flink Job</strong>: → Flink Cluster 提交 (YARN/K8s) + Savepoint 管理<br>
+<strong>C++ Operator</strong>: → 编译产物推送到 Ad Server 的 artifact repo<br><br>
+<strong>部署策略</strong>:<br>
+• <strong>蓝绿部署</strong>: 新版本 Job 启动成功后切换流量<br>
+• <strong>金丝雀部署</strong>: Flink Job 新旧版本并行，shadow 模式验证<br>
+• <strong>回滚</strong>: 保留最近 3 个版本的 Savepoint / Artifact<br><br>
+<span class="p pa">Job Deployer</span> <span class="p pa">YARN / K8s API</span>
+</div>
+</div>
+</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#D4537E">
+<div class="ct" style="color:#993556">1.5 Resource Estimator</div>
+<div class="cd">
+自动估算 Job 所需的计算资源。<br><br>
+<strong>Batch Job 估算</strong>:<br>
+• 输入: 上游 Hive 表行数 + 列数 + Transform 复杂度<br>
+• 输出: executor 数量、内存、核数<br>
+• 算法: 基于历史 Job 的资源使用回归模型<br><br>
+<strong>Flink Job 估算</strong>:<br>
+• 输入: Kafka topic QPS + 窗口大小 + State 预估<br>
+• 输出: parallelism、TaskManager 内存、SSD 大小<br><br>
+<span class="p pk">Resource Model</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#A32D2D">
+<div class="ct" style="color:#A32D2D">1.6 Lifecycle Manager</div>
+<div class="cd">
+管理 Job 的全生命周期状态。<br><br>
+<strong>状态机</strong>:<br>
+BUILDING → TESTING → DEPLOYING → RUNNING → UPDATING → STOPPING → STOPPED<br><br>
+<strong>核心能力</strong>:<br>
+• 自动重启失败的 Job<br>
+• 版本变更时的平滑升级<br>
+• 定期健康检查<br>
+• 资源弹性伸缩<br><br>
+<span class="p pr">Lifecycle FSM</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#185FA5">
+<div class="ct" style="color:#0C447C">1.7 Test Runner</div>
+<div class="cd">
+在 Job 部署前执行自动化测试。<br><br>
+<strong>测试类型</strong>:<br>
+• 一致性测试: 多引擎结果对比<br>
+• 性能基线: 与前一版本对比<br>
+• 数据质量预检: Mock 数据验证<br><br>
+<strong>沙箱环境</strong>:<br>
+独立的 Spark/Flink mini-cluster 执行测试 Job，不影响生产。<br><br>
+<span class="p pb">Test Sandbox</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2: Build Flow ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+构建流程全景 — 从 Feature View 变更到 Job 上线
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">一次 Feature View 注册/变更的完整构建链路</div>
+
+<strong>触发点</strong>: 算法工程师通过 SDK/Web UI 提交 Feature View 变更<br>
+<span style="color:var(--color-text-tertiary)">├ 变更类型: 新建 / Transform 修改 / 新增字段 / 调度变更 / 资源调整</span><br>
+<span style="color:var(--color-text-tertiary)">└ 写入 Feature Platform 元数据库 (MySQL), version++ </span><br><br>
+
+<strong>Step 1: 变更事件分发</strong> <span class="p pp">Event Bus</span> <span class="tag">~100ms</span><br>
+<span style="color:var(--color-text-tertiary)">├ 元数据库触发 Change Data Capture (Binlog / Debezium)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 变更事件发送到内部 Kafka topic: feature_view_changes</span><br>
+<span style="color:var(--color-text-tertiary)">└ 执行引擎的 Plan Resolver 消费此事件</span><br><br>
+
+<strong>Step 2: Plan Resolver 解析执行计划</strong> <span class="p pp">Plan Resolver</span> <span class="tag">~500ms</span><br>
+<span style="color:var(--color-text-tertiary)">├ 读取完整 Feature View 定义 (from Metadata Service gRPC)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 确定变更影响范围:</span><br>
+<span style="color:var(--color-text-tertiary)">│   Transform 变更? → 需要重新编译 + 重建 Job</span><br>
+<span style="color:var(--color-text-tertiary)">│   仅新增字段? → FlatBuffer 向后兼容, 只需更新 Materialization 逻辑</span><br>
+<span style="color:var(--color-text-tertiary)">│   仅调度变更? → 只更新 Airflow DAG, 不重建 Job</span><br>
+<span style="color:var(--color-text-tertiary)">│   仅资源调整? → 只更新 YARN/K8s 资源配置</span><br>
+<span style="color:var(--color-text-tertiary)">├ Job Fusion 决策: 是否与其他 Feature View 共享 Job?</span><br>
+<span style="color:var(--color-text-tertiary)">│   (同一 Entity + 同一数据源 + 同一调度 → 合并为一个 Job)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 输出: ExecutionPlan { jobSpecs: [...], deployActions: [...] }</span><br><br>
+
+<strong>Step 3: DSL 编译</strong> <span class="p pp">DSL Compiler</span> <span class="tag">~2s</span><br>
+<span style="color:var(--color-text-tertiary)">├ 3.1 前端编译:</span><br>
+<span style="color:var(--color-text-tertiary)">│   DSL 源码 → ANTLR4 Lexer/Parser → CST → AST → Semantic Analysis</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 类型推导: "COUNT(action='click')" → 输出类型 INT64</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 窗口校验: SLIDING(1h, 5min) → slide < size, 合法</span><br>
+<span style="color:var(--color-text-tertiary)">│   → IR 生成: LogicalPlan { source, filters, aggregations, projections }</span><br>
+<span style="color:var(--color-text-tertiary)">├ 3.2 优化:</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 谓词下推: WHERE action='click' 推到 source 读取层</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 列裁剪: 只读取 DSL 引用的列</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 公共子表达式: ctr=click/imp, click 和 imp 已在窗口 A 计算 → 复用</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 窗口合并: 两个窗口相同但聚合不同 → 合并为一个窗口+多个聚合</span><br>
+<span style="color:var(--color-text-tertiary)">├ 3.3 后端代码生成 (按 source_type 分支):</span><br>
+<span style="color:var(--color-text-tertiary)">│   BATCH → SparkSQL 字符串 + UDF Java Class</span><br>
+<span style="color:var(--color-text-tertiary)">│   STREAM → Flink AggregateFunction/ProcessFunction Java Class</span><br>
+<span style="color:var(--color-text-tertiary)">│   ON_DEMAND → C++ Operator Header + Source</span><br>
+<span style="color:var(--color-text-tertiary)">└ 3.4 产物缓存: Hash(DSL+version) 作为 key, 编译产物存入 Artifact Store</span><br><br>
+
+<strong>Step 4: Job 构建</strong> <span class="p po">Job Builder</span> <span class="tag">~5s (Batch) / ~30s (Flink) / ~60s (C++)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 4.1 代码组装:</span><br>
+<span style="color:var(--color-text-tertiary)">│   编译产物 + 框架模板 (Spark/Flink boilerplate) + Sink 配置</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 完整可执行代码</span><br>
+<span style="color:var(--color-text-tertiary)">├ 4.2 自动注入:</span><br>
+<span style="color:var(--color-text-tertiary)">│   ├ Tair Sink (key_template, serializer, ttl, 限流参数)</span><br>
+<span style="color:var(--color-text-tertiary)">│   ├ HDFS Snapshot Sink (snapshot_path, interval, format)</span><br>
+<span style="color:var(--color-text-tertiary)">│   ├ Quality Gate (行数/NULL率/PSI 校验逻辑)</span><br>
+<span style="color:var(--color-text-tertiary)">│   ├ Prometheus Metrics (计数器/直方图/Gauge 埋点)</span><br>
+<span style="color:var(--color-text-tertiary)">│   └ Error Handler (异常捕获 + 告警 + 自动重试)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 4.3 打包:</span><br>
+<span style="color:var(--color-text-tertiary)">│   Spark → uber JAR (Maven Shade) 上传到 HDFS artifact 目录</span><br>
+<span style="color:var(--color-text-tertiary)">│   Flink → fat JAR 上传到 Flink artifact 目录</span><br>
+<span style="color:var(--color-text-tertiary)">│   C++ → cmake build → .so 文件上传到 artifact repo</span><br>
+<span style="color:var(--color-text-tertiary)">├ 4.4 资源配置生成:</span><br>
+<span style="color:var(--color-text-tertiary)">│   Spark → spark-submit.conf (executors, memory, shuffle partitions)</span><br>
+<span style="color:var(--color-text-tertiary)">│   Flink → flink-conf.yaml (parallelism, checkpoint, state backend)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 4.5 调度配置生成:</span><br>
+<span style="color:var(--color-text-tertiary)">│   Batch → Airflow DAG Python 文件 (自动生成)</span><br>
+<span style="color:var(--color-text-tertiary)">│   Stream → Flink Job 的 K8s Deployment YAML</span><br>
+<span style="color:var(--color-text-tertiary)">└ 输出: JobArtifact { jar/so, config, dag, version, checksum }</span><br><br>
+
+<strong>Step 5: 自动化测试</strong> <span class="p pb">Test Runner</span> <span class="tag">~2min</span><br>
+<span style="color:var(--color-text-tertiary)">├ 5.1 一致性测试: 1000 条 mock 数据 × 各引擎代码 → 结果全等?</span><br>
+<span style="color:var(--color-text-tertiary)">├ 5.2 集成测试: 在沙箱 mini-cluster 提交 Job → 是否正常启动运行?</span><br>
+<span style="color:var(--color-text-tertiary)">├ 5.3 性能基线: 处理 10万条数据的耗时 vs 上一版本 → 无回退?</span><br>
+<span style="color:var(--color-text-tertiary)">└ 全部通过 → Step 6; 任一失败 → 中止 + 通知 Owner</span><br><br>
+
+<strong>Step 6: 部署上线</strong> <span class="p pa">Job Deployer</span> <span class="tag">~30s (Batch) / ~3min (Flink)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Batch Job: 将生成的 Airflow DAG 文件同步到 Airflow DAGs 目录</span><br>
+<span style="color:var(--color-text-tertiary)">│   → Airflow Scheduler 自动检测新 DAG 并注册</span><br>
+<span style="color:var(--color-text-tertiary)">├ Flink Job (新建): Flink REST API → 提交 Job → 等待 RUNNING 状态</span><br>
+<span style="color:var(--color-text-tertiary)">├ Flink Job (更新): 触发 Savepoint → 停止旧 Job → 从 Savepoint 启动新 Job</span><br>
+<span style="color:var(--color-text-tertiary)">├ C++ Operator: 推送 .so 到 artifact repo → 触发 Ad Server 滚动重启</span><br>
+<span style="color:var(--color-text-tertiary)">└ 更新 Lifecycle Manager 状态: DEPLOYING → RUNNING</span><br><br>
+
+<strong>Step 7: 部署后验证</strong> <span class="p pr">Post-Deploy Verifier</span> <span class="tag">~5min</span><br>
+<span style="color:var(--color-text-tertiary)">├ Batch: 等待下一次调度执行 → 验证输出 Hive 表正确</span><br>
+<span style="color:var(--color-text-tertiary)">├ Flink: 观察 5min → Kafka Lag 正常 + 无 Checkpoint 失败 + Tair 写入正常</span><br>
+<span style="color:var(--color-text-tertiary)">├ C++: Ad Server canary 实例验证 → Feature Serving 延迟无回退</span><br>
+<span style="color:var(--color-text-tertiary)">└ 全部通过 → Feature View status: STAGING/PROD; 失败 → 自动回滚</span>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3: DSL Compiler Deep Dive ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+DSL Compiler 深度拆解 — 执行引擎的技术核心
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">3.1 编译器前端: DSL → IR</div>
+<div class="cd">
+<strong>DSL 语法设计原则</strong>:<br>
+• 类 SQL 语法 (降低学习成本)<br>
+• 只支持"离线和在线都能高效执行"的算子子集<br>
+• 不支持任意 UDF (防止一致性无法保证)<br>
+• 不支持 JOIN (JOIN 在平台层处理，不在 DSL 内)<br><br>
+
+<strong>编译阶段示例</strong>:<br>
+<div class="code">// DSL 源码
+COUNT(action='click') OVER SLIDING(1h, 5min) AS click_1h
+
+// Lexer → Tokens
+[FUNC:COUNT, LPAREN, FIELD:action, EQ, STR:'click', 
+ RPAREN, OVER, WINDOW:SLIDING, LPAREN, DUR:1h, 
+ COMMA, DUR:5min, RPAREN, AS, ALIAS:click_1h]
+
+// Parser → AST
+WindowedAggregation {
+  func: Count
+  filter: BinaryOp(Eq, Field("action"), Lit("click"))
+  window: Sliding(size=3600s, slide=300s)
+  alias: "click_1h"
+  output_type: INT64  // 类型推导
+}
+
+// IR (Logical Plan)
+LogicalPlan {
+  source: KafkaSource("user_behavior_log")
+  filter: Predicate(action == "click")
+  window: SlidingWindow(3600, 300, EventTime)
+  agg: Count(*)
+  project: [entity_key, click_1h, _trigger_time]
+}</div>
+</div>
+</div>
+<div class="c">
+<div class="ct">3.2 IR 优化 (Logical Optimization)</div>
+<div class="cd">
+<strong>优化规则 (按优先级依次执行)</strong>:<br><br>
+
+<strong>Rule 1: 谓词下推 (Predicate Pushdown)</strong><br>
+将 filter 条件推到 source 层。对 Kafka: 写入 Flink 的 FilterFunction 作为第一个算子。对 Hive: 写入 WHERE 条件利用 Parquet 的 predicate pushdown。<br><br>
+
+<strong>Rule 2: 列裁剪 (Column Pruning)</strong><br>
+DSL 只引用 action, category_id, event_time → 从 source 只读这 3 列。对 Parquet 效果显著 (跳过其他列的 I/O)。<br><br>
+
+<strong>Rule 3: 窗口合并 (Window Merge)</strong><br>
+同一 Feature View 中如果多个特征使用相同的窗口定义，合并为一个窗口 + 多个聚合:<br>
+<div class="code">// 优化前: 两个独立窗口
+Window(1h,5min).agg(Count(click))  → click_1h
+Window(1h,5min).agg(Count(imp))    → imp_1h
+
+// 优化后: 一个窗口 + 多聚合
+Window(1h,5min).agg(
+  Count(click) → click_1h,
+  Count(imp)   → imp_1h
+)</div>
+减少 50% 的 state 和 window timer 开销。<br><br>
+
+<strong>Rule 4: 公共子表达式消除 (CSE)</strong><br>
+<code style="font-family:var(--font-mono);font-size:10px">ctr_1h = SUM(click) / SUM(imp)</code><br>
+如果 click_1h 和 imp_1h 已计算 → ctr_1h 直接引用，不重复聚合。<br><br>
+
+<strong>Rule 5: 增量聚合推导 (Incremental Agg)</strong><br>
+分析聚合函数是否支持增量计算:<br>
+• COUNT/SUM/MAX/MIN → 可增量 → 用 AggregateFunction<br>
+• COLLECT_LIST/DISTINCT_COUNT → 不可增量 → 用 ProcessWindowFunction<br>
+• 自动选择最优实现<br><br>
+<span class="p pp">Optimizer</span> <span class="p pp">Rule Engine</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">3.3 后端代码生成: IR → 引擎代码</div>
+<div class="cd">
+<strong>同一个 IR 被翻译为完全不同的引擎代码</strong>:<br><br>
+
+<strong>生成 Spark SQL</strong>:<br>
+<div class="code">// IR: SlidingWindow(1h,5min) + Count(click)
+// → Spark SQL (离线回溯计算)
+SELECT 
+  user_id,
+  COUNT(CASE WHEN action='click' THEN 1 END) AS click_1h,
+  COUNT(CASE WHEN action='impression' THEN 1 END) AS imp_1h
+FROM user_events
+WHERE event_time BETWEEN 
+  '${target_time}' - INTERVAL 1 HOUR 
+  AND '${target_time}'
+GROUP BY user_id</div>
+
+<strong>生成 Flink Java</strong>:<br>
+<div class="code">// IR: SlidingWindow(1h,5min) + Count(click)
+// → Flink AggregateFunction
+public class ClickCountAgg 
+  implements AggregateFunction&lt;Event, long[], long[]&gt; {
+  public long[] createAccumulator() { 
+    return new long[]{0, 0}; // [click, imp]
+  }
+  public long[] add(Event e, long[] acc) {
+    if ("click".equals(e.action)) acc[0]++;
+    if ("impression".equals(e.action)) acc[1]++;
+    return acc;
+  }
+  public long[] getResult(long[] acc) { return acc; }
+  public long[] merge(long[] a, long[] b) {
+    return new long[]{a[0]+b[0], a[1]+b[1]};
+  }
+}</div>
+
+<strong>生成 C++ Operator</strong> (仅 OnDemand):<br>
+<div class="code">// IR: HOUR_OF_DAY(request_time) 
+// → C++ inline function
+int64_t compute_hour_bucket(int64_t ts_ms) {
+  time_t t = ts_ms / 1000;
+  struct tm tm_buf;
+  localtime_r(&t, &tm_buf);
+  return tm_buf.tm_hour;
+}</div>
+</div>
+</div>
+<div class="c">
+<div class="ct">3.4 编译产物管理 (Artifact Store)</div>
+<div class="cd">
+编译产物以版本化的方式存储，支持回滚和复用。<br><br>
+
+<strong>Artifact Store 结构</strong>:<br>
+<div class="code">artifact_store/
+  user_realtime_stats_v3/
+    spark/
+      v3.1/  ← Transform DSL version
+        feature_etl.jar        (uber JAR)
+        spark_submit.conf      (资源配置)
+        quality_gate.py        (校验脚本)
+        airflow_dag.py         (DAG 定义)
+    flink/
+      v3.1/
+        feature_stream.jar     (fat JAR)
+        flink_conf.yaml        (Job 配置)
+        flink_job_graph.bin    (序列化 JobGraph)
+    cpp/
+      v3.1/
+        libfeature_ops.so      (动态库)
+        feature_ops.h          (头文件)
+    test/
+      v3.1/
+        test_data.parquet      (测试数据)
+        expected_output.json   (预期结果)
+        consistency_report.json(一致性报告)
+    metadata.json              (版本元信息)</div>
+
+<strong>存储后端</strong>: HDFS (字节) / OSS (阿里)<br>
+<strong>缓存策略</strong>: 编译产物按 Hash(DSL + version) 缓存。DSL 未变更时直接复用，不重新编译。<br>
+<strong>保留策略</strong>: 最近 5 个版本保留，更早的自动清理。<br><br>
+<span class="p pp">Artifact Store</span> <span class="p pa">HDFS / OSS</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: Job Builder ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+Job Builder 深度拆解 — 从编译产物到可运行 Job
+</div>
+
+<div class="sub">Job Builder 是执行引擎中"动手干活"的核心模块。它不写业务逻辑 (那是 DSL Compiler 的事)，而是负责<strong>将业务逻辑嵌入框架模板、注入平台能力、打包为可提交的作业</strong>。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">4.1 Spark Job Builder</div>
+<div class="cd">
+<strong>框架模板 (Boilerplate)</strong>:<br>
+Job Builder 维护一个 Spark Job 的"骨架"代码 (Java/Scala)，编译产物被注入其中:<br>
+<div class="code">class FeatureETLJob {
+  // ===== 平台注入: Source =====
+  val sourceDF = spark.read
+    .format(viewConfig.sourceFormat) // "parquet"
+    .load(viewConfig.sourcePath)    // 动态填入
+    .select(prunedColumns)          // 列裁剪
+
+  // ===== 编译注入: Transform =====
+  val transformedDF = sourceDF
+    .sql(compiledSQL)               // DSL 编译产物
+    // 或 .withColumn("x", compiledUDF(...))
+
+  // ===== 平台注入: Quality Gate =====
+  QualityGate.check(transformedDF, viewConfig.qualityRules)
+
+  // ===== 平台注入: Materialization =====
+  TairWriter.write(transformedDF, viewConfig.storeConfig)
+
+  // ===== 平台注入: HDFS Snapshot =====
+  if (viewConfig.snapshotEnabled)
+    SnapshotWriter.write(transformedDF, snapshotPath)
+
+  // ===== 平台注入: Metrics =====
+  MetricsReporter.report("row_count", transformedDF.count)
+}</div>
+
+编译产物只填充 Transform 部分，其余全部由 Job Builder 自动注入。<br><br>
+
+<strong>Airflow DAG 自动生成</strong>:<br>
+<div class="code">// Job Builder 根据 Feature View 配置生成:
+dag = DAG(
+  dag_id=f"fv_{view_name}_{version}",
+  schedule=viewConfig.schedule,
+  default_args={retries: 2, retry_delay: 300}
+)
+sensor = HivePartitionSensor(
+  table=viewConfig.sourceTable,
+  partition=f"ds={'{{'} yesterday {'}}'}")
+spark_task = SparkSubmitOperator(
+  application=artifactPath("feature_etl.jar"),
+  conf=resourceConfig)
+quality_task = PythonOperator(fn=quality_gate)
+materialize_task = PythonOperator(fn=materialize)
+sensor >> spark_task >> quality_task >> materialize_task</div>
+<span class="p pb">Spark Template</span> <span class="p pa">DAG Generator</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">4.2 Flink Job Builder</div>
+<div class="cd">
+<strong>JobGraph 构建</strong>:<br>
+Flink Job 不是简单的 JAR 提交——它需要构建一个完整的 StreamGraph → JobGraph:<br>
+<div class="code">StreamExecutionEnvironment env = ...;
+
+// ===== 平台注入: Source =====
+KafkaSource source = KafkaSource.builder()
+  .setTopics(viewConfig.kafkaTopic)
+  .setGroupId(viewConfig.consumerGroup)
+  .setDeserializer(new ProtobufDeserializer(
+    viewConfig.messageSchema))
+  .build();
+
+DataStream&lt;Event&gt; stream = env
+  .fromSource(source, 
+    WatermarkStrategy.forBoundedOutOfOrderness(
+      Duration.ofSeconds(viewConfig.watermark)))
+
+  // ===== 平台注入: Filter =====
+  .filter(new ValidEventFilter())
+
+  // ===== 编译注入: KeyBy + Windows + Agg =====
+  .keyBy(e -> e.getUserId())
+  .window(SlidingEventTimeWindows.of(
+    Time.seconds(viewConfig.windowSize),
+    Time.seconds(viewConfig.windowSlide)))
+  .aggregate(
+    compiledAggregateFunction,  // DSL 编译产物
+    compiledProcessFunction)
+
+  // ===== 平台注入: Merge + Serialize =====
+  .map(new FlatBufferSerializer(viewConfig.schema))
+
+  // ===== 平台注入: Dual Sink =====
+  .addSink(new TairPipelineSink(viewConfig.storeConfig))
+  .addSink(new HDFSSnapshotSink(viewConfig.snapshotConfig));
+
+// ===== 平台注入: Checkpoint 配置 =====
+env.enableCheckpointing(
+  viewConfig.checkpointInterval,
+  CheckpointingMode.EXACTLY_ONCE);
+env.setStateBackend(new EmbeddedRocksDBStateBackend());
+
+// 构建 JobGraph
+JobGraph jobGraph = env.getStreamGraph()
+  .getJobGraph();</div>
+
+<strong>关键区别</strong>: Flink Job Builder 生成的不是 "代码文件"，而是一个<strong>序列化的 JobGraph 对象</strong>。这个 JobGraph 包含了所有算子的拓扑关系、并行度、State 配置等。提交给 Flink Cluster 时直接反序列化执行。<br><br>
+<span class="p pg">Flink JobGraph</span> <span class="p pg">StreamGraph Builder</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">4.3 C++ Operator Builder</div>
+<div class="cd">
+OnDemand Feature View 的 Transform 被编译为 C++ 代码，需要构建为动态链接库。<br><br>
+
+<strong>构建流程</strong>:<br>
+<div class="code">// Step 1: Code Generation 输出
+//   feature_ops_v3.h + feature_ops_v3.cc
+
+// Step 2: CMake 构建
+cmake -B build -DCMAKE_BUILD_TYPE=Release \
+  -DFLATBUFFERS_DIR=/opt/flatbuffers
+cmake --build build --target feature_ops_v3
+
+// Step 3: 输出
+//   build/libfeature_ops_v3.so  (约 200KB)
+
+// Step 4: 接口标准化
+// 所有 C++ Operator 实现统一接口:
+class IFeatureOperator {
+  virtual void compute(
+    const BidRequest& req,
+    const FeatureContext& ctx,
+    FeatureOutput* output) = 0;
+};</div>
+
+<strong>部署到 Ad Server</strong>:<br>
+.so 文件上传到 artifact repo → Ad Server 的 Feature Serving SDK 通过 dlopen() 动态加载 → 无需重新编译 Ad Server 整体。<br><br>
+
+<strong>版本管理</strong>:<br>
+多个版本的 .so 可以同时加载。通过 Feature View version 路由到对应的 Operator。灰度时旧模型用 v2 Operator，新模型用 v3 Operator。<br><br>
+<span class="p po">CMake</span> <span class="p po">dlopen</span> <span class="p po">Artifact Repo</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">4.4 自动注入能力详解</div>
+<div class="cd">
+Job Builder 向每个 Job 自动注入 6 类平台能力:<br><br>
+
+<strong>① Tair Sink</strong>:<br>
+根据 store_config 自动生成 Sink 代码: key 模板渲染、FlatBuffer 序列化、Pipeline MSet 批量写入、限流、重试。<br><br>
+
+<strong>② HDFS Snapshot Sink</strong>:<br>
+training_config.snapshot_enabled=true 时注入。Flink 用 BucketingSink (Parquet，按时间分桶)；Spark 直接 write.parquet()。<br><br>
+
+<strong>③ Quality Gate</strong>:<br>
+在 Transform 之后、Materialization 之前插入校验步骤。规则来自 Feature 配置的 monitoring 字段。<br><br>
+
+<strong>④ Prometheus Metrics</strong>:<br>
+自动注入计数器和直方图:<br>
+• feature_job_rows_processed_total<br>
+• feature_job_transform_latency_ms<br>
+• feature_job_tair_write_latency_ms<br>
+• feature_job_quality_check_pass (0/1)<br><br>
+
+<strong>⑤ Error Handler</strong>:<br>
+捕获所有异常 → 分类 (数据异常/系统异常/资源异常) → 告警 (飞书/PagerDuty) → 决策 (重试/跳过/中止)。<br><br>
+
+<strong>⑥ Lineage Tracker</strong>:<br>
+Job 启动和完成时上报血缘信息: 读了哪个 Hive 表/Kafka topic、输出到哪个 Tair namespace、处理了多少行。<br><br>
+<span class="p pp">Auto-Injector</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: Job Fusion ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">5</div>
+Job Fusion (作业合并) — 多 Feature View 共享 Job
+</div>
+
+<div class="sub">字节 DSP 有 ~300 个 Feature View 但只有 ~80 个 Flink Job 和 ~100 个 Spark DAG。原因是 Job Fusion——多个相关 Feature View 被合并到同一个 Job 中执行。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">5.1 Fusion 触发条件</div>
+<div class="cd">
+两个 Feature View 可以合并为一个 Job，当且仅当:<br><br>
+<strong>必须满足</strong>:<br>
+• 同一个 Entity (join_key 相同)<br>
+• 同一个数据源 (同一个 Kafka topic 或 Hive 表)<br>
+• 同一类管线 (都是 Batch 或都是 Stream)<br><br>
+<strong>加分条件</strong> (可以合并但不强制):<br>
+• 相同的调度频率 (都是 "0 2 * * *" 或都是 realtime)<br>
+• 相同的 Owner (避免跨团队耦合)<br>
+• 总资源消耗在合理范围内 (合并后不超过单 Job 上限)<br><br>
+<strong>禁止合并</strong>:<br>
+• 不同 Entity (user vs ad)<br>
+• 不同数据源 (不同 Kafka topic)<br>
+• 不同管线类型 (Batch + Stream)
+</div>
+</div>
+<div class="c">
+<div class="ct">5.2 Fusion 实现机制</div>
+<div class="cd">
+<strong>Flink Job Fusion</strong>:<br>
+多个 Feature View 的窗口+聚合共享同一个 KeyedStream:<br>
+<div class="code">stream.keyBy(user_id)
+  // View 1: user_realtime_stats
+  .window(Sliding(1h,5min)).aggregate(statsAgg)
+  // View 2: user_behavior_seq  
+  .process(seqCollector)
+  // View 3: user_click_dist
+  .window(Tumbling(1h)).aggregate(distAgg)
+
+// 三个输出合并后写入各自的 Tair key
+union → TairSink(
+  view1 → "uf:rts:{user_id}",
+  view2 → "uf:seq:{user_id}",
+  view3 → "uf:dist:{user_id}"
+)</div>
+
+<strong>Spark Job Fusion</strong>:<br>
+多个 Feature View 的 SQL 合并为一个 multi-output 的 Spark Job:<br>
+<div class="code">// 读取一次数据源
+val source = spark.read.parquet(hive_table)
+
+// View 1 Transform
+val v1 = source.sql(compiled_sql_v1)
+// View 2 Transform  
+val v2 = source.sql(compiled_sql_v2)
+
+// 各自写入不同的 Tair namespace
+TairWriter.write(v1, config_v1)
+TairWriter.write(v2, config_v2)</div>
+
+<strong>收益</strong>:<br>
+• Kafka 消费只一次 (省 I/O)<br>
+• Hive 表只读一次 (省 HDFS I/O)<br>
+• KeyBy 只做一次 (省 shuffle)<br>
+• Flink state 共享 TaskManager 资源<br>
+• 减少 Job 管理数量 (运维简化)<br><br>
+<strong>字节数据</strong>: Fusion 将 300 个 View 合并为 80 个 Flink Job，节省 ~40% 的计算资源。
+</div>
+</div>
+</div>
+
+<div class="W">
+<strong>Fusion 的风险与约束</strong>: 合并后一个 View 的 bug 可能影响同 Job 中的其他 View。字节的防御: ① 每个 View 的 Transform 在 Flink 中由独立的 Operator 处理，Operator 内部 try-catch 隔离异常；② 某个 View 的 Sink 写入失败不影响其他 View 的 Sink；③ 提供"Fusion Opt-out"选项——算法工程师可以在 Feature View 配置中设置 <code style="font-family:var(--font-mono);font-size:10px">fusion_enabled: false</code> 强制独立 Job。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: Resource Estimation ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+资源估算与弹性伸缩 — 执行引擎的"智能"部分
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">6.1 Batch Job 资源估算模型</div>
+<div class="cd">
+<strong>估算输入</strong>:<br>
+• 上游 Hive 表行数 (从 Hive Metastore 获取)<br>
+• 列数 + 数据类型 (Parquet footer 元信息)<br>
+• Transform 复杂度 (AST 节点数 + 是否有 UDF)<br>
+• 历史 Job 的资源使用记录<br><br>
+
+<strong>估算公式 (字节内部回归模型)</strong>:<br>
+<div class="code">executors = max(
+  ceil(input_size_gb / 2),   // 每 executor 处理 2GB
+  ceil(row_count / 5_000_000) // 每 executor 500万行
+)
+executor_memory = base_4g + (has_udf ? 2g : 0) 
+                  + (has_join ? 4g : 0)
+executor_cores = 4  // 固定
+shuffle_partitions = executors * 2.5</div>
+
+<strong>自适应调整</strong>:<br>
+首次运行用估算值。运行后记录实际 peak memory、shuffle 大小、GC time。下次运行用实际值 × 1.2 安全系数。<br><br>
+<span class="p pr">Resource Estimator</span> <span class="p pb">History DB</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">6.2 Flink Job 资源估算 + 弹性伸缩</div>
+<div class="cd">
+<strong>初始估算</strong>:<br>
+<div class="code">parallelism = max(
+  kafka_partitions,    // 通常 1:1
+  ceil(peak_qps / 50000)  // 每 slot 5万 QPS
+)
+tm_memory = 4g + state_estimate
+  // state_estimate = active_users * per_user_state
+  // 例: 3亿 * 700B ≈ 200GB → 分摊到 128 TM ≈ 1.6GB/TM
+tm_ssd = state_estimate / parallelism * 1.5</div>
+
+<strong>运行时弹性伸缩 (Reactive Scaling)</strong>:<br>
+字节使用 Flink 的 Reactive Mode (1.13+):<br>
+• Kubernetes HPA 监控 Kafka Lag 和 CPU<br>
+• Lag 持续 > 阈值 → 增加 TaskManager Pod<br>
+• Flink Reactive Mode 自动感知新 TM → 重新分配 subtask<br>
+• 缩容: 低峰时段 (凌晨) 减少 TM Pod<br><br>
+
+<strong>阿里方案: VVP (Ververica Platform)</strong><br>
+阿里使用 VVP 的 Autopilot 功能:<br>
+• 自动分析 Job 的 backpressure 热点<br>
+• 识别瓶颈算子 → 单独增加该算子的并行度<br>
+• 不需要整体 rescale<br><br>
+<span class="p pg">K8s HPA</span> <span class="p pg">Flink Reactive</span> <span class="p pa">VVP Autopilot</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Lifecycle ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">7</div>
+Job 生命周期管理 — 从创建到退役
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:4px">Job 状态机</div>
+<div class="code">BUILDING ──→ TESTING ──→ DEPLOYING ──→ RUNNING
+                                          │
+                                          ├──→ UPDATING (新版本部署中)
+                                          │       └──→ RUNNING (成功) 
+                                          │       └──→ ROLLING_BACK (失败)
+                                          │
+                                          ├──→ DEGRADED (运行但有问题)
+                                          │       └──→ RUNNING (自动恢复)
+                                          │       └──→ STOPPED (多次恢复失败)
+                                          │
+                                          ├──→ SCALING (弹性伸缩中)
+                                          │       └──→ RUNNING
+                                          │
+                                          └──→ STOPPING ──→ STOPPED ──→ DELETED</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">7.1 版本升级 (UPDATING)</div>
+<div class="cd">
+<strong>Batch Job 升级</strong> (简单):<br>
+• 替换 Airflow DAG 文件 + JAR 文件<br>
+• 下次调度自动使用新版本<br>
+• 旧版本 JAR 保留 (可回滚)<br><br>
+
+<strong>Flink Job 升级</strong> (复杂):<br>
+<div class="code">Step 1: 触发旧 Job 的 Savepoint
+  POST /jobs/{id}/savepoints
+  等待 Savepoint 完成 (~30s)
+
+Step 2: Cancel 旧 Job
+  PATCH /jobs/{id} {state: CANCELLING}
+  等待 CANCELLED 状态
+
+Step 3: 提交新版本 Job (从 Savepoint 恢复)
+  POST /jobs {
+    jarId: new_jar_id,
+    savepointPath: savepoint_path,
+    parallelism: new_config.parallelism
+  }
+
+Step 4: 验证新 Job RUNNING + Kafka Lag 正常
+
+Step 5: 失败回滚
+  如果 Step 3 失败 → 从 Savepoint 启动旧版本</div>
+
+<strong>关键</strong>: Savepoint 保证了 State 的连续性——新 Job 从旧 Job 停止的位置继续处理，不丢数据不重复。但 State schema 变更 (如新增字段) 需要 State 兼容性处理。<br><br>
+
+<strong>C++ Operator 升级</strong>:<br>
+新 .so 文件推送 → Ad Server 热加载 (dlopen) → 通过版本路由新旧请求
+</div>
+</div>
+<div class="c">
+<div class="ct">7.2 故障恢复 (DEGRADED → RUNNING)</div>
+<div class="cd">
+<strong>Batch Job 故障</strong>:<br>
+• Spark Job 失败 → Airflow retry (配置 2 次)<br>
+• 2 次都失败 → 告警 + 线上用昨天数据 (TTL 兜底)<br>
+• 人工修复后手动触发重跑<br><br>
+
+<strong>Flink Job 故障</strong>:<br>
+<div class="code">故障类型及应对:
+
+TaskManager OOM:
+  → 自动从 Checkpoint 恢复 (fixed-delay × 3)
+  → 成功 → RUNNING
+  → 3次都 OOM → 告警 + 增加 TM memory 后重启
+
+Checkpoint 超时:
+  → 降低 Checkpoint 频率 (60s → 120s)
+  → 如果持续超时 → State 过大, 需要优化
+
+Kafka 消费超时:
+  → 检查 Kafka Broker 健康
+  → 自动重启 Consumer
+
+Tair Sink 写入失败:
+  → 背压限流 + 重试
+  → 持续失败 → 熔断 Sink, 数据暂存内存/本地
+  → Tair 恢复后补写</div>
+
+<strong>Lifecycle Manager 的健康检查</strong>:<br>
+每 30s 通过 Flink REST API 检查 Job 状态。发现异常自动触发恢复流程。<br><br>
+<span class="p pr">Health Checker</span> <span class="p pr">Auto Recovery</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 8: Deployment ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">8</div>
+部署架构 — 执行引擎自身如何部署
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">8.1 执行引擎服务架构</div>
+<div class="cd">
+<div class="code">Feature Execution Engine (K8s Deployment)
+├── API Gateway (gRPC / REST)
+│     接收 Feature View 变更事件
+│     暴露 Job 管理 API (查询/停止/重启)
+│
+├── Plan Resolver (Worker Pod × 3)
+│     消费 Kafka 变更事件
+│     生成 ExecutionPlan
+│
+├── DSL Compiler Service (Pod × 2)
+│     ANTLR4 编译器 (JVM)
+│     编译缓存 (Redis)
+│
+├── Job Builder (Pod × 3)
+│     Spark JAR 构建 (Maven)
+│     Flink JobGraph 构建
+│     C++ 编译 (Docker multi-stage build)
+│
+├── Job Deployer (Pod × 2)
+│     Airflow API Client
+│     Flink REST API Client
+│     K8s API Client (for Flink on K8s)
+│
+├── Lifecycle Manager (Pod × 2)
+│     Job 状态轮询 + 健康检查
+│     弹性伸缩决策
+│     故障恢复编排
+│
+├── Test Runner (Pod × 2, 按需扩缩)
+│     Spark Mini-Cluster (嵌入式)
+│     Flink MiniCluster (嵌入式)
+│
+└── Metadata Store (MySQL + Redis)
+      Job 状态、版本、Artifact 路径</div>
+
+<strong>高可用</strong>: API Gateway 和 Lifecycle Manager 是 Leader-Follower 模式 (通过 K8s LeaderElection)。其他组件无状态，水平扩缩。
+</div>
+</div>
+<div class="c">
+<div class="ct">8.2 与外部系统的集成点</div>
+<div class="cd">
+<table class="tbl">
+<tr><th style="width:30%">外部系统</th><th>集成方式</th><th>交互内容</th></tr>
+<tr><td><span class="p pp">Feature Platform 元数据</span></td><td>gRPC + Kafka CDC</td><td>Feature View 定义变更事件</td></tr>
+<tr><td><span class="p pa">Airflow</span></td><td>DAG 文件同步 + REST API</td><td>注册/更新/触发 Batch DAG</td></tr>
+<tr><td><span class="p pg">Flink Cluster</span></td><td>Flink REST API</td><td>提交/取消/Savepoint Job</td></tr>
+<tr><td><span class="p pb">YARN / K8s</span></td><td>K8s API / YARN REST</td><td>资源申请/释放/Pod 管理</td></tr>
+<tr><td><span class="p po">Tair / Redis</span></td><td>Tair SDK</td><td>BulkLoad + Pipeline Write</td></tr>
+<tr><td><span class="p pa">HDFS / OSS</span></td><td>Hadoop FileSystem API</td><td>Artifact 存储 + 快照输出</td></tr>
+<tr><td><span class="p pa">Kafka</span></td><td>Consumer SDK</td><td>变更事件消费 + 数据源</td></tr>
+<tr><td><span class="p pr">Prometheus</span></td><td>Push Gateway / Pull</td><td>Job 运行指标上报</td></tr>
+<tr><td><span class="p pr">PagerDuty / 飞书</span></td><td>Webhook</td><td>告警通知</td></tr>
+<tr><td><span class="p pp">Consul / Nacos</span></td><td>Watch API</td><td>配置下发 (双缓冲切换)</td></tr>
+<tr><td><span class="p pb">Artifact Repo</span></td><td>HDFS / OSS</td><td>JAR/SO/Config 存储</td></tr>
+<tr><td><span class="p pb">Ad Server</span></td><td>Artifact Pull + dlopen</td><td>C++ Operator 热加载</td></tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 9: Tech Stack ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">9</div>
+执行引擎完整技术栈
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">引擎核心</div>
+<div class="cd">
+<span class="p pp">Java / Go</span> 引擎主服务<br>
+<span class="p pp">ANTLR4</span> DSL 编译器前端<br>
+<span class="p pp">Velocity / StringTemplate</span> 代码模板<br>
+<span class="p pp">Maven Shade</span> Spark JAR 构建<br>
+<span class="p pp">CMake / Bazel</span> C++ 编译<br>
+<span class="p pp">Docker</span> 构建隔离环境<br>
+<span class="p pp">Redis</span> 编译缓存<br>
+<span class="p pp">MySQL</span> Job 元数据
+</div>
+</div>
+<div class="c">
+<div class="ct">目标执行环境</div>
+<div class="cd">
+<span class="p pb">Spark 3.x</span> 批处理<br>
+<span class="p pg">Flink 1.17+</span> 流处理<br>
+<span class="p po">GCC / Clang</span> C++ 编译<br>
+<span class="p pa">Airflow</span> 批调度<br>
+<span class="p pa">YARN / K8s</span> 资源管理<br>
+<span class="p pa">Kafka 3.x</span> 消息队列<br>
+<span class="p pa">HDFS / OSS</span> 存储<br>
+<span class="p pg">Tair / Redis</span> 在线 KV
+</div>
+</div>
+<div class="c">
+<div class="ct">运维 & 监控</div>
+<div class="cd">
+<span class="p pr">Prometheus</span> 引擎自身+Job 监控<br>
+<span class="p pr">Grafana</span> 可视化<br>
+<span class="p pr">PagerDuty / 飞书</span> 告警<br>
+<span class="p pp">K8s</span> 引擎部署<br>
+<span class="p pp">Consul / Nacos</span> 配置中心<br>
+<span class="p pp">Git</span> DSL 版本管理<br>
+<span class="p pp">AB Platform</span> 灰度发布
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+执行引擎规模 (字节 DSP): 引擎服务 Pod ~20 个 | 管理 Spark DAG ~100 个, Flink Job ~80 个, C++ Operator ~30 个 | 日均构建 ~15 次 (Feature View 变更) | DSL 编译缓存命中率 ~70% | 平均构建耗时: Batch 10s, Flink 40s, C++ 90s | Job Fusion 率 ~60% (300 View → 180 Job)
+</div>
+</div>

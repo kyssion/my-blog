@@ -1,0 +1,822 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}.pk{background:#FBEAF0;color:#72243E}.pgy{background:#F1EFE8;color:#444441}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">特征执行引擎三条管线 — 生产级全解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature / 阿里 PAI-FeatureStore 线上方案 — Feature View 定义的 Transform 如何被执行引擎物化为在线可查询的特征值</div>
+
+<!-- ==================== OVERVIEW ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+三条管线全景 — 执行引擎如何调度 Feature View
+</div>
+
+<div class="sub">Feature View 注册时指定 source_type (BATCH/STREAM/ON_DEMAND)，执行引擎据此选择对应的管线。每条管线的核心职责是：<strong>读取数据源 → 执行 Transform DSL → 写入在线存储 (Materialization)</strong>。三条管线的差异在于数据源、计算引擎、调度方式和写入模式。</div>
+
+<table class="tbl">
+<tr><th style="width:14%">维度</th><th style="width:29%"><span class="p pb">链路一: 离线批量</span></th><th style="width:29%"><span class="p pg">链路二: 实时流式</span></th><th><span class="p po">链路三: 近线微批</span></th></tr>
+<tr><td>时效性</td><td>T+1 (天级)</td><td>秒~分钟级</td><td>分钟~小时级</td></tr>
+<tr><td>数据源</td><td>Hive/MaxCompute 表 (离线数仓)</td><td>Kafka/RocketMQ topic (实时流)</td><td>Kafka topic (同实时流) + 触发式 micro-batch</td></tr>
+<tr><td>计算引擎</td><td>Spark SQL / PySpark / MaxCompute SQL</td><td>Flink (持续运行的 Job)</td><td>Flink micro-batch / Spark Structured Streaming</td></tr>
+<tr><td>调度方式</td><td>Airflow/DolphinScheduler cron DAG</td><td>常驻 Job (无调度，自启动)</td><td>Airflow 周期触发 (每 5~30min)</td></tr>
+<tr><td>写入模式</td><td>BulkLoad (SST Ingest) / Pipeline MSet</td><td>Flink Sink micro-batch MSet (5s 攒批)</td><td>Spark/Flink 攒批后一次性 BulkLoad</td></tr>
+<tr><td>在线存储</td><td>Tair/Redis Cluster</td><td>Tair/Redis Cluster</td><td>Tair/Redis Cluster</td></tr>
+<tr><td>训练快照</td><td>Hive 分区本身就是快照 (按天)</td><td>Flink Sink 双写 HDFS Parquet (每 5min)</td><td>每批次输出一份 HDFS Parquet</td></tr>
+<tr><td>典型特征</td><td>用户画像、兴趣标签、Embedding、消费分层</td><td>行为序列、实时 CTR、滑动窗口统计</td><td>小时级聚合统计、准实时 Look-alike 扩展</td></tr>
+<tr><td>字节占比</td><td>~40% Feature View</td><td>~50% Feature View</td><td>~10% Feature View</td></tr>
+</table>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== PIPELINE 1: BATCH ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+链路一: 离线批量计算管线 — Spark + Airflow 深度拆解
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">完整执行流程 (凌晨 02:00~05:00)</div>
+
+<strong>Phase 0: 调度触发</strong> <span class="p pa">Airflow / DolphinScheduler</span><br>
+<span style="color:var(--color-text-tertiary)">├ Airflow DAG 定义: 每个 Batch Feature View → 一个 DAG</span><br>
+<span style="color:var(--color-text-tertiary)">├ 触发方式: cron 表达式 (如 "0 2 * * *" 每天 02:00)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 依赖检查 (Sensor): 上游 Hive 分区 ds=yesterday 是否就绪？</span><br>
+<span style="color:var(--color-text-tertiary)">│   → HivePartitionSensor 轮询 (30s 间隔，最长等 2h，超时告警)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 跨 DAG 依赖: user_interest_tags DAG 依赖 user_profile DAG 完成</span><br>
+<span style="color:var(--color-text-tertiary)">│   → ExternalTaskSensor 或 TriggerDagRunOperator</span><br>
+<span style="color:var(--color-text-tertiary)">└ 依赖满足 → 触发 SparkSubmitOperator</span><br><br>
+
+<strong>Phase 1: DSL 编译</strong> <span class="p pp">DSL Compiler Service</span><br>
+<span style="color:var(--color-text-tertiary)">├ 从 Feature Platform 元数据库读取 Feature View 定义</span><br>
+<span style="color:var(--color-text-tertiary)">├ Transform DSL → ANTLR Parser → AST</span><br>
+<span style="color:var(--color-text-tertiary)">├ 语义校验: 类型检查、函数签名、窗口合法性</span><br>
+<span style="color:var(--color-text-tertiary)">├ 优化: 常量折叠、列裁剪 (只读需要的列)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Code Generation → Spark SQL 字符串 + 自定义 UDF Jar</span><br>
+<span style="color:var(--color-text-tertiary)">└ 缓存: 相同 DSL version 的编译结果缓存，不重复编译</span><br><br>
+
+<strong>Phase 2: Spark Job 执行</strong> <span class="p pb">Spark 3.x on YARN/K8s</span><br>
+<span style="color:var(--color-text-tertiary)">├ 提交: spark-submit --class FeatureETLJob --master yarn</span><br>
+<span style="color:var(--color-text-tertiary)">│   --num-executors 200 --executor-cores 4 --executor-memory 8g</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 1: 读取上游 Hive 表 (Parquet 格式，列裁剪 + 谓词下推)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 2: 执行编译后的 Spark SQL (含 UDF 调用)</span><br>
+<span style="color:var(--color-text-tertiary)">│   SELECT user_id, BUCKET(age, [18,25,35,45]) AS age_bucket,</span><br>
+<span style="color:var(--color-text-tertiary)">│          gender, city_id, ... FROM dw.user_profile WHERE ds='${yesterday}'</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 3: 输出中间 Hive 表 feature_output.user_profile_v2/ds=today</span><br>
+<span style="color:var(--color-text-tertiary)">└ 耗时: 5 亿行 ~40min, shuffle ~200GB</span><br><br>
+
+<strong>Phase 3: 数据质量校验</strong> <span class="p pp">Quality Gate</span><br>
+<span style="color:var(--color-text-tertiary)">├ 行数校验: |today_count - yesterday_count| / yesterday_count &lt; 5%</span><br>
+<span style="color:var(--color-text-tertiary)">├ NULL 率: 每个 Feature 字段 NULL 率 &lt; 配置阈值</span><br>
+<span style="color:var(--color-text-tertiary)">├ 值域: 离散特征值 ∈ 合法枚举集合</span><br>
+<span style="color:var(--color-text-tertiary)">├ PSI: 与前 7 天基线对比 PSI &lt; 0.25</span><br>
+<span style="color:var(--color-text-tertiary)">├ 一致性抽样: 1000 条数据用 C++ 算子重算，与 Spark 输出 diff=0</span><br>
+<span style="color:var(--color-text-tertiary)">└ 任一失败 → 中止 Materialization + P1 告警 + 线上继续用昨天数据</span><br><br>
+
+<strong>Phase 4: Materialization (写入在线 KV)</strong> <span class="p pg">Tair BulkLoad / Pipeline Write</span><br>
+<span style="color:var(--color-text-tertiary)">├ 方式选择: 变更量 &gt;30% → BulkLoad (全量); ≤30% → Pipeline (增量)</span><br>
+<span style="color:var(--color-text-tertiary)">├ BulkLoad 流程:</span><br>
+<span style="color:var(--color-text-tertiary)">│   Spark → FlatBuffer 序列化 → SST 文件 → Tair Ingest API → 双缓冲切换</span><br>
+<span style="color:var(--color-text-tertiary)">│   吞吐: ~50 万 key/s, 5 亿 key ~15min</span><br>
+<span style="color:var(--color-text-tertiary)">├ Pipeline 流程:</span><br>
+<span style="color:var(--color-text-tertiary)">│   Spark → 按 Tair 分片分区 → 每分区内 Pipeline MSet → 限流 20 万 QPS</span><br>
+<span style="color:var(--color-text-tertiary)">│   吞吐: ~20 万 key/s, 5000 万变更 key ~5min</span><br>
+<span style="color:var(--color-text-tertiary)">└ 完成后: 校验 KV 与 Hive 一致 → 原子切换 → 记录血缘日志</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Airflow DAG 结构设计</div>
+<div class="cd">
+<div class="code">user_profile_dag:
+  schedule: "0 2 * * *"
+  
+  tasks:
+    check_upstream:
+      type: HivePartitionSensor
+      table: dw.user_profile_daily
+      partition: ds={{ yesterday }}
+      timeout: 7200  # 2h 超时
+
+    compile_dsl:
+      type: PythonOperator
+      callable: compile_feature_view_dsl
+      args: { view_name: "user_profile_v2" }
+      upstream: [check_upstream]
+
+    spark_transform:
+      type: SparkSubmitOperator
+      application: feature_etl.jar
+      args: ["--view", "user_profile_v2",
+             "--ds", "{{ yesterday }}"]
+      conf: {
+        spark.executor.instances: 200,
+        spark.executor.cores: 4,
+        spark.executor.memory: 8g,
+        spark.sql.shuffle.partitions: 500
+      }
+      upstream: [compile_dsl]
+
+    quality_check:
+      type: PythonOperator
+      callable: run_quality_gate
+      upstream: [spark_transform]
+
+    materialize:
+      type: PythonOperator
+      callable: materialize_to_tair
+      args: { mode: "auto" }  # auto=根据变更量选
+      upstream: [quality_check]
+
+    verify_online:
+      type: PythonOperator
+      callable: verify_online_kv
+      upstream: [materialize]
+
+    notify:
+      type: SlackOperator
+      channel: "#feature-alerts"
+      upstream: [verify_online]
+      trigger_rule: all_done  # 成功/失败都通知</div>
+</div>
+</div>
+<div class="c">
+<div class="ct">Spark Job 关键优化</div>
+<div class="cd">
+<strong>① AQE (Adaptive Query Execution)</strong><br>
+Spark 3.x 开启 AQE 自动优化 shuffle partition 数量。避免"200 个分区但 90% 的数据集中在 10 个分区"的数据倾斜。<br><br>
+
+<strong>② 列裁剪 + 谓词下推</strong><br>
+上游 Hive 表可能有 500 列，Feature View 只用 20 列。Spark 编译后的 SQL 自动做 Column Pruning，只读需要的列。对 Parquet 格式效果极佳 (跳过不需要的 column chunk)。<br><br>
+
+<strong>③ Broadcast Join</strong><br>
+画像加工常需 JOIN 维度表 (如 city_dim, category_dim)。维度表通常 &lt;100MB，Spark 自动 Broadcast，避免 Shuffle Join。<br><br>
+
+<strong>④ 分区裁剪</strong><br>
+只读 ds=yesterday 的分区，不扫描全表。Hive Metastore 提供分区元信息，Spark 精确定位 HDFS 文件路径。<br><br>
+
+<strong>⑤ Repartition by entity_key</strong><br>
+Materialization 前按 CRC16(user_id) % N repartition，使同一个 Tair 分片的 key 在同一个 Spark partition，减少写入时的跨分片网络开销。<br><br>
+<span class="p pb">Spark 3.x</span> <span class="p pb">AQE</span> <span class="p pb">Parquet</span>
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>BulkLoad vs Pipeline Write 的选择策略</strong><br><br>
+<strong>BulkLoad (SST Ingest)</strong>: Spark 直接生成 Tair 底层存储引擎 (类 RocksDB) 的 SST 文件，通过 Tair 的 Ingest API 直接注入存储层，绕过 Tair 的写入链路。优点是吞吐极高 (50万/s)，缺点是必须全量写入一个完整的 namespace，不支持部分 key 更新。适用于全量 Materialization。<br><br>
+<strong>Pipeline Write</strong>: Spark 通过 Tair 客户端 SDK 发送 Pipeline MSet 命令逐批写入。优点是支持增量 (只更新变化的 key)，缺点是受 Tair 写入链路的 QPS 限制，需要限流。适用于增量 Materialization。<br><br>
+<strong>字节实践</strong>: 工作日用 Pipeline (增量, ~5000万 key, 5min)；周末用 BulkLoad (全量, ~5亿 key, 15min) 做 Clean Sweep 修正累积误差。平台根据 Feature View 配置的 materialization.mode 自动选择。mode="auto" 时由平台根据当日变更比率动态决定。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== PIPELINE 2: STREAMING ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+链路二: 实时流式计算管线 — Flink 深度拆解
+</div>
+
+<div class="sub">实时流式管线是三条中工程复杂度最高的。它不像 Batch 有明确的"开始-结束"，而是 7×24 小时持续运行的常驻 Job。字节 DSP 的 ~80 个 Flink Job 服务 ~150 个 Stream Feature View。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">Flink Job 完整架构 (以 user_realtime_stats 为例)</div>
+
+<strong>Source: Kafka Consumer</strong> <span class="p pa">Kafka 3.x</span><br>
+<span style="color:var(--color-text-tertiary)">├ Topic: user_behavior_log (128 partitions, ~10M msg/s 峰值)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Deserialization: Protobuf → Java POJO (UserBehaviorEvent)</span><br>
+<span style="color:var(--color-text-tertiary)">│   fields: user_id, event_time, action(impression/click/convert),</span><br>
+<span style="color:var(--color-text-tertiary)">│           ad_id, category_id, advertiser_id, app_id, ...</span><br>
+<span style="color:var(--color-text-tertiary)">├ Consumer Group: fv_user_realtime_stats_v3</span><br>
+<span style="color:var(--color-text-tertiary)">├ Offset Commit: Flink Checkpoint 驱动 (不依赖 Kafka auto-commit)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 消费策略: EARLIEST (Job 首次启动) / LATEST (正常重启)</span><br><br>
+
+<strong>Step 1: 预处理</strong><br>
+<span style="color:var(--color-text-tertiary)">├ Filter: 过滤无效事件 (event_time=null, user_id为空, 非广告行为)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Watermark: BoundedOutOfOrdernessWatermarks(maxOutOfOrderness=10s)</span><br>
+<span style="color:var(--color-text-tertiary)">│   作用: 容忍 10 秒的乱序数据。超过 10s 的 late event 被丢弃 (或进入 side output)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Late Event 处理: 写入 late_event_kafka_topic 供离线修正</span><br>
+<span style="color:var(--color-text-tertiary)">└ KeyBy(user_id): 按用户分区，保证同一用户的事件在同一 Task</span><br><br>
+
+<strong>Step 2: 窗口聚合 (核心计算)</strong> <span class="p pg">Flink Window API</span><br>
+<span style="color:var(--color-text-tertiary)">├ 同一个 KeyedStream 上注册多个并行窗口:</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">│  Window A: SlidingEventTimeWindows(1h, 5min)</span><br>
+<span style="color:var(--color-text-tertiary)">│    AggregateFunction: { click_count: Long, imp_count: Long }</span><br>
+<span style="color:var(--color-text-tertiary)">│    触发器: 每 5min 输出一次当前窗口状态</span><br>
+<span style="color:var(--color-text-tertiary)">│    输出: (user_id, click_1h, imp_1h, trigger_time)</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">│  Window B: SlidingEventTimeWindows(6h, 30min)</span><br>
+<span style="color:var(--color-text-tertiary)">│    AggregateFunction: { click_sum: Long, imp_sum: Long }</span><br>
+<span style="color:var(--color-text-tertiary)">│    输出: (user_id, ctr_6h = click_sum/imp_sum, trigger_time)</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">│  Window C: SlidingEventTimeWindows(30min, 1min)</span><br>
+<span style="color:var(--color-text-tertiary)">│    AggregateFunction: { category_list: List[Int] }</span><br>
+<span style="color:var(--color-text-tertiary)">│    ProcessWindowFunction: 截断到 Top-20 → click_cat_seq</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">└  Window D: Global Window + ContinuousProcessingTimeTrigger(1min)</span><br>
+<span style="color:var(--color-text-tertiary)">     ProcessFunction: 维护行为序列 state，事件到达立刻追加</span><br>
+<span style="color:var(--color-text-tertiary)">     输出: (user_id, last_click_ts)</span><br><br>
+
+<strong>Step 3: 窗口结果合并</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 各窗口输出 Union → CoProcessFunction</span><br>
+<span style="color:var(--color-text-tertiary)">├ 按 user_id 聚合: 将各窗口的输出字段合并为完整的 Feature View value</span><br>
+<span style="color:var(--color-text-tertiary)">├ FlatBuffer 序列化: Pack(click_1h, imp_1h, ctr_6h, click_cat_seq, ...)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 去重: 同一 user_id 在同一 micro-batch 内多次输出 → 只保留最新</span><br><br>
+
+<strong>Step 4: 双写 Sink</strong><br>
+<span style="color:var(--color-text-tertiary)">├─ Sink A: Tair (在线 KV)</span><br>
+<span style="color:var(--color-text-tertiary)">│  ├ Micro-batch 攒批: 每 5s 收集一批 (BufferingSink)</span><br>
+<span style="color:var(--color-text-tertiary)">│  ├ 合并: 同一 user_id 多条 → 只保留最新</span><br>
+<span style="color:var(--color-text-tertiary)">│  ├ Pipeline MSet: 每批 1000~5000 key</span><br>
+<span style="color:var(--color-text-tertiary)">│  ├ 限流: max_write_qps=100000，超过则背压</span><br>
+<span style="color:var(--color-text-tertiary)">│  ├ 幂等: Tair MSet 天然幂等 (last-write-wins)</span><br>
+<span style="color:var(--color-text-tertiary)">│  └ key: "uf:rts:{user_id}", TTL=86400 (1天)</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">└─ Sink B: HDFS Snapshot (训练快照)</span><br>
+<span style="color:var(--color-text-tertiary)">   ├ 每 5min 触发一次 rolling file 关闭</span><br>
+<span style="color:var(--color-text-tertiary)">   ├ 输出 Parquet 文件到 HDFS:</span><br>
+<span style="color:var(--color-text-tertiary)">   │  hdfs:///snapshots/user_rts_v3/dt=2024-11-20/hh=10/mm=05/part-0.parquet</span><br>
+<span style="color:var(--color-text-tertiary)">   ├ 用于训练时 Point-in-time Join</span><br>
+<span style="color:var(--color-text-tertiary)">   └ 保留 7 天, 之后自动清理</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Flink State 管理 (最大工程挑战)</div>
+<div class="cd">
+<strong>State Backend: RocksDB</strong><br>
+窗口聚合的中间状态 (计数器、列表) 存在 RocksDB 中 (本地 NVMe SSD)。<br><br>
+
+<strong>状态大小估算</strong>:<br>
+• 活跃用户 ~3 亿<br>
+• 每用户状态: 窗口 A+B 计数器 ~64 Bytes + 窗口 C 列表 ~400 Bytes + 窗口 D 序列 ~200 Bytes ≈ 664 Bytes<br>
+• 总 state: 3 亿 × 664B ≈ 200GB<br><br>
+
+<strong>Checkpoint 配置</strong>:<br>
+<div class="code">checkpoint.interval: 60s
+checkpoint.mode: EXACTLY_ONCE
+state.backend: rocksdb
+state.backend.incremental: true
+state.backend.rocksdb.block.cache-size: 256MB
+state.checkpoints.dir: hdfs:///flink-checkpoints/
+state.savepoints.dir: hdfs:///flink-savepoints/</div>
+
+<strong>增量 Checkpoint</strong>: 只上传 RocksDB 的 delta SST 文件到 HDFS，而非全量 snapshot。200GB state 的增量 checkpoint 通常 &lt;5GB，耗时 &lt;30s。<br><br>
+
+<strong>State TTL</strong>: 设为最大窗口 × 1.5 (如 6h × 1.5 = 9h)。超过 9h 未更新的用户 state 自动清理，防止不活跃用户累积。<br><br>
+<span class="p pg">RocksDB</span> <span class="p pg">NVMe SSD</span> <span class="p pg">HDFS Checkpoint</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">Flink Job 运维体系</div>
+<div class="cd">
+<strong>Job 部署方式</strong>:<br>
+Flink on YARN (字节) / Flink on K8s (阿里 VVP)<br>
+每个 Stream Feature View → 一个 Flink Job (或多个 View 共享一个 Job)<br><br>
+
+<strong>自动重启策略</strong>:<br>
+<div class="code">restart-strategy: fixed-delay
+restart-strategy.fixed-delay.attempts: 3
+restart-strategy.fixed-delay.delay: 30s</div>
+Job Crash → 从最近 checkpoint 恢复 → Kafka offset 回溯 → 追赶消费 → 通常 1~3min 恢复<br><br>
+
+<strong>Savepoint 管理</strong>:<br>
+• 代码变更部署: 先触发 Savepoint → 停止旧 Job → 从 Savepoint 启动新 Job<br>
+• 定期 Savepoint: 每 6h 自动保存一份，防止 checkpoint 链断裂<br><br>
+
+<strong>关键监控指标</strong>:<br>
+• Kafka Lag (消费延迟): &gt;1min P2, &gt;5min P1<br>
+• Checkpoint Duration: &gt;30s P2<br>
+• Backpressure: &gt;0.5 Warning, &gt;0.8 P2<br>
+• State Size: 超预期 200% P2<br>
+• Task 重启次数: &gt;3 次/小时 P1<br><br>
+<span class="p pr">Prometheus</span> <span class="p pr">Grafana</span> <span class="p pr">PagerDuty</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">增量聚合 vs 全量聚合</div>
+<div class="cd">
+<strong>增量聚合 (AggregateFunction)</strong>:<br>
+只在 state 中保存聚合中间状态 (如 COUNT → 一个 Long 计数器)。每条事件到达: counter += 1。窗口触发时直接输出 counter 值。<br>
+<strong>state 大小</strong>: O(1) per key — 极小<br>
+<strong>适用</strong>: COUNT, SUM, AVG, MAX, MIN<br><br>
+
+<strong>全量聚合 (ProcessWindowFunction)</strong>:<br>
+在 state 中保存窗口内的<strong>全部原始事件</strong>。窗口触发时遍历所有事件计算结果。<br>
+<strong>state 大小</strong>: O(N) per key — 巨大<br>
+<strong>适用</strong>: COLLECT_LIST, TOP_K, DISTINCT_COUNT, 复杂自定义逻辑<br><br>
+
+<strong>字节的优化方案</strong>:<br>
+对 COLLECT_LIST (行为序列) 使用<strong>预聚合 ProcessFunction</strong>: 维护一个固定大小的 RingBuffer (max_len=50)，事件到达时追加到 RingBuffer 尾部，满时淘汰最早的。State 大小固定为 O(max_len)，比 ProcessWindowFunction 节省 10 倍+ 空间。<br><br>
+对 DISTINCT_COUNT 使用 HyperLogLog 近似计算。State 从 O(N) 降到 O(1)，误差 &lt;2%。
+</div>
+</div>
+<div class="c">
+<div class="ct">数据倾斜与热 Key 处理</div>
+<div class="cd">
+<strong>问题</strong>: 少量高活跃用户 (Bot、头部 KOL) 产生大量事件，导致单个 KeyBy 后的 Task 过载。<br><br>
+
+<strong>方案一: 两阶段聚合 (Local-Global)</strong><br>
+<div class="code">// Stage 1: Local Pre-Aggregate
+KeyBy(user_id + random(0..9))  // 分散到 10 个 sub-key
+  .window(...)
+  .aggregate(partialAgg)       // 局部聚合
+
+// Stage 2: Global Aggregate
+KeyBy(user_id)                 // 归回原 key
+  .window(...)
+  .aggregate(mergeAgg)         // 合并局部结果</div>
+
+<strong>方案二: Hot Key 旁路</strong><br>
+维护 Hot Key 列表 (定期从监控系统拉取)。事件到达时检查 user_id 是否 Hot Key → 是则走旁路 (单独的处理逻辑，降低聚合精度换性能)。<br><br>
+
+<strong>方案三: Flink Operator Chaining 关闭</strong><br>
+对 KeyBy 后的重算子禁用 Operator Chaining，让 Flink 将其调度到不同 slot，利用更多 TaskManager 资源。<br><br>
+<span class="p pg">Local-Global Agg</span> <span class="p pg">Hot Key Bypass</span>
+</div>
+</div>
+</div>
+
+<div class="W">
+<strong>Flink Job 故障恢复完整流程</strong>:<br>
+① TaskManager 崩溃 (JVM OOM / 节点宕机)<br>
+② JobManager 检测到 Task failure → 触发 Job restart<br>
+③ 从 HDFS 上最近一次成功的 checkpoint 恢复 state (增量 SST 文件合并)<br>
+④ Kafka Consumer 回溯 offset 到 checkpoint 时刻<br>
+⑤ 重新消费 checkpoint 之后的数据 (数据重放，但 Tair Sink 是 last-write-wins 幂等)<br>
+⑥ 追赶消费直到 Lag 降为 0 (通常 1~3min)<br>
+⑦ 期间线上使用 Tair 中的旧值 (容忍分钟级延迟，不影响服务可用性)<br><br>
+<strong>极端情况</strong>: 3 次 fixed-delay restart 均失败 → Job 进入 FAILED 状态 → P0 告警 → 人工排查。Feature Serving 侧自动熔断该 View，全部使用 default_value。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== PIPELINE 3: NEAR-LINE ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+链路三: 近线微批计算管线 — 介于批和流之间
+</div>
+
+<div class="sub">近线管线是批和流的折中方案。它消费与实时流相同的 Kafka 数据源，但不做持续窗口聚合，而是由调度系统每 5~30 分钟触发一次 micro-batch 作业。字节和阿里在实践中发现，~10% 的特征既不需要 T+1 的粗粒度，也不需要秒级的细粒度，5~30 分钟的更新频率恰好满足需求且成本大幅低于常驻 Flink Job。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">近线管线的两种实现方式</div>
+<div class="cd">
+<strong>方式一: Spark Structured Streaming (字节部分场景)</strong><br>
+<div class="code">spark.readStream
+  .format("kafka")
+  .option("subscribe", "user_behavior_log")
+  .option("startingOffsets", "latest")
+  .load()
+  .withWatermark("event_time", "2 minutes")
+  .groupBy(
+    window("event_time", "1 hour", "5 minutes"),
+    col("user_id")
+  )
+  .agg(count("click").as("click_1h"))
+  .writeStream
+  .trigger(processingTime="5 minutes") // 每5min 一个 micro-batch
+  .foreachBatch { (batchDF, batchId) =>
+    // 写入 Tair
+    materializeToTair(batchDF)
+  }
+  .start()</div>
+特点: 用 Spark 的 micro-batch 模型 (每 5min 消费一批 Kafka 数据 → Spark Job 处理 → 输出)。每次是一个完整的 Spark Job (申请资源 → 执行 → 释放)。<br><br>
+
+<strong>方式二: Flink Batch Mode on Streaming Data (阿里实践)</strong><br>
+Airflow 每 15min 触发一次 Flink batch job，消费最近 15min 的 Kafka 数据 (指定 offset 范围)，执行聚合后写入 Tair。<br>
+本质是"定时触发的小批量 Flink Job"，而非常驻 Job。
+</div>
+</div>
+<div class="c">
+<div class="ct">近线 vs 实时流: 选择标准</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>维度</th><th>近线 (micro-batch)</th><th>实时 (streaming)</th></tr>
+<tr><td>延迟</td><td>5~30min</td><td>秒~分钟</td></tr>
+<tr><td>计算成本</td><td>按需申请释放 (低)</td><td>常驻集群 (高 3~5x)</td></tr>
+<tr><td>State 管理</td><td>无状态 (每批独立)</td><td>有状态 (RocksDB)</td></tr>
+<tr><td>运维复杂度</td><td>低 (普通调度)</td><td>高 (checkpoint/savepoint)</td></tr>
+<tr><td>Exactly-once</td><td>天然 (批处理)</td><td>需 checkpoint 保证</td></tr>
+</table>
+<br>
+<strong>选择近线的典型场景</strong>:<br>
+• 小时级兴趣标签更新 (30min 更新一次足够)<br>
+• Look-alike 人群扩展 (每 15min 扩散一次)<br>
+• 准实时广告质量分 (每 10min 重算)<br>
+• 模型特征回填补丁 (修复特定 Feature 的值)<br><br>
+
+<strong>选择实时流的典型场景</strong>:<br>
+• 行为序列 (点击后立刻影响下次推荐)<br>
+• 实时 CTR/CVR (秒级变化的竞价景观)<br>
+• 频次控制 (即时生效的曝光计数)
+</div>
+</div>
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">近线管线完整执行流程 (以 Airflow + Spark Structured Streaming 为例)</div>
+
+<strong>每 15 分钟触发一次</strong> <span class="p pa">Airflow</span><br>
+<span style="color:var(--color-text-tertiary)">├ 02:00, 02:15, 02:30, 02:45, ...</span><br>
+<span style="color:var(--color-text-tertiary)">└ 触发 SparkSubmitOperator (micro-batch mode)</span><br><br>
+
+<strong>Step 1: 读取 Kafka</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 读取最近 15min 的数据 (通过 Kafka offset 范围)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 数据量: ~15min × 10M msg/s ≈ 90 亿条</span><br>
+<span style="color:var(--color-text-tertiary)">└ Spark 申请资源: 50 executors × 4 cores</span><br><br>
+
+<strong>Step 2: Transform + 聚合</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 执行 DSL 编译后的 Spark SQL</span><br>
+<span style="color:var(--color-text-tertiary)">├ 窗口: TUMBLING(15min) 聚合 (无 state 跨批次)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 注意: 与 Batch 不同，这里的数据源是 Kafka 而非 Hive</span><br>
+<span style="color:var(--color-text-tertiary)">└ 耗时: ~3min (数据量比 T+1 小很多)</span><br><br>
+
+<strong>Step 3: 质量校验 (轻量版)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 行数校验: 与前一批次对比波动 &lt;30%</span><br>
+<span style="color:var(--color-text-tertiary)">└ 值域校验: 抽样 100 条检查</span><br><br>
+
+<strong>Step 4: 写入 Tair (增量)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ Pipeline MSet 写入变更的 key</span><br>
+<span style="color:var(--color-text-tertiary)">├ 限流 10 万 QPS</span><br>
+<span style="color:var(--color-text-tertiary)">└ 完成 → 释放 Spark 资源</span><br><br>
+
+<strong>Step 5: HDFS 快照 (可选)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 将本批次输出写一份 Parquet 到 HDFS</span><br>
+<span style="color:var(--color-text-tertiary)">└ 路径: hdfs:///snapshots/user_hourly_agg/dt=today/hh=02/mm=15/</span>
+</div>
+
+<div class="I">
+<strong>近线管线与离线/实时的"覆盖"关系</strong><br><br>
+三条管线可能同时向同一个 Tair key 写入，覆盖策略是 <strong>last-write-wins</strong>:<br>
+• 离线管线凌晨写入全量基线 (覆盖所有 key)<br>
+• 近线管线白天每 15min 增量更新 (只覆盖活跃用户)<br>
+• 实时管线每秒更新 (只覆盖高频事件用户)<br><br>
+<strong>关键设计</strong>: 近线/实时的 TTL 短于离线。当近线特征过期后，查到的是离线的基线值——自动 "回退"。例如: 离线 TTL=30d, 近线 TTL=1d。昨天的近线值今天过期 → 查到的是离线画像 → 仍然有效。这个设计让三条管线无需显式协调，通过 TTL 机制自然衔接。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: DSL Compilation ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">4</div>
+DSL 编译器 — 一份 DSL 如何驱动三条管线
+</div>
+
+<div class="sub">DSL 编译器是三条管线的统一入口。算法工程师写一次 Transform DSL，编译器自动生成三种执行引擎的代码。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">DSL 编译全流程</div>
+
+<span class="p pp">Transform DSL 源码</span>
+<br><span style="color:var(--color-text-tertiary)">  "COUNT(action='click') OVER SLIDING(1h, 5min) AS click_1h"</span>
+<br>↓
+<br><span class="p pp">ANTLR Parser</span> → <span style="color:var(--color-text-tertiary)">词法分析 + 语法分析 → AST (抽象语法树)</span>
+<br>↓
+<br><span class="p pp">Semantic Analyzer</span> → <span style="color:var(--color-text-tertiary)">类型推导、函数签名校验、窗口语义校验</span>
+<br>↓
+<br><span class="p pp">Optimizer</span> → <span style="color:var(--color-text-tertiary)">常量折叠、公共子表达式消除、谓词下推</span>
+<br>↓
+<br><span style="color:var(--color-text-tertiary)">Code Generation (分支编译):</span>
+<br>
+<br>├─→ <span class="p pb">Spark SQL + UDF Jar</span> → 离线链路
+<br>│   <span style="color:var(--color-text-tertiary)">SELECT user_id, COUNT(CASE WHEN action='click' THEN 1 END) AS click_1h</span>
+<br>│   <span style="color:var(--color-text-tertiary)">FROM events WHERE event_time BETWEEN ... GROUP BY user_id</span>
+<br>│
+<br>├─→ <span class="p pg">Flink Java Operator</span> → 实时流链路
+<br>│   <span style="color:var(--color-text-tertiary)">KeyedStream.window(SlidingEventTimeWindows.of(1h, 5min))</span>
+<br>│   <span style="color:var(--color-text-tertiary)">.aggregate(new ClickCountAggregate())</span>
+<br>│
+<br>├─→ <span class="p po">C++ Operator</span> → 在线 serving (OnDemand)
+<br>│   <span style="color:var(--color-text-tertiary)">用于 Feature Serving 中 OnDemand Feature View 的计算</span>
+<br>│
+<br>└─→ <span class="p pa">Python UDF</span> → 训练样本工厂
+<br>    <span style="color:var(--color-text-tertiary)">用于离线样本拼接时重算特征 (验证一致性)</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">窗口语义的跨引擎翻译</div>
+<div class="cd">
+同一个 <code style="font-family:var(--font-mono);font-size:10px">SLIDING(1h, 5min)</code> 在不同引擎中的实现完全不同:<br><br>
+
+<strong>Spark (离线)</strong>:<br>
+没有"滑动窗口"概念。编译器将其翻译为 SQL 的时间范围 WHERE 条件:<br>
+<code style="font-family:var(--font-mono);font-size:10px">WHERE event_time BETWEEN timestamp - INTERVAL 1 HOUR AND timestamp</code><br>
+因为离线是回溯计算，"当前时刻"就是样本的 event_time。<br><br>
+
+<strong>Flink (实时)</strong>:<br>
+直接映射为 Flink 的 SlidingEventTimeWindows(size=1h, slide=5min)。Flink 自动维护窗口 state 和触发逻辑。<br><br>
+
+<strong>Spark Structured Streaming (近线)</strong>:<br>
+映射为 Spark 的 window() 函数 + micro-batch trigger。每 5min 触发一批，聚合最近 1h 的数据。<br><br>
+
+<strong>C++ (在线)</strong>:<br>
+OnDemand 特征通常不涉及窗口 (它只计算当前请求的上下文)。如果 DSL 包含窗口聚合，编译器拒绝为 C++ 生成代码 → 该 View 不能是 ON_DEMAND 类型。
+</div>
+</div>
+<div class="c">
+<div class="ct">一致性保证机制</div>
+<div class="cd">
+<strong>编译器级保证</strong>:<br>
+• 所有引擎的输出 schema 相同 (字段名、类型、顺序)<br>
+• 聚合函数的语义严格定义 (如 COUNT NULL 行为: 统一不计 NULL)<br>
+• 浮点精度: 统一使用 FLOAT64 中间计算，输出时 cast 到 FLOAT32<br><br>
+
+<strong>自动化校验 (注册时)</strong>:<br>
+<div class="code">一致性测试流程:
+1. 准备 test_data (1000 行 mock 事件)
+2. 分别用 4 个引擎执行:
+   - spark_result = run_spark_udf(test_data)
+   - flink_result = run_flink_op(test_data)
+   - cpp_result   = run_cpp_op(test_data)   
+   - python_result= run_python_udf(test_data)
+3. Assert: all_equal(spark, flink, cpp, python)
+4. 任一不等 → 注册失败 → 编译器 bug</div>
+
+<strong>运行时校验 (每周)</strong>:<br>
+抽样 1% 在线请求，用离线链路 (Spark) 重算特征值，与在线 serving 的实际值对比。diff &gt; 0.1% → P1 告警。<br><br>
+<span class="p pp">Consistency Checker</span> <span class="p pb">Replay Validator</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: Sync to Online ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">5</div>
+离线→在线同步机制 — Materialization 引擎深度拆解
+</div>
+
+<div class="sub">Materialization 是将离线/近线/实时计算结果"物化"到在线 KV 存储的过程。它是三条管线的最后一个环节，也是对在线服务影响最直接的环节。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">5.1 BulkLoad 引擎 (离线全量)</div>
+<div class="cd">
+<strong>原理</strong>: 绕过 Tair 的写入链路 (接收 → 解析 → 写 WAL → 写 MemTable → Flush → Compaction)，直接生成 Tair 底层存储引擎的 SST 文件，通过 Ingest API 注入。<br><br>
+
+<strong>流程</strong>:<br>
+<div class="code">Spark DataFrame (user_id, features)
+  ↓ repartition by CRC16(user_id) % shard_count
+  ↓ sortWithinPartitions by user_id
+  ↓ mapPartitions:
+      for each row:
+        key = "uf:p:" + user_id
+        value = FlatBuffer.pack(features)
+        SSTFileWriter.add(key, value)
+      SSTFileWriter.finish() → /tmp/sst/shard_N/xxx.sst
+  ↓ upload SST files to Tair shadow namespace
+  ↓ Tair.IngestSST(shard_N, sst_path)
+  ↓ 双缓冲原子切换</div>
+
+<strong>关键优化</strong>:<br>
+• Spark partition 与 Tair shard 一一对应 (repartition by CRC16)，每个 partition 直接生成对应 shard 的 SST<br>
+• SST 文件内 key 按字典序排列 (Tair/RocksDB 要求)，Spark sortWithinPartitions 保证<br>
+• 压缩: LZ4 (Tair 默认压缩算法)，SST 文件比原始数据小 30~50%<br><br>
+<span class="p pb">SST FileWriter</span> <span class="p pg">Tair Ingest API</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">5.2 双缓冲切换机制</div>
+<div class="cd">
+<strong>问题</strong>: 全量 BulkLoad 需要 15~40min。期间如果直接写入线上 namespace，线上会出现"新旧混合"状态。<br><br>
+
+<strong>解法: A/B Namespace 交替</strong><br>
+<div class="code">Day 1: 线上用 namespace_A
+  BulkLoad → 写入 namespace_B
+  校验 B 完整性
+  原子切换: active = B
+  
+Day 2: 线上用 namespace_B
+  BulkLoad → 写入 namespace_A
+  校验 A 完整性
+  原子切换: active = A</div>
+
+<strong>原子切换实现</strong>:<br>
+配置中心 (Consul/Nacos) 中维护一个 flag:<br>
+<code style="font-family:var(--font-mono);font-size:10px">feature_view.user_profile_v2.active_namespace = "B"</code><br>
+Feature Serving SDK 监听此 flag 的变化。flag 变更后，所有 Ad Server 实例在 ~1s 内同时切换读取目标 namespace。<br><br>
+
+<strong>回滚</strong>: 如果新 namespace 上线后发现问题，直接将 flag 切回旧 namespace。旧数据仍然完整保留。<br><br>
+<span class="p pa">Consul/Nacos</span> <span class="p pa">Atomic Switch</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">5.3 Pipeline Write (增量写入)</div>
+<div class="cd">
+<strong>适用场景</strong>: 只更新变化的 key (增量 Materialization + 近线管线)<br><br>
+<strong>流程</strong>:<br>
+<div class="code">Spark / Flink 输出 (user_id, features)
+  ↓ 按 Tair 分片分组
+  ↓ 每组内攒批: batch_size=5000 key
+  ↓ Pipeline MSet 发送到对应 Tair 节点
+  ↓ 限流: TokenBucket(max_qps=100000)
+  ↓ 重试: 失败 key 放入 retry_queue, 3 次重试</div>
+
+<strong>限流策略</strong>:<br>
+• Token Bucket 算法: 每秒补充 100000 token，每个 key 消耗 1 token<br>
+• 背压: 当 Tair 响应延迟 P99 &gt;10ms 时，自动降低写入速率 50%<br>
+• 凌晨 vs 白天: 凌晨 (离线 Batch) 限流 20 万 QPS；白天 (近线) 限流 10 万 QPS (留资源给在线读)<br><br>
+
+<strong>幂等性</strong>:<br>
+Tair MSet 天然 last-write-wins。同一个 key 多次写入不会产生脏数据——最后一次写入的值生效。对于 Flink exactly-once 语义，checkpoint 恢复后重放的数据虽然重复写入，但因为幂等性不影响正确性。
+</div>
+</div>
+<div class="c">
+<div class="ct">5.4 三条链路的写入协调</div>
+<div class="cd">
+<strong>同一个 key 可能被三条管线写入</strong>:<br>
+例如 user_realtime_stats 可能同时有:<br>
+• 离线 Batch: 凌晨全量写入基线值<br>
+• 实时 Flink: 白天持续更新<br><br>
+
+<strong>协调规则</strong>:<br>
+① <strong>TTL 分层</strong>: 离线 TTL=30d, 实时 TTL=1d<br>
+② <strong>时间自然覆盖</strong>: 实时写入覆盖离线值 (last-write-wins)；实时值过期后自动露出离线值<br>
+③ <strong>Key 命名隔离</strong> (可选): 有些团队选择为离线/实时使用不同的 key 前缀 (如 <code style="font-family:var(--font-mono);font-size:10px">uf:rts_batch:U123</code> vs <code style="font-family:var(--font-mono);font-size:10px">uf:rts_stream:U123</code>)。Feature Serving 先查 stream key，miss 后回退查 batch key。但字节更多使用<strong>同一个 key + TTL</strong>的方案——更简单，运维成本低。<br><br>
+
+<strong>写入优先级</strong>:<br>
+• Tair 层面无优先级 (谁后写谁生效)<br>
+• 时间顺序保证: 实时管线的写入时间戳总是晚于离线管线 → 自然覆盖<br>
+• 近线管线介于两者之间: 15min 粒度的写入覆盖离线但被实时覆盖
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: End-to-End Quality ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+端到端质量保障 — 跨管线一致性
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">训练-Serving 一致性闭环</div>
+<div class="cd">
+三条管线不仅服务在线 serving，也服务训练样本拼接。一致性的"闭环"是:<br><br>
+
+<div class="code">Feature View DSL (唯一 source of truth)
+  ├→ 离线 Spark UDF → Hive 特征表 → 训练样本拼接
+  ├→ 实时 Flink Op → Tair (在线) + HDFS 快照 (训练 PIT Join)
+  ├→ 近线 Spark/Flink → Tair (在线) + HDFS 快照
+  └→ C++ Operator → Feature Serving (在线计算)
+
+闭环校验:
+  在线 serving 实际使用的值 ← 记录到曝光日志
+  训练样本拼接的值 ← Point-in-time Join 获取
+  Assert: serving_value ≈ training_value (diff &lt; 0.1%)</div>
+
+<strong>字节 ByteFeature 的做法</strong>:<br>
+每周自动跑一次 "Consistency Audit Job":<br>
+① 随机抽 100 万条曝光日志 (含 serving 时记录的特征值)<br>
+② 用 Sample Factory 的 PIT Join 重新拼接这些样本的特征值<br>
+③ 对比 serving 值 vs PIT Join 值<br>
+④ 输出 diff report (按 Feature View 分组)<br>
+⑤ diff &gt; 0.1% 的 View 自动标记为 "consistency warning"
+</div>
+</div>
+<div class="c">
+<div class="ct">端到端延迟 SLA</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>管线</th><th>延迟 SLA</th><th>监控方式</th></tr>
+<tr><td>离线 Batch</td><td>06:00 前全部完成</td><td>Airflow DAG 完成时间告警</td></tr>
+<tr><td>实时 Stream</td><td>数据产生 → 在线可查 &lt;2min</td><td>Kafka Lag + Tair 写入延迟</td></tr>
+<tr><td>近线 micro-batch</td><td>数据产生 → 在线可查 &lt;30min</td><td>Airflow Job 完成时间</td></tr>
+</table>
+<br>
+<strong>延迟分解 (实时管线)</strong>:<br>
+• 客户端埋点 → Kafka: ~1s (上报 SDK batch)<br>
+• Kafka → Flink 消费: ~0.1s<br>
+• Flink 窗口处理: 取决于 slide (最差 =slide 间隔)<br>
+• Flink → Tair 写入: ~5s (micro-batch 攒批)<br>
+• 总延迟: 1s + 0.1s + 5min (slide) + 5s ≈ 5~6min<br><br>
+<strong>优化: Process-time 旁路</strong><br>
+对 click_1h 等核心特征，额外注册一个 <strong>ContinuousProcessingTimeTrigger(1s)</strong>，事件到达后 1s 内就输出到 Tair。延迟: 1s + 0.1s + 1s + 5s ≈ 7s (接近实时)。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Tech Stack ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">7</div>
+三条管线完整中间件清单
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">离线批量管线</div>
+<div class="cd">
+<span class="p pb">Spark 3.x</span> 批计算引擎<br>
+<span class="p pb">Hive / Iceberg</span> 离线数仓<br>
+<span class="p pb">HDFS / OSS</span> 分布式文件<br>
+<span class="p pb">Parquet</span> 列式存储<br>
+<span class="p pa">Airflow / DolphinScheduler</span> DAG 调度<br>
+<span class="p pa">YARN / K8s</span> 资源管理<br>
+<span class="p pg">Tair BulkLoad</span> SST Ingest<br>
+<span class="p pp">DSL Compiler</span> ANTLR<br>
+<span class="p pp">Quality Gate</span> 数据校验
+</div>
+</div>
+<div class="c">
+<div class="ct">实时流式管线</div>
+<div class="cd">
+<span class="p pg">Flink 1.17+</span> 流计算引擎<br>
+<span class="p pa">Kafka 3.x</span> 消息队列<br>
+<span class="p pg">RocksDB</span> State Backend<br>
+<span class="p pg">NVMe SSD</span> State 存储<br>
+<span class="p pg">HDFS</span> Checkpoint + 快照<br>
+<span class="p pg">Tair Sink</span> Pipeline MSet<br>
+<span class="p pa">YARN / K8s</span> 资源管理<br>
+<span class="p pp">DSL Compiler</span> Flink Op 生成<br>
+<span class="p pr">Prometheus + Grafana</span> 监控
+</div>
+</div>
+<div class="c">
+<div class="ct">近线微批管线</div>
+<div class="cd">
+<span class="p po">Spark Structured Streaming</span><br>
+或 <span class="p po">Flink Batch Mode</span><br>
+<span class="p pa">Kafka 3.x</span> 数据源<br>
+<span class="p pa">Airflow</span> 周期调度<br>
+<span class="p pa">YARN / K8s</span> 按需资源<br>
+<span class="p pg">Tair Pipeline</span> 增量写入<br>
+<span class="p pg">HDFS</span> 快照输出<br>
+<span class="p pp">DSL Compiler</span> 代码生成<br>
+<span class="p pp">Quality Gate</span> 轻量校验
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">跨管线共享组件</div>
+<div class="cd">
+<span class="p pp">Consul / Nacos</span> 配置中心 (双缓冲切换、限流配置) | <span class="p pp">MySQL / PostgreSQL</span> Feature Platform 元数据 | <span class="p pp">FlatBuffer</span> 统一序列化 | <span class="p pr">Prometheus + Grafana</span> 全管线统一监控 | <span class="p pr">PagerDuty / 飞书</span> 告警 | <span class="p pp">Git</span> DSL 版本管理 | <span class="p pp">AB Platform</span> 灰度发布
+</div>
+</div>
+<div class="c">
+<div class="ct">在线存储层 (三条管线共同写入)</div>
+<div class="cd">
+<span class="p po">Tair / Redis Cluster</span> 200+ 节点, 20TB 内存 | <span class="p po">双缓冲 Namespace</span> A/B 切换 | <span class="p po">Pipeline MSet</span> 批量写入 | <span class="p po">BulkLoad SST Ingest</span> 全量导入 | <span class="p po">TTL 分层</span> 离线 30d / 近线 1~7d / 实时 1d
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+执行引擎规模 (字节 DSP): Spark 集群 ~5000 核 (离线+近线) | Flink 集群 ~2000 核 (80 个常驻 Job) | Kafka ~300 Broker (日吞吐 ~100TB) | Airflow DAG ~200 个 | 每日 Tair 写入 ~50 亿次 (离线 5 亿 + 实时 45 亿) | HDFS 快照 ~200TB
+</div>
+</div>

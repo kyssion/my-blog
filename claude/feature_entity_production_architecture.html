@@ -1,0 +1,808 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}
+.pg{background:#E1F5EE;color:#085041}
+.po{background:#FAECE7;color:#712B13}
+.pp{background:#EEEDFE;color:#3C3489}
+.pa{background:#FAEEDA;color:#633806}
+.pr{background:#FCEBEB;color:#791F1F}
+.pk{background:#FBEAF0;color:#72243E}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">Feature Entity 生产级架构全解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature / 阿里 PAI-FeatureStore / 开源 Feast 的真实线上方案</div>
+
+<!-- ==================== SECTION 0: Core Concept ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+核心概念 — 什么是 Feature Entity
+</div>
+
+<div class="sub">Feature Entity 是 Feature Store 的核心抽象。它不是一个简单的"表"，而是以<strong>业务实体</strong>为中心组织特征的元模型(Meta-model)。它定义了"谁(Entity)有什么属性(Feature)，这些属性从哪来(Source)、怎么算(Transform)、存哪里(Store)、怎么服务(Serving)"的完整生命周期。</div>
+
+<div class="I">
+<strong>为什么需要 Feature Entity，而不是直接管理特征表？</strong><br><br>
+传统做法: 算法工程师各自维护 Hive 表 + Redis key，没有统一抽象。<br>
+导致的问题: ① 同一个特征不同团队重复开发 (字节曾统计有 30%+ 的特征是重复的)；② 训练/serving 特征不一致无法自动发现；③ 特征血缘不可追踪，上游表变更不知道影响哪些模型；④ 特征缺失/异常无统一监控。<br><br>
+Feature Entity 通过在"特征"上建立统一的元信息层，将特征从"散落的表字段"提升为"有明确定义、来源、生命周期的一等公民"。这是字节 ByteFeature 和阿里 PAI-FeatureStore 的核心设计哲学。
+</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#534AB7">
+<div class="ct" style="color:#534AB7">Entity (实体)</div>
+<div class="cd">
+业务对象的唯一标识<br><br>
+<strong>典型实体:</strong><br>
+• <span class="p pp">User</span> user_id<br>
+• <span class="p pp">Ad</span> ad_id<br>
+• <span class="p pp">Advertiser</span> advertiser_id<br>
+• <span class="p pp">Creative</span> creative_id<br>
+• <span class="p pp">Campaign</span> campaign_id<br>
+• <span class="p pp">App</span> app_id<br>
+• <span class="p pp">AdSlot</span> slot_id<br><br>
+<strong>复合实体 (交叉):</strong><br>
+• <span class="p pk">User×Ad</span><br>
+• <span class="p pk">User×Advertiser</span><br>
+• <span class="p pk">User×Category</span><br>
+• <span class="p pk">Ad×Slot</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">Feature View (特征视图)</div>
+<div class="cd">
+挂载在实体上的一组相关特征<br><br>
+一个 Entity 可以有多个 Feature View，每个 View 代表一个特征生产管线的输出。<br><br>
+<strong>示例:</strong><br>
+User 实体下:<br>
+• <span class="p pg">user_profile</span> 基础画像<br>
+• <span class="p pg">user_behavior</span> 行为序列<br>
+• <span class="p pg">user_realtime_stats</span> 实时统计<br>
+• <span class="p pg">user_embedding</span> 向量特征<br><br>
+每个 View 有独立的:<br>
+更新频率、存储策略、TTL、Owner
+</div>
+</div>
+<div class="c bl" style="border-left-color:#D85A30">
+<div class="ct" style="color:#D85A30">Feature (特征字段)</div>
+<div class="cd">
+Feature View 中的具体字段<br><br>
+<strong>属性定义:</strong><br>
+• name: 特征名<br>
+• dtype: INT64/FLOAT/STRING/EMBEDDING/SEQ<br>
+• default_value: 缺失时的默认值<br>
+• description: 业务含义<br>
+• transform: 处理逻辑 DSL<br>
+• emb_dim: Embedding 维度<br>
+• bucket_config: 分桶配置<br>
+• monitoring: 监控规则<br><br>
+<strong>示例:</strong><br>
+user_profile.gender → INT64<br>
+user_behavior.click_seq → SEQ[INT64]<br>
+user_embedding.dssm_vec → FLOAT[128]
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 1: Data Model ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+元数据模型 — Feature Entity 的完整数据结构
+</div>
+
+<div class="sub">Feature Entity 的元数据存储在 MySQL/PostgreSQL 中，通过 Feature Platform 的管理后台或 SDK 进行注册。以下是字节 ByteFeature 内部的完整元模型结构。</div>
+
+<div class="code">// ========== Entity 定义 ==========
+Entity {
+  entity_id:       INT AUTO_INCREMENT           // 实体唯一 ID
+  entity_name:     VARCHAR(64) UNIQUE            // 如 "user", "ad", "user_x_ad"
+  join_keys:       JSON                          // ["user_id"] 或 ["user_id", "ad_id"]
+  description:     TEXT                          // 业务描述
+  owner:           VARCHAR(64)                   // 负责团队/个人
+  created_at:      TIMESTAMP
+  updated_at:      TIMESTAMP
+}
+
+// ========== Feature View 定义 ==========
+FeatureView {
+  view_id:         INT AUTO_INCREMENT
+  view_name:       VARCHAR(128) UNIQUE           // 如 "user_profile_v2"
+  entity_id:       INT → Entity.entity_id        // 归属实体
+  source_type:     ENUM(BATCH, STREAM, ONLINE)   // 数据源类型
+  source_config:   JSON                          // Hive表/Kafka topic/在线计算配置
+  transform_dsl:   TEXT                          // 特征转换逻辑 (统一 DSL)
+  store_config:    JSON                          // 存储配置 (Tair key模板/TTL/序列化)
+  schedule:        VARCHAR(64)                   // "0 2 * * *" (cron) 或 "realtime"
+  version:         INT                           // 版本号，每次变更自增
+  status:          ENUM(DEV, STAGING, PROD, DEPRECATED)
+  created_by:      VARCHAR(64)
+  tags:            JSON                          // ["广告", "用户画像", "核心"]
+}
+
+// ========== Feature 字段定义 ==========
+Feature {
+  feature_id:      INT AUTO_INCREMENT
+  view_id:         INT → FeatureView.view_id
+  feature_name:    VARCHAR(128)                  // 如 "gender", "age_bucket"
+  dtype:           ENUM(INT64, FLOAT32, FLOAT64, STRING, 
+                        EMBEDDING, SEQ_INT64, SEQ_FLOAT, MAP)
+  default_value:   VARCHAR(256)                  // 缺失填充值
+  transform:       TEXT                          // 字段级转换: "BUCKET(age, [18,25,35,45])"
+  emb_dim:         INT NULL                      // Embedding 维度 (仅 ID/SEQ 类型)
+  emb_hash_bucket: INT NULL                      // Hash 桶数
+  max_seq_len:     INT NULL                      // 序列最大长度 (仅 SEQ 类型)
+  monitoring:      JSON                          // {"psi_threshold":0.25, "missing_rate_max":0.3}
+  description:     TEXT
+  importance:      FLOAT NULL                    // 模型中的特征重要性 (定期自动回填)
+}
+
+// ========== Feature View 与 Model 的绑定 ==========
+ModelFeatureBinding {
+  model_id:        VARCHAR(128)                  // 模型唯一标识
+  view_id:         INT → FeatureView.view_id
+  feature_ids:     JSON                          // 该模型使用的 Feature IDs
+  slot_mapping:    JSON                          // feature_id → model_slot_id 映射
+  created_at:      TIMESTAMP
+}</div>
+
+<div class="I">
+<strong>关键设计决策说明</strong><br><br>
+<strong>① 为什么 Entity 和 Feature View 分离？</strong><br>
+同一个 User 实体可以有 10+ 个 Feature View (画像、行为序列、实时统计、embedding...)，每个 View 有不同的更新频率和 Owner。分离后可以独立管理生命周期——下线一个 View 不影响其他 View。<br><br>
+<strong>② 为什么有 version？</strong><br>
+特征逻辑变更 (如 age 分桶边界调整) 会产生新版本。旧模型继续使用旧版本，新模型使用新版本。通过 version 实现特征的平滑迁移，避免"改一个特征崩所有模型"。<br><br>
+<strong>③ join_keys 复合实体设计</strong><br>
+交叉特征 (如 user×ad 的曝光次数) 需要复合 key。join_keys=["user_id","ad_id"] 意味着这个 Entity 的 KV key 是两个 ID 的拼接。在线 serving 时需要对每个候选广告动态拼接 key。<br><br>
+<strong>④ transform_dsl 统一表达</strong><br>
+字节 ByteFeature 使用自研 DSL (类 SQL 语法)，如: <code style="font-family:var(--font-mono);font-size:10px">SELECT BUCKET(age,[18,25,35,45]) AS age_bucket, COUNT(click) OVER (SLIDING 1h) AS click_1h FROM user_events</code><br>
+这段 DSL 同时编译为 Spark UDF (离线) 和 C++ 算子 (在线)，从根源保证训练-serving 一致性。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2: Registration Flow ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+特征注册流程 — 从定义到上线的完整工作流
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">特征上线全流程 (字节内部实践，通常 2~5 天)</div>
+
+<strong>Step 1: 需求评审</strong> <span class="tag">算法 + 工程</span><br>
+<span style="color:var(--color-text-tertiary)">├ 算法工程师提出特征需求 (特征名、业务含义、预期收益)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 评估是否已有同类特征可复用 (查特征市场)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 确定特征 Entity 归属、更新频率、存储预算</span><br><br>
+
+<strong>Step 2: 特征注册</strong> <span class="tag">Feature Platform SDK / Web UI</span><br>
+<span style="color:var(--color-text-tertiary)">├ 通过 SDK 或管理后台填写 Entity → FeatureView → Feature 三层定义</span><br>
+<span style="color:var(--color-text-tertiary)">├ 编写 Transform DSL (特征加工逻辑)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 配置 KV key 模板、序列化格式、TTL、默认值</span><br>
+<span style="color:var(--color-text-tertiary)">└ 自动生成 feature_config.pb (模型侧引用配置)</span><br><br>
+
+<strong>Step 3: 数据验证</strong> <span class="tag">自动化</span><br>
+<span style="color:var(--color-text-tertiary)">├ 离线回放: 用历史数据跑 Transform DSL，验证输出值域和分布</span><br>
+<span style="color:var(--color-text-tertiary)">├ Schema 检查: dtype 与上游数据源类型匹配</span><br>
+<span style="color:var(--color-text-tertiary)">├ 一致性测试: 对同一批数据分别跑离线链路和在线链路，对比输出 diff &lt; 0.01%</span><br>
+<span style="color:var(--color-text-tertiary)">└ 穿越检测: 检查 Transform 中是否引用了未来时间点的数据</span><br><br>
+
+<strong>Step 4: 离线评估</strong> <span class="tag">自动化 AB</span><br>
+<span style="color:var(--color-text-tertiary)">├ 将新特征加入训练样本，重训模型</span><br>
+<span style="color:var(--color-text-tertiary)">├ 对比 AUC/GAUC/NDCG 等离线指标提升</span><br>
+<span style="color:var(--color-text-tertiary)">└ 特征重要性 (Gain/SHAP) 排名，确认新特征有正向贡献</span><br><br>
+
+<strong>Step 5: 灰度上线</strong> <span class="tag">AB 实验平台</span><br>
+<span style="color:var(--color-text-tertiary)">├ Feature View status: DEV → STAGING (灰度 5% 流量)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 观察在线指标: CTR/CVR/RPM 变化、特征缺失率、延迟</span><br>
+<span style="color:var(--color-text-tertiary)">├ 通过后扩量: STAGING → PROD (100% 流量)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 失败自动回滚: 监控到指标恶化 → 自动切回旧特征版本</span><br><br>
+
+<strong>Step 6: 持续运维</strong> <span class="tag">自动化监控</span><br>
+<span style="color:var(--color-text-tertiary)">├ PSI 漂移监控 (每日自动计算)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 缺失率/覆盖率日报</span><br>
+<span style="color:var(--color-text-tertiary)">├ 定期特征裁剪 (重要性低于阈值的特征标记 DEPRECATED)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 血缘追踪: 上游表变更自动通知下游模型 Owner</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">注册 SDK 代码示例 (Python)</div>
+<div class="code">from bytefeature import FeatureStore
+
+fs = FeatureStore(project="ads_dsp")
+
+# Step 1: 注册 Entity
+user_entity = fs.register_entity(
+    name="user",
+    join_keys=["user_id"],
+    description="广告系统用户实体"
+)
+
+# Step 2: 注册 Feature View
+user_stats = fs.register_feature_view(
+    name="user_realtime_stats_v3",
+    entity=user_entity,
+    source=StreamSource(
+        kafka_topic="user_behavior_log",
+        timestamp_field="event_time"
+    ),
+    features=[
+        Feature("click_1h", dtype=INT64,
+                transform="COUNT(action='click') "
+                          "OVER SLIDING(1h)",
+                default=0),
+        Feature("ctr_7d", dtype=FLOAT32,
+                transform="SUM(click)/SUM(imp) "
+                          "OVER TUMBLING(7d)",
+                default=-1.0,
+                monitoring={"psi_max": 0.25}),
+        Feature("last_click_cat", dtype=SEQ_INT64,
+                transform="COLLECT_LIST(category) "
+                          "OVER SLIDING(30min) "
+                          "LIMIT 20",
+                max_seq_len=20),
+    ],
+    store=TairStore(
+        key_template="uf:stats:{user_id}",
+        ttl_seconds=86400,
+        serializer="flatbuffer"
+    ),
+    schedule="realtime",
+    owner="ads-algo@bytedance.com"
+)</div>
+</div>
+<div class="c">
+<div class="ct">注册 SDK 代码示例 (阿里 PAI-FeatureStore)</div>
+<div class="code">from pai_featurestore import FeatureStore
+
+fs = FeatureStore(project="alimama_dsp")
+
+# Step 1: 注册 Entity
+user = fs.entity(
+    name="user",
+    join_keys=["user_id"]
+)
+
+# Step 2: 注册 Feature View (离线)
+user_profile = fs.feature_view(
+    name="user_profile",
+    entity=user,
+    source=MaxComputeSource(
+        table="dw.user_profile_daily",
+        partition="ds"
+    ),
+    schema=[
+        ("gender", INT64, {"default": 0}),
+        ("age_bucket", INT64, {
+            "transform": "BUCKET(age,"
+                         "[18,25,35,45,55])",
+            "default": 0
+        }),
+        ("city_id", INT64, {"default": 0}),
+        ("purchase_level", INT64, {
+            "default": 2  # 中等消费力
+        }),
+    ],
+    online_store=ABFSStore(
+        key_template="up:{user_id}",
+        ttl=30*86400  # 30天
+    ),
+    schedule="0 3 * * *",  # 每天凌晨3点
+    materialization="incremental"
+)
+
+# Step 3: 注册交叉特征
+user_x_adv = fs.feature_view(
+    name="user_advertiser_cross",
+    entity=fs.entity("user_x_advertiser",
+        join_keys=["user_id","advertiser_id"]),
+    source=StreamSource(
+        topic="ad_interaction_log"),
+    schema=[
+        ("impression_cnt_7d", INT64, {}),
+        ("click_cnt_7d", INT64, {}),
+        ("cross_ctr_7d", FLOAT32, {
+            "default": -1.0
+        }),
+    ],
+    online_store=ABFSStore(
+        key_template="uxadv:{user_id}_{advertiser_id}",
+        ttl=7*86400),
+    schedule="realtime"
+)</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3: Transform DSL Engine ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+Transform DSL 引擎 — 一份代码，两条链路
+</div>
+
+<div class="sub">Transform DSL 是 Feature Entity 体系中保证训练-serving 一致性的核心技术。一段 DSL 声明式地描述特征加工逻辑，由编译器自动生成离线代码 (Spark/Flink) 和在线代码 (C++/Go)。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">DSL 编译器架构</div>
+
+<span class="p pp">Transform DSL 源码</span> (统一声明式语法)
+<br>↓ <span style="color:var(--color-text-tertiary)">Parser → AST (抽象语法树)</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">语义校验: 类型检查、函数签名校验、时间窗口合法性</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">优化: 常量折叠、公共子表达式消除</span>
+<br>
+<br><span style="color:var(--color-text-tertiary)">分支编译 (Code Generation):</span>
+<br>├─→ <span class="p pb">Spark UDF (Java/Scala)</span> → 离线批计算链路 (T+1)
+<br>├─→ <span class="p pg">Flink Operator (Java)</span> → 近线流计算链路 (分钟级)
+<br>├─→ <span class="p po">C++ Operator</span> → 在线 Ad Server 嵌入式计算 (毫秒级)
+<br>└─→ <span class="p pa">Python UDF</span> → 训练样本拼接 (样本工厂)
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">DSL 支持的核心算子</div>
+<div class="cd">
+<table class="tbl">
+<tr><th style="width:30%">算子类别</th><th>具体算子</th></tr>
+<tr><td>数值变换</td><td><code style="font-family:var(--font-mono);font-size:10px">BUCKET(x, boundaries)</code> 分桶<br><code style="font-family:var(--font-mono);font-size:10px">LOG(x)</code> 对数<br><code style="font-family:var(--font-mono);font-size:10px">NORMALIZE(x, min, max)</code> 归一化<br><code style="font-family:var(--font-mono);font-size:10px">CLIP(x, lo, hi)</code> 截断</td></tr>
+<tr><td>聚合 (窗口)</td><td><code style="font-family:var(--font-mono);font-size:10px">COUNT/SUM/AVG/MAX/MIN</code><br><code style="font-family:var(--font-mono);font-size:10px">OVER SLIDING(1h) / TUMBLING(1d)</code><br><code style="font-family:var(--font-mono);font-size:10px">DISTINCT_COUNT</code><br><code style="font-family:var(--font-mono);font-size:10px">TOP_K(field, k)</code></td></tr>
+<tr><td>序列操作</td><td><code style="font-family:var(--font-mono);font-size:10px">COLLECT_LIST(x) LIMIT N</code><br><code style="font-family:var(--font-mono);font-size:10px">LAST_N(x, n)</code> 最近 N 条<br><code style="font-family:var(--font-mono);font-size:10px">WEIGHTED_SUM(seq, weights)</code></td></tr>
+<tr><td>Hash / 编码</td><td><code style="font-family:var(--font-mono);font-size:10px">HASH(x, bucket_size)</code><br><code style="font-family:var(--font-mono);font-size:10px">CROSS_HASH(a, b, size)</code> 交叉 Hash<br><code style="font-family:var(--font-mono);font-size:10px">GEOHASH(lat, lng, precision)</code></td></tr>
+<tr><td>条件 / 映射</td><td><code style="font-family:var(--font-mono);font-size:10px">CASE WHEN ... THEN ... ELSE ...</code><br><code style="font-family:var(--font-mono);font-size:10px">COALESCE(a, b, default)</code><br><code style="font-family:var(--font-mono);font-size:10px">IF_NULL(x, fallback)</code></td></tr>
+<tr><td>时间</td><td><code style="font-family:var(--font-mono);font-size:10px">TIME_DIFF(now, event_time, 'hour')</code><br><code style="font-family:var(--font-mono);font-size:10px">HOUR_OF_DAY(ts)</code><br><code style="font-family:var(--font-mono);font-size:10px">IS_WEEKEND(ts)</code></td></tr>
+</table>
+</div>
+</div>
+<div class="c">
+<div class="ct">DSL 一致性校验机制</div>
+<div class="cd">
+<strong>① 编译期校验</strong><br>
+DSL Parser 对每个算子做强类型检查。如 <code style="font-family:var(--font-mono);font-size:10px">BUCKET(x, ...)</code> 要求 x 为数值类型，编译期报错而非运行时。<br><br>
+<strong>② 单元测试自动生成</strong><br>
+注册时平台自动用历史数据生成 100 条 test case，分别跑 Spark UDF 和 C++ Operator，assert 输出完全相同。<br><br>
+<strong>③ 在线 shadow 模式</strong><br>
+新版本 DSL 上线前，在线服务同时跑新旧两个版本 (旧版本作为实际输出，新版本仅计算不使用)，对比输出 diff。连续 24h diff &lt; 0.01% 才允许切换。<br><br>
+<strong>④ 定期回放校验</strong><br>
+每周自动抽样 1% 在线请求，用离线链路重算特征值，与在线 serving 的实际值对比。diff &gt; 0.1% 触发 P1 告警。<br><br>
+<span class="p pp">DSL Compiler</span>
+<span class="p pb">Shadow Runner</span>
+<span class="p pg">Consistency Checker</span>
+</div>
+</div>
+</div>
+
+<div class="W">
+<strong>字节内部的一个真实案例</strong>: 某团队手动在 C++ serving 代码中将 age 分桶实现为 <code style="font-family:var(--font-mono);font-size:10px">age/10</code> (整除)，但离线 Spark 中用了 <code style="font-family:var(--font-mono);font-size:10px">BUCKET(age,[0,18,25,35,45,55])</code> (不等宽)。这个不一致导致线上 CTR 模型的 AUC 比离线低了 0.8%，直到 3 个月后才被发现。这是推动 ByteFeature DSL 引擎立项的直接原因。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: Storage Architecture ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+存储架构 — Feature Entity 的多层存储体系
+</div>
+
+<div class="sub">Feature Entity 的特征值最终需要存储在高性能 KV 系统中供在线 serving 使用。但不同时效性的特征有不同的写入和读取模式，因此需要分层存储。</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#185FA5">
+<div class="ct" style="color:#185FA5">4.1 KV key 设计规范</div>
+<div class="cd">
+<strong>Key 模板</strong>: <code style="font-family:var(--font-mono);font-size:10px">{namespace}:{view_abbr}:{entity_keys}</code><br><br>
+<strong>具体示例:</strong><br>
+<code style="font-family:var(--font-mono);font-size:10px">uf:profile:123456</code> → User#123456 的画像特征<br>
+<code style="font-family:var(--font-mono);font-size:10px">uf:stats:123456</code> → User#123456 的统计特征<br>
+<code style="font-family:var(--font-mono);font-size:10px">af:meta:789012</code> → Ad#789012 的基础属性<br>
+<code style="font-family:var(--font-mono);font-size:10px">cf:uxad:123456_789012</code> → User×Ad 交叉特征<br>
+<code style="font-family:var(--font-mono);font-size:10px">af:emb:789012</code> → Ad#789012 的 embedding<br><br>
+<strong>命名空间</strong>: uf=user feature, af=ad feature, cf=cross feature, sf=slot feature<br><br>
+<strong>Value 序列化</strong>: FlatBuffer (字节首选，零拷贝反序列化) 或 Protobuf (阿里首选)。一个 key 对应一个 Feature View 的所有字段打包在一起，避免多次 KV 查询。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#185FA5">
+<div class="ct" style="color:#185FA5">4.2 存储分层策略</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>层级</th><th>技术</th><th>容量</th><th>延迟</th><th>用途</th></tr>
+<tr><td><strong>L0 进程内</strong></td><td>LRU Cache<br>(Go sync.Map /<br>C++ unordered_map)</td><td>~100K key<br>~500MB</td><td>&lt;0.01ms</td><td>热门广告特征、高频用户</td></tr>
+<tr><td><strong>L1 本机</strong></td><td>RocksDB<br>(嵌入式 KV)</td><td>~50GB<br>SSD</td><td>&lt;0.1ms</td><td>当日活跃用户画像预热</td></tr>
+<tr><td><strong>L2 分布式</strong></td><td>Tair / Redis Cluster<br>(ByteKV / ABFS)</td><td>~10TB<br>分布式内存</td><td>0.5~2ms<br>(同机房)</td><td>全量在线特征存储</td></tr>
+<tr><td><strong>L3 离线</strong></td><td>Hive / HDFS<br>/ OSS</td><td>~PB 级</td><td>秒~分钟</td><td>训练数据、历史快照</td></tr>
+</table>
+<br>
+<strong>读取路径</strong>: L0 miss → L1 miss → L2 查询 → 填充 L0/L1<br>
+<strong>写入路径</strong>: 离线 BulkLoad → L2 ; 近线 Flink → L2 ; 热 key 预热 → L1
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>Tair/ByteKV 集群的典型配置 (字节 DSP 线上规模)</strong><br><br>
+<strong>集群规模</strong>: 200+ 节点，总内存 ~20TB，支撑 ~5 亿 key<br>
+<strong>读 QPS</strong>: 峰值 ~2000万/s (Pipeline MGet 合并后)<br>
+<strong>写 QPS</strong>: 离线批量导入 ~50万/s (凌晨)，近线写入 ~100万/s (全天)<br>
+<strong>P99 延迟</strong>: Get &lt;1ms, MGet(100key) &lt;2ms (同机房)，跨机房 &lt;5ms<br>
+<strong>数据分片</strong>: 按 entity_key 一致性 Hash 分片，同一用户的所有特征落在同一分片<br>
+<strong>过期策略</strong>: 离线特征 TTL=30d，近线特征 TTL=1~7d，在线特征不持久化<br>
+<strong>序列化</strong>: FlatBuffer (同一 Feature View 的所有字段打包为一个 value)，单个 value 平均 ~200 Bytes，最大 ~10KB (含行为序列)
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">4.3 离线批量导入 (BulkLoad)</div>
+<div class="cd">
+<strong>流程</strong>:<br>
+Spark Job 输出 → SST 文件 (Tair 底层格式) → 直接 Ingest 到 Tair<br><br>
+<strong>优势</strong>: 绕过 Tair 的写入链路，直接写底层存储引擎，吞吐提升 10 倍+<br><br>
+<strong>全量 vs 增量</strong>:<br>
+• 全量: 每天凌晨 2:00~5:00，重建全量用户画像 (~5亿 key)，耗时 ~2h<br>
+• 增量: 每天 6:00~8:00，仅更新当天有行为的用户 (~5000万 key)，耗时 ~20min<br><br>
+<strong>双缓冲切换</strong>: 写入到 shadow 表 → 验证通过 → 原子切换指针，对线上零影响<br><br>
+<span class="p pb">Spark</span> <span class="p pa">SST Builder</span> <span class="p pg">Tair BulkLoad</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">4.4 近线流式写入</div>
+<div class="cd">
+<strong>流程</strong>:<br>
+Kafka → Flink 窗口聚合 → Micro-batch 写入 Tair<br><br>
+<strong>写入优化</strong>:<br>
+• Flink Sink 使用 Micro-batch (每 5s 攒批) 而非逐条写入<br>
+• Pipeline 模式批量 MSet，单批 1000~5000 key<br>
+• 写入限流: 峰值 QPS 限制，防止打爆 Tair<br><br>
+<strong>幂等写入</strong>:<br>
+Flink checkpoint + Tair CAS (Compare And Swap) 保证 exactly-once<br><br>
+<strong>近线覆盖离线</strong>:<br>
+同一个 key 的值以最新写入为准 (last-write-wins)。近线特征的 TTL 短于离线特征，过期后自动回退到离线版本<br><br>
+<span class="p pg">Flink</span> <span class="p pa">Kafka</span> <span class="p pg">Tair Sink</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: Online Serving ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">5</div>
+在线 serving 架构 — Feature Entity 如何服务一次广告请求
+</div>
+
+<div class="sub">在线 serving 是 Feature Entity 对外的核心接口。Ad Server 的 Feature Assembler 模块根据 Entity + Feature View 定义，自动拼接特征。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">Feature Assembler 处理一次精排请求的完整时序</div>
+
+<strong>T+0ms</strong> — <span class="p po">请求到达</span> 解析 Bid Request<br>
+<span style="color:var(--color-text-tertiary)">├ 提取 device_id → 查 OneID mapping → user_id = "U123456"</span><br>
+<span style="color:var(--color-text-tertiary)">├ 提取候选广告列表: [ad_001, ad_002, ..., ad_500] (精排 500 条)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 提取上下文: app_id, slot_id, timestamp, ip, geo</span><br><br>
+
+<strong>T+0.5ms</strong> — <span class="p pp">构造 KV key 集合</span> (Feature Key Generator)<br>
+<span style="color:var(--color-text-tertiary)">├ 遍历模型的 ModelFeatureBinding，获取所需 Feature View 列表</span><br>
+<span style="color:var(--color-text-tertiary)">├ User Entity keys (固定，不随候选变化):</span><br>
+<span style="color:var(--color-text-tertiary)">│   "uf:profile:U123456", "uf:stats:U123456",</span><br>
+<span style="color:var(--color-text-tertiary)">│   "uf:seq:U123456", "uf:emb:U123456"   → 4 keys</span><br>
+<span style="color:var(--color-text-tertiary)">├ Ad Entity keys (每个候选一组):</span><br>
+<span style="color:var(--color-text-tertiary)">│   "af:meta:{ad_id}", "af:stats:{ad_id}",</span><br>
+<span style="color:var(--color-text-tertiary)">│   "af:emb:{ad_id}"   → 500 × 3 = 1500 keys</span><br>
+<span style="color:var(--color-text-tertiary)">├ Cross Entity keys (每个候选一组):</span><br>
+<span style="color:var(--color-text-tertiary)">│   "cf:uxad:U123456_{ad_id}",</span><br>
+<span style="color:var(--color-text-tertiary)">│   "cf:uxadv:U123456_{adv_id}"  → ~1000 keys</span><br>
+<span style="color:var(--color-text-tertiary)">└ 总计: ~2500 keys (去重后)</span><br><br>
+
+<strong>T+1ms</strong> — <span class="p pb">并行 MGet</span> (异步 I/O)<br>
+<span style="color:var(--color-text-tertiary)">├ L0 LRU Cache 命中: ~60% (热门广告的 af:* key)</span><br>
+<span style="color:var(--color-text-tertiary)">├ L1 RocksDB 命中: ~25% (当日活跃用户的 uf:* key)</span><br>
+<span style="color:var(--color-text-tertiary)">├ L2 Tair Pipeline MGet: 剩余 ~375 keys → 一次网络往返</span><br>
+<span style="color:var(--color-text-tertiary)">└ 同一 Tair 分片的 keys 合并为一个 MGet 命令 (通常 3~5 个分片)</span><br><br>
+
+<strong>T+4ms</strong> — <span class="p pg">反序列化 + 特征提取</span><br>
+<span style="color:var(--color-text-tertiary)">├ FlatBuffer 零拷贝反序列化 (不需要内存分配)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 从每个 View 的 value 中提取需要的 Feature 字段</span><br>
+<span style="color:var(--color-text-tertiary)">└ 对 SEQ 类型字段做截断 (max_seq_len) 和 padding</span><br><br>
+
+<strong>T+5ms</strong> — <span class="p po">在线特征计算</span> (Context Features)<br>
+<span style="color:var(--color-text-tertiary)">├ HOUR_OF_DAY(timestamp) → hour_bucket</span><br>
+<span style="color:var(--color-text-tertiary)">├ GEOHASH(lat, lng, 5) → geohash_code</span><br>
+<span style="color:var(--color-text-tertiary)">├ 竞价景观: 候选广告数量、出价分布统计</span><br>
+<span style="color:var(--color-text-tertiary)">└ Transform DSL (在线版) 执行 C++ 算子</span><br><br>
+
+<strong>T+6ms</strong> — <span class="p pp">特征拼接</span> (Slot Assignment)<br>
+<span style="color:var(--color-text-tertiary)">├ 按 ModelFeatureBinding.slot_mapping 将每个特征值分配到对应 slot</span><br>
+<span style="color:var(--color-text-tertiary)">├ 共享特征 (User + Context): 只填充一份，500 条样本复用指针</span><br>
+<span style="color:var(--color-text-tertiary)">├ 个性化特征 (Ad + Cross): 每条样本独立填充</span><br>
+<span style="color:var(--color-text-tertiary)">├ 缺失值处理: 按 Feature.default_value 填充</span><br>
+<span style="color:var(--color-text-tertiary)">│   → INT64 缺失: 填 0 (映射到 default embedding)</span><br>
+<span style="color:var(--color-text-tertiary)">│   → FLOAT 缺失: 填 -1.0 (模型学习到 -1 意味着缺失)</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 统计类缺失: 层级回退 (ad→advertiser→category→global)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 输出: FeatureBatch (FlatBuffer 序列化的 500 × N_slots 矩阵)</span><br><br>
+
+<strong>T+7ms</strong> — <span class="p pp">发送到模型 serving</span><br>
+<span style="color:var(--color-text-tertiary)">└ gRPC 发送 FeatureBatch → TF Serving / Triton → 返回 pCTR/pCVR</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Feature Assembler 核心优化</div>
+<div class="cd">
+<strong>① 预取 (Prefetch)</strong><br>
+用户特征在请求进入的第一毫秒就启动异步拉取，与 OneID mapping、流量过滤并行执行。等到精排需要特征时，用户特征已就绪。<br><br>
+<strong>② 共享特征零拷贝</strong><br>
+User + Context 特征在 500 个样本中完全相同。Feature Assembler 只存一份，模型 serving 侧通过 broadcast 机制复用，避免 500 倍内存放大。<br><br>
+<strong>③ Key 批量合并</strong><br>
+将落在同一 Tair 分片的 keys 合并为一个 Pipeline MGet 命令。假设 10 个分片，2500 keys 变成 10 次 MGet (每次 ~250 key)，总网络往返只有 1~2 次 (并行)。<br><br>
+<strong>④ 热 key 保护</strong><br>
+头部广告的 key 极热 (如品牌广告)，L0 缓存命中率 &gt;99%。对 Tair 侧做热 key 自动识别 + 本地缓存复制，防止单分片过载。
+</div>
+</div>
+<div class="c">
+<div class="ct">降级与容错策略</div>
+<div class="cd">
+<strong>① Tair 超时降级</strong><br>
+MGet 设置 5ms 超时。超时后放弃未返回的 key，使用 default_value。线上观测: Tair P99.9 偶发 &gt;5ms (毛刺)，但特征缺失对单次请求影响可控。<br><br>
+<strong>② Feature View 级别熔断</strong><br>
+如果某个 View (如 user_realtime_stats) 的缺失率突增 &gt;50%，自动熔断该 View，全部使用 default_value。防止上游 Flink 故障导致模型效果雪崩。<br><br>
+<strong>③ 离线特征兜底</strong><br>
+近线特征 TTL 过期后，自动回退到离线版本。设计原则: 离线特征的 TTL 必须长于近线特征。<br><br>
+<strong>④ 全局降级开关</strong><br>
+极端情况 (Tair 集群不可用): 关闭远端特征拉取，仅使用在线计算的 Context 特征 + L0/L1 缓存的用户特征。模型效果下降但服务不中断。<br><br>
+<span class="p pr">Circuit Breaker</span>
+<span class="p pa">Fallback Manager</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: Training Integration ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">6</div>
+训练集成 — Point-in-time Join 与样本工厂
+</div>
+
+<div class="sub">Feature Entity 不仅服务在线 serving，也服务离线训练。核心挑战是：训练样本的特征值必须是"事件发生时刻"的特征值，而非"现在"的值。这就是 Point-in-time Join。</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#993556">
+<div class="ct" style="color:#993556">6.1 Point-in-time Join 原理</div>
+<div class="cd">
+<strong>问题场景</strong>:<br>
+样本: 用户 U1 在 T=10:05 点击了广告 A1<br>
+训练需要 T=10:05 时刻 U1 的特征值 (而非当前的)<br><br>
+<strong>错误做法</strong>:<br>
+直接用最新的 user_profile 表 join，拿到的是 T+1 的值 → 特征穿越<br><br>
+<strong>正确做法 (Point-in-time Join)</strong>:<br>
+对每条样本的 event_time，找到该时刻之前最近的特征快照<br><br>
+<code style="font-family:var(--font-mono);font-size:10px">SELECT s.*, f.* 
+FROM samples s 
+ASOF JOIN feature_snapshots f
+  ON s.user_id = f.user_id
+  AND f.snapshot_time <= s.event_time
+ORDER BY f.snapshot_time DESC
+LIMIT 1</code><br><br>
+<strong>阿里 PAI-FeatureStore</strong> 原生支持 ASOF JOIN 语义，自动处理时间对齐。<br>
+<strong>字节 ByteFeature</strong> 的样本工厂 (Sample Factory) 实现了同样功能。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#993556">
+<div class="ct" style="color:#993556">6.2 样本工厂 (Sample Factory)</div>
+<div class="cd">
+<strong>完整流程</strong>:<br><br>
+① <strong>Label 生成</strong>:<br>
+曝光日志 (T) + 点击日志 (T+Δ) + 转化日志 (T+Δ') → Flink Interval Join → 带 label 的样本骨架 (user_id, ad_id, event_time, click, convert)<br><br>
+② <strong>特征回填</strong>:<br>
+样本骨架 × Feature Entity 的离线快照 → Point-in-time Join → 完整训练样本<br><br>
+对每个 Feature View:<br>
+• <strong>离线 View</strong>: 用当天 (或前一天) 的 Hive 分区 join<br>
+• <strong>近线 View</strong>: 用 Flink 输出的分钟级快照 (存在 HDFS 的 mini-batch 文件) join<br>
+• <strong>在线 View</strong>: 用请求日志中的 Context 字段直接填充 (无需 join)<br><br>
+③ <strong>样本输出</strong>:<br>
+TFRecord / Parquet 格式 → HDFS → 模型训练 Pipeline<br><br>
+<span class="p pk">Flink Join</span>
+<span class="p pb">Spark PIT Join</span>
+<span class="p pa">HDFS</span>
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>近线特征的 Point-in-time Join 难点</strong><br><br>
+近线特征 (如 user_click_1h) 是分钟级更新的，不像离线特征有明确的日分区。解决方案: Flink 在输出到 Tair 的同时，将每个窗口的聚合结果同步写一份到 HDFS (Mini-batch Snapshot，按 5min 分片)。样本工厂在做 PIT Join 时，找到 event_time 所在的 5min 区间，取对应快照。<br><br>
+字节的实现: Flink Sink 双写 (Tair + HDFS Parquet)，HDFS 端按 <code style="font-family:var(--font-mono);font-size:10px">view_name/dt=2024-01-15/hh=10/mm=05/</code> 路径组织，支持高效的时间范围查找。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Governance & Monitoring ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">7</div>
+治理与监控 — Feature Entity 的运维体系
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">7.1 特征血缘追踪</div>
+<div class="cd">
+<strong>血缘关系链</strong>:<br>
+<code style="font-family:var(--font-mono);font-size:10px">数据源 (Hive表/Kafka topic)
+ → Feature View (Transform DSL)
+  → Feature (字段)
+   → ModelFeatureBinding
+    → Model (线上模型)
+     → AB 实验</code><br><br>
+<strong>核心能力:</strong><br>
+• <strong>影响分析</strong>: 上游 Hive 表 schema 变更 → 自动扫描所有下游 Feature View → 通知 Owner<br>
+• <strong>模型溯源</strong>: 模型效果异常 → 反查所有使用的 Feature → 定位哪个 Feature 出问题<br>
+• <strong>废弃检测</strong>: 某 Feature 没有任何 Model 引用 → 自动标记 DEPRECATED → 7天后下线<br><br>
+<span class="p pp">Metadata Service</span>
+<span class="p pb">Lineage Graph (DAG)</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">7.2 特征质量监控</div>
+<div class="cd">
+<strong>监控指标矩阵</strong> (每个 Feature 独立监控):<br><br>
+<table class="tbl">
+<tr><th>指标</th><th>阈值</th><th>监控粒度</th></tr>
+<tr><td>PSI (分布稳定性)</td><td>&gt;0.25 P1 告警</td><td>每日</td></tr>
+<tr><td>缺失率</td><td>&gt;历史 2x P2 告警</td><td>每小时</td></tr>
+<tr><td>覆盖率 (非零)</td><td>下降 &gt;10% P2</td><td>每小时</td></tr>
+<tr><td>值域异常</td><td>超出训练 min/max</td><td>实时</td></tr>
+<tr><td>延迟 (近线)</td><td>&gt;5min 数据延迟</td><td>实时</td></tr>
+<tr><td>serving 延迟</td><td>P99 &gt;3ms</td><td>实时</td></tr>
+<tr><td>训练-serving diff</td><td>&gt;0.1%</td><td>每周</td></tr>
+</table>
+<br>
+<span class="p pr">Prometheus</span>
+<span class="p pa">Grafana</span>
+<span class="p pr">PagerDuty</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">7.3 特征市场 & 复用</div>
+<div class="cd">
+<strong>特征市场 (Feature Market)</strong><br>
+一个内部 Web 平台，类似"特征的应用商店"：<br><br>
+• <strong>搜索</strong>: 按关键词/Entity/标签搜索已有特征<br>
+• <strong>详情页</strong>: 特征定义、数据样本、分布图、使用该特征的模型列表、Owner 联系方式<br>
+• <strong>一键引用</strong>: 在自己的 Model 配置中直接引用他人的 Feature View，无需重复开发<br>
+• <strong>质量评分</strong>: 根据 PSI、缺失率、使用广度自动打分<br><br>
+<strong>字节数据</strong>: ByteFeature 特征市场上线后，新特征的重复开发率从 30% 降到 5%<br><br>
+<span class="p pp">Feature Market Web</span>
+<span class="p pb">Search Service (ES)</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">7.4 特征生命周期管理</div>
+<div class="cd">
+<strong>状态机</strong>:<br>
+<code style="font-family:var(--font-mono);font-size:10px">DEV → STAGING → PROD → DEPRECATED → DELETED</code><br><br>
+<strong>自动化策略:</strong><br>
+• <strong>DEV → STAGING</strong>: 通过数据校验 + 离线评估后自动流转<br>
+• <strong>STAGING → PROD</strong>: 灰度 AB 实验通过后人工审批<br>
+• <strong>PROD → DEPRECATED</strong>: 90天无 Model 引用 → 自动标记<br>
+• <strong>DEPRECATED → DELETED</strong>: 标记后 30天，Owner 不反对则自动删除<br><br>
+<strong>版本管理</strong>:<br>
+每次 Transform DSL 变更产生新 version。旧 version 不删除，直到所有引用的 Model 迁移到新 version。支持一键回滚到任意历史 version<br><br>
+<span class="p pg">Lifecycle Manager</span>
+<span class="p pa">Version Control</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 8: Tech Stack Summary ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">8</div>
+完整技术栈与中间件清单
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">元数据 & 管理层</div>
+<div class="cd">
+<span class="p pp">MySQL/PostgreSQL</span> 元数据存储<br>
+<span class="p pp">Feature Platform API</span> REST/gRPC 管理接口<br>
+<span class="p pp">Feature Market Web</span> React 前端 + 搜索<br>
+<span class="p pp">Elasticsearch</span> 特征搜索索引<br>
+<span class="p pp">DSL Compiler</span> 自研编译器 (ANTLR)<br>
+<span class="p pp">Git</span> DSL 版本管理<br>
+<span class="p pp">Airflow/DolphinScheduler</span> 调度
+</div>
+</div>
+<div class="c">
+<div class="ct">数据生产层</div>
+<div class="cd">
+<span class="p pb">Spark 3.x</span> 离线批计算<br>
+<span class="p pb">Flink 1.17+</span> 近线流计算<br>
+<span class="p pb">Kafka 3.x</span> 消息队列<br>
+<span class="p pb">Hive/Iceberg</span> 离线数据仓库<br>
+<span class="p pb">HDFS/OSS</span> 分布式存储<br>
+<span class="p pb">TF/PyTorch</span> Embedding 预计算<br>
+<span class="p pb">DataX/Canal</span> 数据同步
+</div>
+</div>
+<div class="c">
+<div class="ct">在线服务层</div>
+<div class="cd">
+<span class="p po">Tair/Redis Cluster</span> 在线 KV 存储<br>
+<span class="p po">RocksDB</span> 本地嵌入式 KV<br>
+<span class="p po">Feature Assembler</span> C++/Go 特征拼接<br>
+<span class="p po">TF Serving/Triton</span> 模型推理<br>
+<span class="p po">FlatBuffer/Protobuf</span> 序列化<br>
+<span class="p po">gRPC</span> 服务间通信<br>
+<span class="p po">Consul/Nacos</span> 服务发现
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">监控 & 治理层</div>
+<div class="cd">
+<span class="p pr">Prometheus</span> 指标采集 | <span class="p pr">Grafana</span> 可视化大盘 | <span class="p pr">PagerDuty/飞书</span> 告警<br>
+<span class="p pa">Lineage Service</span> 血缘追踪 | <span class="p pa">Consistency Checker</span> 一致性校验<br>
+<span class="p pg">AB Platform</span> 灰度实验 | <span class="p pg">Feature Quality Dashboard</span> 质量看板
+</div>
+</div>
+<div class="c">
+<div class="ct">训练集成层</div>
+<div class="cd">
+<span class="p pk">Sample Factory</span> 样本拼接服务 | <span class="p pk">PIT Join Engine</span> 时间对齐引擎<br>
+<span class="p pb">Parameter Server</span> 模型训练 | <span class="p pb">Model Registry</span> 模型管理<br>
+<span class="p pa">TFRecord/Parquet</span> 样本格式 | <span class="p pa">HDFS Snapshot</span> 特征快照
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+Feature Entity 平台规模参考 (字节 DSP): Entity 类型 ~15 种 | Feature View ~300+ 个 | Feature 字段 ~3000+ 个 | 日均 serving QPS 峰值 ~2000万/s | 特征总存储 ~20TB (Tair) + ~500TB (Hive)
+</div>
+</div>

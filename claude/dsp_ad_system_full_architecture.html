@@ -1,0 +1,532 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.root{font-family:var(--font-sans);color:var(--color-text-primary);padding:1rem 0;max-width:680px}
+.phase{margin-bottom:2rem}
+.phase-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;user-select:none}
+.phase-num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0}
+.phase-title{font-size:15px;font-weight:500}
+.phase-sub{font-size:12px;color:var(--color-text-secondary);margin-left:36px;margin-bottom:10px;line-height:1.6}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-left:36px;margin-bottom:6px}
+.card{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.5;flex:1;min-width:140px;max-width:220px;background:var(--color-background-primary)}
+.card-t{font-weight:500;font-size:12px;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.card-d{color:var(--color-text-secondary);font-size:11px;line-height:1.5}
+.mw{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.mw-store{background:var(--color-background-info);color:var(--color-text-info)}
+.mw-mq{background:var(--color-background-warning);color:var(--color-text-warning)}
+.mw-compute{background:var(--color-background-success);color:var(--color-text-success)}
+.mw-model{background:#EEEDFE;color:#534AB7}
+.mw-search{background:#FAECE7;color:#993C1D}
+.arrow-down{text-align:center;margin:8px 0;color:var(--color-text-tertiary);font-size:18px;margin-left:36px}
+.sep{height:0.5px;background:var(--color-border-tertiary);margin:16px 0 16px 36px}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 16px 0;padding:10px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary)}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--color-text-secondary)}
+.detail-box{margin-left:36px;padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.7;margin-bottom:8px}
+.flow-arrow{display:flex;align-items:center;justify-content:center;gap:4px;margin:6px 0 6px 36px;font-size:11px;color:var(--color-text-tertiary)}
+.flow-arrow svg{width:16px;height:16px}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-left:36px;margin-bottom:6px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-left:36px;margin-bottom:6px}
+</style>
+<div class="root">
+<div style="font-size:16px;font-weight:500;margin-bottom:4px">DSP 广告投放系统全链路架构</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:8px">参考字节跳动穿山甲 / 阿里妈妈 Uni-DSP 线上方案</div>
+
+<div class="legend">
+<div class="legend-item"><span class="mw mw-store">■</span> 存储/缓存</div>
+<div class="legend-item"><span class="mw mw-mq">■</span> 消息队列/流</div>
+<div class="legend-item"><span class="mw mw-compute">■</span> 计算引擎</div>
+<div class="legend-item"><span class="mw mw-model">■</span> 模型服务</div>
+<div class="legend-item"><span class="mw mw-search">■</span> 检索引擎</div>
+</div>
+
+<!-- Phase 0: Ad Request -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:var(--color-background-info);color:var(--color-text-info)">0</div>
+<div class="phase-title">广告请求接入 — Ad Exchange / SSP 竞价请求</div>
+</div>
+<div class="phase-sub">ADX/SSP 通过 OpenRTB 协议发送 Bid Request，携带设备信息、App/媒体信息、地理位置等。DSP 需在 ~100ms 内完成全链路处理并返回 Bid Response。</div>
+<div class="row">
+<div class="card">
+<div class="card-t">Bid Request 解析</div>
+<div class="card-d">解析 device_id (IDFA/OAID/IMEI)、IP、UA、媒体 ID、广告位 ID、banner 尺寸等。<br><span class="mw mw-compute">Nginx</span> <span class="mw mw-compute">Go/C++ Gateway</span></div>
+</div>
+<div class="card">
+<div class="card-t">流量过滤 & 反作弊</div>
+<div class="card-d">无效流量过滤 (IVT)、爬虫/刷量检测、频次控制初筛。<br><span class="mw mw-store">Bloom Filter</span> <span class="mw mw-store">Redis Bitmap</span></div>
+</div>
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 1: User ID & Profile -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:#EEEDFE;color:#534AB7">1</div>
+<div class="phase-title">用户识别 & 画像特征获取</div>
+</div>
+<div class="phase-sub">将设备标识映射到统一用户 ID (OneID)，并行拉取离线画像、实时画像、LBS 画像等多维特征。这是整个链路中特征准备的核心环节。</div>
+
+<div class="detail-box">
+<strong>OneID 打通 (字节: DataRangers / 阿里: UMID)</strong><br>
+通过 device_id → cookie → phone_hash 等多级映射，将跨端设备归一到同一用户。映射表存储在分布式 KV 中，支持毫秒级查询。
+<br><span class="mw mw-store">Tair/Redis Cluster</span> <span class="mw mw-store">RocksDB</span> <span class="mw mw-compute">ID-Mapping Service</span>
+</div>
+
+<div class="grid3">
+<div class="card" style="border-left:2px solid #185FA5">
+<div class="card-t" style="color:#185FA5">离线用户画像</div>
+<div class="card-d">
+T+1 批量计算<br>
+• 基础属性: 性别/年龄/城市/学历<br>
+• 兴趣标签: 长期兴趣偏好<br>
+• 消费能力: LTV 分层<br>
+• 人群包: DMP 圈选<br>
+<span class="mw mw-compute">Spark/MR</span>
+<span class="mw mw-store">Hive/HDFS</span>
+<span class="mw mw-store">Tair/Redis</span>
+</div>
+</div>
+<div class="card" style="border-left:2px solid #0F6E56">
+<div class="card-t" style="color:#0F6E56">近线/流式画像</div>
+<div class="card-d">
+分钟~小时级更新<br>
+• 近N小时行为序列<br>
+• Session 内点击/转化<br>
+• 实时兴趣漂移<br>
+• 短期频次统计<br>
+<span class="mw mw-mq">Kafka/RocketMQ</span>
+<span class="mw mw-compute">Flink</span>
+<span class="mw mw-store">Tair/Redis</span>
+</div>
+</div>
+<div class="card" style="border-left:2px solid #D85A30">
+<div class="card-t" style="color:#D85A30">在线实时特征</div>
+<div class="card-d">
+请求级实时计算<br>
+• 当前请求上下文<br>
+• 实时 CTR 统计<br>
+• 广告主预算余额<br>
+• 竞价景观特征<br>
+<span class="mw mw-compute">在线计算模块</span>
+<span class="mw mw-store">本地 Cache</span>
+</div>
+</div>
+</div>
+
+<div class="detail-box">
+<strong>特征时效性分层 (Feature Timeliness Hierarchy)</strong><br>
+<strong>离线特征 (T+1)</strong>: Hive SQL → Spark ETL → 写入 Tair/Redis。覆盖 90%+ 基础画像，每天凌晨全量/增量更新。<br>
+<strong>近线特征 (分钟级)</strong>: 用户行为日志 → Kafka → Flink 窗口聚合 (滑动/滚动窗口) → 写入 Tair。典型场景：近 30min 点击品类分布、近 1h 搜索关键词 embedding。<br>
+<strong>在线特征 (毫秒级)</strong>: 在 Ad Server 内部计算，如当前时间分桶、请求来源 App、本次竞价广告数量、广告主实时消耗。不落存储，就地使用。<br>
+字节方案中使用 ByteFeature (内部特征平台) 统一管理三级特征的注册、存储和在线服务。
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 2: Recall -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:var(--color-background-warning);color:var(--color-text-warning)">2</div>
+<div class="phase-title">多路召回 (Recall / Matching)</div>
+</div>
+<div class="phase-sub">从全量广告库 (百万~千万级) 中快速筛选出候选集 (千级)。多路并行召回，最终取并集，是保证召回率的核心。</div>
+
+<div class="grid3">
+<div class="card" style="border-top:2px solid #534AB7">
+<div class="card-t">向量召回 (ANN)</div>
+<div class="card-d">
+用户 embedding 与广告 embedding 做近邻检索<br>
+• 双塔模型 (DSSM) 离线训练 user/ad tower<br>
+• 用户侧: 实时 serving 或预计算<br>
+• 广告侧: 全量索引每小时更新<br>
+<span class="mw mw-search">Faiss/Milvus</span>
+<span class="mw mw-model">TF Serving</span>
+<span class="mw mw-store">HNSW Index</span>
+<br><span class="tag">Top-K: ~200</span> <span class="tag">延迟 &lt;5ms</span>
+</div>
+</div>
+<div class="card" style="border-top:2px solid #1D9E75">
+<div class="card-t">行为召回 (Behavior)</div>
+<div class="card-d">
+基于用户历史行为序列触发召回<br>
+• U2I: 用户→点击/转化广告→同广告主/品类倒排<br>
+• I2I: ItemCF 协同过滤<br>
+• 行为序列 → Look-alike 人群扩散<br>
+<span class="mw mw-store">倒排索引</span>
+<span class="mw mw-store">Redis Sorted Set</span>
+<span class="mw mw-compute">离线 CF 计算</span>
+<br><span class="tag">Top-K: ~300</span>
+</div>
+</div>
+<div class="card" style="border-top:2px solid #D85A30">
+<div class="card-t">定向召回 (Targeting)</div>
+<div class="card-d">
+广告主设定的定向条件召回<br>
+• 人群包定向 (DMP圈选)<br>
+• 基础属性定向 (地域/性别/年龄)<br>
+• 关键词/兴趣定向<br>
+• Re-targeting 重定向<br>
+<span class="mw mw-search">倒排索引</span>
+<span class="mw mw-store">Bitmap</span>
+<br><span class="tag">精确匹配</span>
+</div>
+</div>
+</div>
+
+<div class="grid2">
+<div class="card" style="border-top:2px solid #BA7517">
+<div class="card-t">热门/探索召回</div>
+<div class="card-d">
+全局热门广告 + 冷启动探索<br>
+• 全局 CTR Top-N<br>
+• 新广告冷启动池 (E&E)<br>
+• 按品类/行业热门<br>
+<span class="mw mw-store">Redis</span> <span class="mw mw-compute">Bandit 策略</span>
+</div>
+</div>
+<div class="card" style="border-top:2px solid #D4537E">
+<div class="card-t">实时意图召回</div>
+<div class="card-d">
+Session 级短期意图触发<br>
+• 搜索 query → 广告关键词匹配<br>
+• 近 N 次浏览商品类目<br>
+• 实时 embedding (DIEN 序列模型)<br>
+<span class="mw mw-compute">Flink</span> <span class="mw mw-search">ES/Faiss</span>
+</div>
+</div>
+</div>
+
+<div class="detail-box">
+<strong>召回阶段关键设计</strong><br>
+<strong>多路并行</strong>: 各路召回独立执行并设超时 (通常 10-15ms)，结果合并去重后进入粗排。<br>
+<strong>向量召回细节</strong>: 字节使用自研 VE-KNN 引擎 (基于 HNSW + PQ 量化)；阿里使用 Proxima/Aitheta。用户 embedding 在线实时推理 (双塔 user tower 前向)，广告 embedding 离线全量构建索引。<br>
+<strong>行为召回细节</strong>: 用户近 7 天点击/转化的广告 ID → 取同广告主其他创意、同品类竞品广告、I2I 相似广告。倒排索引 key=广告属性，value=广告 ID 列表。<br>
+<strong>候选集规模</strong>: 各路合并后通常 1000~3000 条广告进入粗排。
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 3: Feature Assembly -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:var(--color-background-success);color:var(--color-text-success)">3</div>
+<div class="phase-title">特征拼接 & 特征工程 (Feature Assembly)</div>
+</div>
+<div class="phase-sub">将用户特征、广告特征、上下文特征、交叉特征拼接为完整的特征向量，供排序模型使用。这一步直接决定模型效果。</div>
+
+<div class="grid2">
+<div class="card">
+<div class="card-t">用户侧特征 (User Features)</div>
+<div class="card-d">
+• 静态画像 (性别/年龄/设备) <span class="tag">离线</span><br>
+• 历史行为序列 (点击/转化序列 ID) <span class="tag">近线</span><br>
+• 实时行为 (本次 session 浏览序列) <span class="tag">在线</span><br>
+• 用户 embedding (双塔/预训练) <span class="tag">近线</span><br>
+• 统计特征 (7d CTR/CVR) <span class="tag">近线</span>
+</div>
+</div>
+<div class="card">
+<div class="card-t">广告侧特征 (Ad Features)</div>
+<div class="card-d">
+• 广告基础属性 (品类/品牌/价格) <span class="tag">离线</span><br>
+• 创意特征 (图片 embedding/文本 embedding) <span class="tag">离线</span><br>
+• 广告统计 (历史 CTR/CVR/CPC) <span class="tag">近线</span><br>
+• 广告主预算/出价 <span class="tag">在线</span><br>
+• 广告质量分 <span class="tag">近线</span>
+</div>
+</div>
+</div>
+<div class="grid2">
+<div class="card">
+<div class="card-t">上下文特征 (Context Features)</div>
+<div class="card-d">
+• 时间特征 (小时/星期/节假日) <span class="tag">在线</span><br>
+• 设备特征 (OS/屏幕/网络) <span class="tag">在线</span><br>
+• 媒体特征 (App/广告位/场景) <span class="tag">在线</span><br>
+• 地理特征 (城市/商圈/POI) <span class="tag">在线</span>
+</div>
+</div>
+<div class="card">
+<div class="card-t">交叉特征 (Cross Features)</div>
+<div class="card-d">
+• 用户×广告: 历史曝光/点击次数 <span class="tag">近线</span><br>
+• 用户×品类: 品类偏好度 <span class="tag">近线</span><br>
+• 用户×广告主: 历史转化率 <span class="tag">近线</span><br>
+• 场景×时间: 时段转化率 <span class="tag">离线</span>
+</div>
+</div>
+</div>
+
+<div class="detail-box">
+<strong>Feature Store 架构 (字节 ByteFeature / 阿里 FeatureStore)</strong><br>
+<strong>特征注册</strong>: 统一特征元信息管理，包括特征名、类型、来源、更新频率、Owner。<br>
+<strong>离线写入</strong>: Spark Job → Hive Table → Bulk Load → Tair/Redis (T+1 全量 + 增量)。<br>
+<strong>近线写入</strong>: Kafka → Flink → Tair/Redis (分钟级滑动窗口聚合)。<br>
+<strong>在线读取</strong>: Ad Server 批量 MGet (Tair Pipeline / Redis Cluster)，P99 延迟 &lt; 3ms。<br>
+<strong>特征缓存</strong>: 本地 LRU Cache 缓存热 key (命中率 &gt; 85%)，减少远端访问。<br>
+<span class="mw mw-store">Tair / Redis Cluster</span>
+<span class="mw mw-mq">Kafka</span>
+<span class="mw mw-compute">Flink</span>
+<span class="mw mw-compute">Spark</span>
+<span class="mw mw-store">Hive/HDFS</span>
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 4: Pre-ranking -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:#FBEAF0;color:#993556">4</div>
+<div class="phase-title">粗排 (Pre-ranking) — 千→百</div>
+</div>
+<div class="phase-sub">用轻量模型快速筛选，从召回候选集 (~1000-3000) 中选出 Top 200-500 进入精排。核心是速度与效果的平衡。</div>
+<div class="row">
+<div class="card">
+<div class="card-t">粗排模型</div>
+<div class="card-d">
+• 双塔模型 (内积打分) 或浅层 DNN<br>
+• 特征交叉少，仅用核心特征<br>
+• 向量内积 + 简单 MLP 打分<br>
+• 单条推理 &lt; 0.1ms<br>
+<span class="mw mw-model">TF Serving Lite</span>
+<span class="tag">GPU/CPU</span>
+</div>
+</div>
+<div class="card">
+<div class="card-t">粗排截断策略</div>
+<div class="card-d">
+• 按 pCTR × bid 排序截断<br>
+• 多目标融合: α·pCTR + β·pCVR<br>
+• 保证各路召回最低配额<br>
+• 广告主多样性保障<br>
+<span class="tag">Top 200-500</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 5: Fine-ranking -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:#FAECE7;color:#993C1D">5</div>
+<div class="phase-title">精排 (Fine-ranking) — 百→十</div>
+</div>
+<div class="phase-sub">使用复杂深度模型对候选广告精细打分。这是整个链路中模型最重、特征最全的环节，直接决定广告效果。</div>
+
+<div class="grid2">
+<div class="card" style="border-left:2px solid #993C1D">
+<div class="card-t">精排模型架构</div>
+<div class="card-d">
+<strong>字节方案</strong>: 基于 DIN/DIEN 变体<br>
+• Attention 机制建模用户行为序列<br>
+• Multi-Task Learning (MTL): pCTR + pCVR + pLTV<br>
+• MMOE / PLE 多任务架构<br>
+• 特征交叉: DCN-V2 / AutoInt<br>
+<strong>阿里方案</strong>: DIEN → CAN → MIMN<br>
+• 长序列建模 (SIM/SDIM 千级行为)<br>
+• 多场景迁移学习 (STAR/SAMD)<br>
+<span class="mw mw-model">TF Serving / TRT</span>
+<span class="tag">GPU P99 &lt; 15ms</span>
+</div>
+</div>
+<div class="card" style="border-left:2px solid #993C1D">
+<div class="card-t">多目标预估</div>
+<div class="card-d">
+<strong>CTR 预估</strong>: 点击率预测，核心指标<br>
+<strong>CVR 预估</strong>: 转化率预测 (ESMM 解决样本偏差)<br>
+<strong>深度转化</strong>: 付费/次留/ROI 预估<br>
+<strong>出价校准</strong>: Isotonic Regression 校准<br>
+<strong>融合公式</strong>:<br>
+eCPM = bid × pCTR × pCVR × 1000<br>
+<span class="tag">OCPC/OCPM 出价</span>
+</div>
+</div>
+</div>
+
+<div class="detail-box">
+<strong>精排模型 Serving 架构</strong><br>
+<strong>模型训练</strong>: 离线全量训练 (天级) + 在线增量训练 (小时级/实时)。训练数据: Kafka → Flink → 样本拼接 → Parameter Server / GPU 集群。<br>
+<strong>模型部署</strong>: TF SavedModel → TF Serving / TensorRT 优化 → GPU 集群 (V100/A100)。<br>
+<strong>实时更新 (Online Learning)</strong>: 字节使用 Monolith (自研 PS)，阿里使用 XDL/PAI。增量参数每 10-30min 推送到 Serving。<br>
+<strong>长序列优化</strong>: 用户历史行为序列可达 1000+，使用 SIM (Search-based Interest Model) 先检索 Top-K 相关行为，再做 Attention，将复杂度从 O(N) 降到 O(K)。<br>
+<span class="mw mw-model">TF Serving / TensorRT</span>
+<span class="mw mw-compute">Parameter Server</span>
+<span class="mw mw-mq">Kafka</span>
+<span class="mw mw-compute">Flink 样本拼接</span>
+<span class="mw mw-store">HDFS 训练数据</span>
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 6: Re-ranking -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:#EAF3DE;color:#3B6D11">6</div>
+<div class="phase-title">重排 & 机制 (Re-ranking & Mechanism)</div>
+</div>
+<div class="phase-sub">在精排打分基础上，叠加业务规则、预算控制、多样性、频次控制等机制约束，输出最终展示广告。</div>
+
+<div class="grid3">
+<div class="card">
+<div class="card-t">预算 Pacing</div>
+<div class="card-d">
+• 广告主日预算平滑消耗<br>
+• PID 控制器 + 预算分配<br>
+• 按小时粒度调节参竞率<br>
+<span class="mw mw-store">Redis (预算计数器)</span>
+</div>
+</div>
+<div class="card">
+<div class="card-t">频次控制</div>
+<div class="card-d">
+• 用户×广告 曝光频次上限<br>
+• 用户×广告主 日频次<br>
+• 疲劳度衰减模型<br>
+<span class="mw mw-store">Redis Bitmap/HLL</span>
+</div>
+</div>
+<div class="card">
+<div class="card-t">多样性 & 规则</div>
+<div class="card-d">
+• 同品类/广告主去重<br>
+• 竞品互斥规则<br>
+• 品牌安全 (Brand Safety)<br>
+• 政策合规过滤<br>
+</div>
+</div>
+</div>
+
+<div class="detail-box">
+<strong>竞价机制</strong><br>
+<strong>GSP (Generalized Second Price)</strong>: 传统竞价，赢者支付第二高价。<br>
+<strong>VCG</strong>: 激励兼容机制，适用于多广告位场景。<br>
+<strong>OCPC/OCPM 智能出价</strong>: 广告主设定目标 CPA，系统自动调整出价。公式: real_bid = target_CPA × pCVR × calibration_factor。<br>
+<strong>深度转化出价 (字节)</strong>: 支持次留/付费/ROI 等深度目标，使用多阶段转化模型链式预估。
+</div>
+</div>
+
+<div class="arrow-down">▼</div>
+
+<!-- Phase 7: Response & Logging -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:var(--color-background-info);color:var(--color-text-info)">7</div>
+<div class="phase-title">广告返回 & 数据回流</div>
+</div>
+<div class="phase-sub">返回竞价结果，同时将全链路日志异步写入数据管线，支撑模型训练、归因分析和报表。</div>
+
+<div class="grid2">
+<div class="card">
+<div class="card-t">Bid Response</div>
+<div class="card-d">
+• 返回获胜广告的创意素材 URL<br>
+• 出价金额 (Win Price)<br>
+• 曝光/点击/转化追踪 URL<br>
+• 全链路耗时 &lt; 100ms<br>
+<span class="mw mw-compute">Ad Server</span>
+</div>
+</div>
+<div class="card">
+<div class="card-t">数据回流管线</div>
+<div class="card-d">
+• 曝光/点击/转化日志 → Kafka<br>
+• 实时样本拼接 → Flink Join<br>
+• 归因窗口: 点击归因 7d / 曝光归因 1d<br>
+• 数据仓库: Hive/ClickHouse<br>
+<span class="mw mw-mq">Kafka</span>
+<span class="mw mw-compute">Flink</span>
+<span class="mw mw-store">ClickHouse</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- Feature Pipeline Detail -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:var(--color-background-danger);color:var(--color-text-danger)">★</div>
+<div class="phase-title">特征管线全景 (Feature Pipeline Overview)</div>
+</div>
+
+<div style="margin-left:36px;margin-bottom:8px;font-size:12px;padding:10px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);line-height:2">
+<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+<span style="font-weight:500;font-size:13px">离线链路 (T+1 batch)</span>
+</div>
+<span class="mw mw-store">用户行为日志</span> → <span class="mw mw-store">HDFS/Hive</span> → <span class="mw mw-compute">Spark ETL</span> → <span class="mw mw-store">特征 Hive 表</span> → <span class="mw mw-compute">Bulk Load</span> → <span class="mw mw-store">Tair/Redis</span>
+<br>
+<div style="display:flex;align-items:center;gap:6px;margin:8px 0 6px">
+<span style="font-weight:500;font-size:13px">近线链路 (分钟级 streaming)</span>
+</div>
+<span class="mw mw-store">行为埋点 SDK</span> → <span class="mw mw-mq">Kafka Topic</span> → <span class="mw mw-compute">Flink (窗口聚合)</span> → <span class="mw mw-store">Tair/Redis</span>
+<br>
+<span style="font-size:11px;color:var(--color-text-tertiary)">典型窗口: 滑动 30min/1h/6h，滚动 1d。聚合算子: count/sum/avg/topK/embedding_update</span>
+<br>
+<div style="display:flex;align-items:center;gap:6px;margin:8px 0 6px">
+<span style="font-weight:500;font-size:13px">在线链路 (毫秒级 online)</span>
+</div>
+<span class="mw mw-compute">Ad Server 请求解析</span> → <span class="mw mw-compute">实时特征计算</span> → <span style="font-size:11px">直接拼入特征向量 (不落存储)</span>
+<br>
+<div style="display:flex;align-items:center;gap:6px;margin:8px 0 6px">
+<span style="font-weight:500;font-size:13px">样本回流链路</span>
+</div>
+<span class="mw mw-store">曝光/点击/转化日志</span> → <span class="mw mw-mq">Kafka</span> → <span class="mw mw-compute">Flink 样本拼接</span> → <span class="mw mw-store">训练样本 HDFS</span> → <span class="mw mw-model">模型训练 (PS/GPU)</span> → <span class="mw mw-model">模型推送 Serving</span>
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- Middleware Summary -->
+<div class="phase">
+<div class="phase-header">
+<div class="phase-num" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">⚙</div>
+<div class="phase-title">核心中间件清单</div>
+</div>
+<div class="grid3">
+<div class="card">
+<div class="card-t"><span class="mw mw-store">存储层</span></div>
+<div class="card-d">
+<strong>Tair/Redis Cluster</strong> — 在线特征 KV 存储 (P99 &lt; 1ms)<br>
+<strong>HDFS/Hive</strong> — 离线数据仓库<br>
+<strong>ClickHouse</strong> — OLAP 分析 & 报表<br>
+<strong>RocksDB</strong> — 嵌入式 KV (本地缓存)<br>
+<strong>HBase</strong> — 宽表存储 (用户画像)
+</div>
+</div>
+<div class="card">
+<div class="card-t"><span class="mw mw-compute">计算层</span></div>
+<div class="card-d">
+<strong>Flink</strong> — 实时流计算 (特征/样本)<br>
+<strong>Spark</strong> — 离线批计算 (画像/ETL)<br>
+<strong>Parameter Server</strong> — 分布式模型训练<br>
+<strong>K8s + GPU 集群</strong> — 模型训练/推理<br>
+<strong>Ray</strong> — 分布式调度 (AutoML)
+</div>
+</div>
+<div class="card">
+<div class="card-t"><span class="mw mw-search">检索/服务</span></div>
+<div class="card-d">
+<strong>Faiss/Milvus</strong> — 向量近邻检索<br>
+<strong>Elasticsearch</strong> — 倒排索引 (定向)<br>
+<strong>TF Serving/Triton</strong> — 模型在线推理<br>
+<strong>Kafka/RocketMQ</strong> — 消息队列<br>
+<strong>Consul/Nacos</strong> — 服务发现/配置
+</div>
+</div>
+</div>
+</div>
+
+<div class="sep"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6;margin-left:36px">
+全链路端到端延迟预算: 总计 ≤100ms | 用户识别 ~5ms | 特征拉取 ~10ms (并行) | 召回 ~10ms (并行) | 粗排 ~5ms | 精排 ~15ms (GPU) | 重排+机制 ~5ms | 网络开销 ~50ms
+</div>
+</div>

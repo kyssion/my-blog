@@ -1,0 +1,709 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}.pk{background:#FBEAF0;color:#72243E}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">Feature Registry 生产级架构全解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature Registry / 阿里 PAI-FeatureStore MetaService / 开源 Feast Registry — Feature Store 的"中央神经系统"</div>
+
+<!-- ==================== SECTION 0 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+Feature Registry 的本质 — 它是整个 Feature Store 的元数据中枢
+</div>
+
+<div class="sub">之前讨论的所有组件——Entity、Feature View、执行引擎、Feature Serving、向量索引——都需要一个地方来"注册自己的存在"并查询其他组件的信息。Feature Registry 就是这个中枢。它不存储特征值本身 (那是 Tair 的事)，而是存储<strong>关于特征的信息</strong> (元数据)。</div>
+
+<div class="I">
+<strong>一个类比</strong>: 如果 Feature Store 是一家图书馆——Tair 是书架 (存放实际的书/特征值)，Feature Serving 是借阅服务 (帮你找书)，执行引擎是编目加工室 (生产新书)——那 Feature Registry 就是<strong>图书馆目录系统</strong> (知道每本书叫什么名、在哪个架子、谁写的、什么时候入库的、被谁借过)。没有目录系统，图书馆的其他一切都无法运转。<br><br>
+<strong>Feature Registry 的核心职责可归纳为七个字: "注册、发现、治理"。</strong>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 1: What It Manages ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+Registry 管理什么 — 十类核心元数据对象
+</div>
+
+<div class="sub">Feature Registry 中存储的不只是 Entity 和 Feature View 的定义——它管理着 Feature Store 生态中所有需要被"知道"的对象。</div>
+
+<table class="tbl">
+<tr><th style="width:18%">元数据对象</th><th style="width:35%">存储内容</th><th>谁写入</th><th>谁读取</th></tr>
+<tr><td><span class="p pp">Entity</span></td><td>entity_name, join_keys, description, owner</td><td>算法工程师 (SDK/UI)</td><td>Feature View、Feature Serving、执行引擎</td></tr>
+<tr><td><span class="p pp">Feature View</span></td><td>view_name, entity, source, transform_dsl, store_config, schedule, version, status</td><td>算法工程师 (SDK/UI)</td><td>执行引擎、Feature Serving、监控系统</td></tr>
+<tr><td><span class="p pp">Feature</span></td><td>feature_name, dtype, default_value, emb_dim, monitoring_rules, description</td><td>随 Feature View 注册</td><td>Feature Serving (拼接配置)、模型训练</td></tr>
+<tr><td><span class="p pb">Model Binding</span></td><td>model_id → [view_ids] → [feature_ids] → slot_mapping</td><td>模型平台/算法工程师</td><td>Feature Serving (知道模型需要哪些特征)</td></tr>
+<tr><td><span class="p pg">Data Source</span></td><td>Hive 表名/Kafka topic/schema/partition 策略</td><td>数据平台/自动发现</td><td>执行引擎 (知道从哪里读数据)</td></tr>
+<tr><td><span class="p po">Materialization Job</span></td><td>job_id, job_type(Spark/Flink), 状态, 资源配置, 最近运行记录</td><td>执行引擎</td><td>监控系统、Lifecycle Manager</td></tr>
+<tr><td><span class="p pa">Lineage (血缘)</span></td><td>上下游依赖关系: 数据源→Feature View→Feature→Model</td><td>执行引擎 + 注册时自动推导</td><td>影响分析、变更通知</td></tr>
+<tr><td><span class="p pr">Quality Metrics</span></td><td>每个 Feature 的 PSI、缺失率、覆盖率历史</td><td>Quality Gate / 监控 Job</td><td>告警系统、Feature Market</td></tr>
+<tr><td><span class="p pk">Access Control</span></td><td>Project→Team→User 权限, Feature View 的读写权限</td><td>管理员</td><td>API Gateway (鉴权)</td></tr>
+<tr><td><span class="p pp">Artifact</span></td><td>编译产物版本、JAR/SO 路径、编译参数 hash</td><td>执行引擎 (Job Builder)</td><td>Job Deployer</td></tr>
+</table>
+
+<div class="I">
+<strong>字节 ByteFeature Registry 的实际规模</strong>: ~15 种 Entity、~300 个 Feature View、~3000 个 Feature 字段、~50 个 Model Binding、~500 条 Lineage 边、~200 个 Materialization Job。元数据总量不大 (MySQL 表 ~10MB)，但其<strong>读 QPS 极高</strong> (Feature Serving 每次请求都要查 Registry 获取 feature_config)，因此必须有多级缓存。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2: Architecture ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+内部架构 — Registry Service 的五大子系统
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">Feature Registry 部署架构</div>
+
+<span class="p pp">Registry API (gRPC + REST)</span> — 对外统一入口<br>
+<span style="color:var(--color-text-tertiary)">├ gRPC: 供 Feature Serving SDK / 执行引擎 / 模型平台调用 (高性能，内部系统)</span><br>
+<span style="color:var(--color-text-tertiary)">├ REST: 供 Web UI (Feature Market) / Python SDK / CLI 调用 (易用性)</span><br>
+<span style="color:var(--color-text-tertiary)">└ K8s Deployment: 4 Pod, 无状态, 水平扩缩</span><br><br>
+
+<span class="p pp">Metadata Store (MySQL 主库 + 只读副本)</span> — 元数据持久化<br>
+<span style="color:var(--color-text-tertiary)">├ MySQL 8.0, 主从复制 (1 主 + 2 只读)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 10 张核心表: entities, feature_views, features, model_bindings, ...</span><br>
+<span style="color:var(--color-text-tertiary)">├ 写入量: ~100 QPS (注册/变更低频操作)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 读取量: 只读副本承接查询，主库只处理写入</span><br><br>
+
+<span class="p pb">Cache Layer (Redis + 进程内 LRU)</span> — 高频读加速<br>
+<span style="color:var(--color-text-tertiary)">├ Redis: 缓存 feature_config.pb (序列化的 Protobuf)，TTL=5min</span><br>
+<span style="color:var(--color-text-tertiary)">├ 进程内 LRU: Registry API Pod 内的 Go sync.Map, TTL=30s</span><br>
+<span style="color:var(--color-text-tertiary)">├ 命中路径: Feature Serving 启动时拉取全量 → 之后增量更新 (Watch 模式)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 缓存失效: CDC 事件触发 (MySQL Binlog → 主动失效对应 key)</span><br><br>
+
+<span class="p pg">Event Bus (Kafka topic: feature_registry_events)</span> — 变更通知<br>
+<span style="color:var(--color-text-tertiary)">├ 任何元数据变更 → 产生事件 → 发送到 Kafka</span><br>
+<span style="color:var(--color-text-tertiary)">├ 消费者: 执行引擎 (触发 Job 重建)、Feature Serving (热更新配置)</span><br>
+<span style="color:var(--color-text-tertiary)">│          监控系统 (更新告警规则)、Lineage Service (更新血缘图)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 事件类型: VIEW_CREATED, VIEW_UPDATED, VIEW_DEPRECATED, FEATURE_ADDED, ...</span><br><br>
+
+<span class="p pa">Search Index (Elasticsearch)</span> — 特征发现与搜索<br>
+<span style="color:var(--color-text-tertiary)">├ 索引: Registry 中所有对象的 name/description/tags/owner</span><br>
+<span style="color:var(--color-text-tertiary)">├ 支持全文搜索: "找一个和用户消费能力相关的特征"</span><br>
+<span style="color:var(--color-text-tertiary)">├ 支持 faceted filter: 按 Entity、Owner、Status 过滤</span><br>
+<span style="color:var(--color-text-tertiary)">└ 同步方式: MySQL CDC → Kafka → ES Sink</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">谁读 Registry (消费者)</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>消费者</th><th>读什么</th><th>频率</th></tr>
+<tr><td>Feature Serving SDK</td><td>feature_config.pb (model→view→feature 映射)</td><td>启动全量 + Watch 增量</td></tr>
+<tr><td>执行引擎</td><td>Feature View 完整定义 (source, transform, store)</td><td>事件驱动 (变更时)</td></tr>
+<tr><td>Airflow DAG</td><td>Feature View 的 schedule + 依赖关系</td><td>DAG 解析时</td></tr>
+<tr><td>Model Serving</td><td>Model Binding (slot mapping)</td><td>模型加载时</td></tr>
+<tr><td>Feature Market UI</td><td>全部元数据 (搜索/浏览)</td><td>用户操作时</td></tr>
+<tr><td>监控系统</td><td>monitoring_rules (PSI 阈值等)</td><td>定时轮询</td></tr>
+<tr><td>Lineage Service</td><td>上下游依赖关系</td><td>事件驱动</td></tr>
+</table>
+</div>
+</div>
+<div class="c">
+<div class="ct">谁写 Registry (生产者)</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>生产者</th><th>写什么</th><th>频率</th></tr>
+<tr><td>算法工程师 (SDK)</td><td>Entity/View/Feature 定义</td><td>日均 ~15 次变更</td></tr>
+<tr><td>执行引擎</td><td>Job 状态、运行记录</td><td>每分钟心跳</td></tr>
+<tr><td>Quality Gate</td><td>PSI/缺失率等指标</td><td>每次 Materialization</td></tr>
+<tr><td>模型平台</td><td>Model Binding</td><td>模型上线时</td></tr>
+<tr><td>Auto-Discovery</td><td>数据源 Schema 变更</td><td>定期扫描</td></tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3: Core Capabilities ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+七大核心能力 — Feature Registry 必须实现什么
+</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#534AB7">
+<div class="ct" style="color:#534AB7">能力一: CRUD + 版本管理</div>
+<div class="cd">
+<strong>基础 CRUD</strong>: 注册/查询/更新/删除 Entity、Feature View、Feature。<br><br>
+<strong>版本管理</strong>是 Registry 区别于普通数据库表的核心能力:<br>
+• Feature View 每次 Transform DSL 或 Schema 变更 → version++<br>
+• 旧 version 不删除，保留完整定义 (供回滚和旧模型引用)<br>
+• 每个 version 有独立的 status 状态机: DEV→STAGING→PROD→DEPRECATED→DELETED<br><br>
+<div class="code">// 版本表设计
+feature_view_versions {
+  view_id:     INT
+  version:     INT
+  transform_dsl: TEXT     // 该版本的完整 DSL
+  schema_hash:  CHAR(64)  // Schema fingerprint
+  status:      ENUM(DEV,STAGING,PROD,DEPRECATED)
+  created_at:  TIMESTAMP
+  created_by:  VARCHAR
+  changelog:   TEXT       // 变更说明
+  PRIMARY KEY (view_id, version)
+}</div>
+
+<strong>字节规则</strong>: PROD 状态的 version 不可修改 (immutable)。要变更只能创建新 version。这保证了线上正在使用的特征定义永远不会被意外修改。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#534AB7">
+<div class="ct" style="color:#534AB7">能力二: 特征发现 (Feature Discovery)</div>
+<div class="cd">
+<strong>问题</strong>: 300 个 Feature View、3000 个 Feature。算法工程师怎么知道自己需要的特征是否已存在？<br><br>
+<strong>Feature Market (特征市场)</strong> — 基于 Registry 的搜索前端:<br><br>
+<strong>搜索</strong>: 全文搜索 + 标签过滤<br>
+• "用户消费" → 命中 user_profile.purchase_level<br>
+• tag=["广告","用户侧"] → 列出所有用户广告特征<br>
+• entity="User" AND status="PROD" → 所有在线用户特征<br><br>
+
+<strong>详情页</strong> (每个 Feature View):<br>
+• 定义: Transform DSL、Schema、更新频率<br>
+• 质量: 近 7 天 PSI 图、缺失率趋势<br>
+• 使用方: 哪些模型引用了它 (来自 Model Binding)<br>
+• 数据样本: 最近一批产出的 Top-10 采样<br>
+• Owner: 负责人邮箱/飞书群<br>
+• 评分: 基于质量指标 + 使用广度的综合评分<br><br>
+
+<strong>一键引用</strong>: 算法工程师点击"使用此特征" → 自动生成 Model Binding 代码片段<br><br>
+<span class="p pb">Elasticsearch</span> <span class="p pb">React Frontend</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">能力三: 血缘追踪 (Lineage)</div>
+<div class="cd">
+<strong>血缘是一个有向无环图 (DAG)</strong>，描述数据从源到消费的完整链路:<br><br>
+<div class="code">Hive Table: dw.user_events
+  ↓ (source_of)
+Feature View: user_realtime_stats_v3
+  ↓ (produces)
+Feature: click_1h, ctr_6h, ...
+  ↓ (used_by)
+Model Binding: ctr_model_v5
+  ↓ (deployed_in)
+AB Experiment: exp_20241120_ctr</div>
+
+<strong>血缘的三大用途</strong>:<br><br>
+<strong>① 影响分析 (Impact Analysis)</strong>:<br>
+上游 Hive 表 dw.user_events 要加一列 → 自动找出所有受影响的 Feature View → 通知 Owner → 避免 Schema 变更导致下游 Job 崩溃。<br><br>
+<strong>② 根因定位 (Root Cause)</strong>:<br>
+模型 CTR 下降 → 反查所有使用的 Feature → 哪个 Feature 的 PSI 异常 → 追溯到哪个 Hive 表数据缺失。全链路 5 分钟内定位根因。<br><br>
+<strong>③ 废弃检测 (Dead Feature Detection)</strong>:<br>
+某 Feature View 90 天内没有任何 Model Binding 引用 → 自动标记 DEPRECATED → 节省 Tair 存储和 Flink 计算资源。<br><br>
+
+<strong>实现</strong>: 血缘关系存储在 MySQL 的关系表 (lineage_edges) 中，用 Neo4j 或 JanusGraph 做图查询加速 (字节早期用 MySQL 递归 CTE，后迁移到图数据库)。<br><br>
+<span class="p pg">MySQL lineage_edges</span> <span class="p pg">Neo4j (可选)</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">能力四: 变更通知 (Change Propagation)</div>
+<div class="cd">
+Registry 中的每一次写操作都必须触发下游系统响应。这是 Registry 的"神经传导"功能。<br><br>
+
+<strong>事件驱动机制</strong>:<br>
+<div class="code">// Registry 写操作 → 事件产生
+MySQL INSERT/UPDATE
+  ↓ (Debezium CDC)
+Kafka topic: feature_registry_events
+  ↓ (多消费者)
+├→ 执行引擎: VIEW_UPDATED → 重新编译 DSL + 重建 Job
+├→ Feature Serving: VIEW_UPDATED → 热更新 feature_config
+├→ 监控系统: FEATURE_ADDED → 注册新的监控规则
+├→ Lineage Service: 更新血缘图
+├→ Search Index: 更新 ES 索引
+└→ Audit Log: 记录变更历史 (谁在什么时候改了什么)</div>
+
+<strong>事件格式</strong>:<br>
+<div class="code">{
+  "event_type": "FEATURE_VIEW_UPDATED",
+  "timestamp": "2024-11-20T10:30:00Z",
+  "entity_type": "FeatureView",
+  "entity_id": 42,
+  "view_name": "user_realtime_stats_v3",
+  "old_version": 2,
+  "new_version": 3,
+  "changed_fields": ["transform_dsl", "features"],
+  "operator": "alice@bytedance.com",
+  "change_summary": "新增 active_minutes 特征"
+}</div>
+
+<span class="p pa">Debezium CDC</span> <span class="p pa">Kafka</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#D85A30">
+<div class="ct" style="color:#D85A30">能力五: feature_config 生成与分发</div>
+<div class="cd">
+这是 Registry 最高频的在线能力。feature_config 是 Feature Serving 的"菜单"——它告诉 Serving SDK 每个模型需要哪些特征、从哪里取、slot 编号是什么。<br><br>
+
+<div class="code">// feature_config.pb (Protobuf 序列化)
+// 由 Registry 根据 Model Binding + View + Feature 自动生成
+
+model_config {
+  model_id: "ctr_model_v5"
+  shared_views: [  // User + Context (所有候选共享)
+    { view_name: "user_profile_v2", 
+      features: [
+        {slot:1, name:"gender", type:ID, key:"uf:p:{user_id}", default:0},
+        {slot:2, name:"age_bucket", type:ID, key:"uf:p:{user_id}", default:0},
+      ]},
+    { view_name: "user_context_v1",
+      features: [
+        {slot:30, name:"hour_bucket", type:ID, source:ON_DEMAND, default:0},
+      ]}
+  ]
+  per_item_views: [  // Ad + Cross (每个候选独立)
+    { view_name: "ad_meta_v2",
+      features: [
+        {slot:20, name:"category", type:ID, key:"af:m:{ad_id}", default:0},
+      ]},
+    { view_name: "user_x_advertiser_v1",
+      features: [
+        {slot:40, name:"cross_ctr_7d", type:FLOAT, 
+         key:"cf:uxadv:{user_id}_{advertiser_id}", default:-1.0},
+      ]}
+  ]
+}</div>
+
+<strong>生成时机</strong>:<br>
+• Model Binding 变更时 → 重新生成<br>
+• Feature View 新增字段时 → 增量更新<br>
+• Feature View 版本切换时 → 整体替换<br><br>
+
+<strong>分发机制</strong>:<br>
+① 生成后写入 Redis (key=config:{model_id})<br>
+② Feature Serving SDK 启动时全量拉取<br>
+③ 运行中通过 Kafka 事件增量更新 (热更新，无需重启)<br><br>
+<span class="p pp">Protobuf Config Gen</span> <span class="p pb">Redis Cache</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#D85A30">
+<div class="ct" style="color:#D85A30">能力六: 权限与多租户</div>
+<div class="cd">
+<strong>多租户 (Project) 隔离</strong>:<br>
+字节内部有多个广告业务线 (穿山甲/巨量引擎/电商广告)，每个业务线是一个 Project，Feature Registry 用 Project 隔离元数据。<br><br>
+<div class="code">Project: ads_chuanshanjia
+  └ Entity: user, ad, creative, ...
+     └ Feature View: user_profile_v2, ...
+  
+Project: ads_juliang
+  └ Entity: user, ad, ...  // 与穿山甲独立
+     └ Feature View: user_profile_v3, ...</div>
+
+<strong>权限模型 (RBAC)</strong>:<br>
+<div class="code">Role       | Create View | Read View | Update View | Delete
+-----------+-------------+-----------+-------------+--------
+Admin      | All         | All       | All         | All
+Owner      | Own Project | All       | Own Views   | Own
+Member     | Own Project | All       | No          | No
+Viewer     | No          | All       | No          | No</div>
+
+<strong>跨 Project 共享</strong>:<br>
+user_profile 等基础特征被多个 Project 共享。通过"共享 Feature View"机制: Owner Project 标记 View 为 shared → 其他 Project 可以 reference (只读)。<br><br>
+<span class="p pk">RBAC</span> <span class="p pk">Project Isolation</span>
+</div>
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px">
+<div class="ct">能力七: Schema 兼容性校验</div>
+<div class="cd">
+Registry 在接受 Feature View 变更时，必须自动校验新版本与旧版本的兼容性，防止"改一个字段崩全部模型"。<br><br>
+
+<strong>四类校验规则</strong>:<br><br>
+<strong>Rule 1: 新增字段 → 允许</strong> (FlatBuffer 向后兼容。新字段追加在末尾，旧 reader 忽略。)<br>
+<strong>Rule 2: 删除字段 → 检查引用</strong> (有 Model Binding 引用 → 拒绝。无引用 → 允许但标记 deprecated。)<br>
+<strong>Rule 3: 修改字段类型 → 拒绝</strong> (INT64→FLOAT32 会导致反序列化错误。必须创建新 Feature + 迁移。)<br>
+<strong>Rule 4: 修改 Transform DSL → 要求新版本</strong> (不允许原地修改 PROD version 的 DSL。)<br><br>
+
+<strong>校验时机</strong>: 在 Registry API 的写入层 (before MySQL INSERT/UPDATE)。校验不通过 → 返回详细的兼容性错误信息 → 写入被拒绝。<br><br>
+<span class="p pr">Compatibility Checker</span>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: Data Model ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+MySQL 数据模型 — Registry 的十张核心表
+</div>
+
+<div class="code">-- ===== 核心实体表 =====
+entities (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  project_id BIGINT NOT NULL,
+  name VARCHAR(64) NOT NULL,           -- "user", "ad"
+  join_keys JSON NOT NULL,             -- ["user_id"]
+  description TEXT,
+  owner VARCHAR(128),
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE (project_id, name)
+);
+
+feature_views (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  entity_id BIGINT NOT NULL REFERENCES entities(id),
+  name VARCHAR(128) NOT NULL,           -- "user_realtime_stats"
+  current_version INT DEFAULT 1,
+  status ENUM('DEV','STAGING','PROD','DEPRECATED') DEFAULT 'DEV',
+  tags JSON,                            -- ["广告","实时","核心"]
+  owner VARCHAR(128),
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP,
+  UNIQUE (entity_id, name)
+);
+
+feature_view_versions (
+  view_id BIGINT NOT NULL REFERENCES feature_views(id),
+  version INT NOT NULL,
+  source_type ENUM('BATCH','STREAM','ON_DEMAND'),
+  source_config JSON,                   -- {kafka_topic, hive_table, ...}
+  transform_dsl TEXT,                   -- DSL 源码
+  store_config JSON,                    -- {key_template, ttl, serializer}
+  materialization_config JSON,          -- {mode, parallelism, ...}
+  training_config JSON,                 -- {snapshot_enabled, interval}
+  schema_hash CHAR(64),                 -- SHA256(所有 Feature 定义)
+  status ENUM('DEV','STAGING','PROD','DEPRECATED'),
+  changelog TEXT,
+  created_by VARCHAR(128),
+  created_at TIMESTAMP,
+  PRIMARY KEY (view_id, version)
+);
+
+features (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  view_id BIGINT NOT NULL,
+  version INT NOT NULL,                 -- 属于哪个 version
+  name VARCHAR(128),                    -- "click_1h"
+  dtype ENUM('INT64','FLOAT32','STRING','EMBEDDING','SEQ_INT64','SEQ_FLOAT','MAP'),
+  default_value VARCHAR(256),
+  transform TEXT,                       -- 字段级 Transform (if any)
+  emb_dim INT NULL,
+  emb_hash_bucket INT NULL,
+  max_seq_len INT NULL,
+  monitoring JSON,                      -- {psi_max:0.25, missing_max:0.3}
+  description TEXT,
+  importance FLOAT NULL,                -- 自动回填的特征重要性
+  FOREIGN KEY (view_id, version) REFERENCES feature_view_versions(view_id, version)
+);
+
+-- ===== 模型绑定表 =====
+model_feature_bindings (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  model_id VARCHAR(128) NOT NULL,       -- 模型唯一标识
+  view_id BIGINT NOT NULL,
+  view_version INT NOT NULL,
+  feature_ids JSON,                     -- [feature_id_1, feature_id_2, ...]
+  slot_mapping JSON,                    -- {feature_id: slot_number}
+  is_shared BOOLEAN DEFAULT FALSE,      -- User/Context 侧=true, Ad/Cross=false
+  created_at TIMESTAMP
+);
+
+-- ===== 血缘表 =====
+lineage_edges (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  source_type ENUM('HIVE_TABLE','KAFKA_TOPIC','FEATURE_VIEW','FEATURE','MODEL'),
+  source_id VARCHAR(256),               -- dw.user_events / view:42 / model:ctr_v5
+  target_type ENUM('FEATURE_VIEW','FEATURE','MODEL','EXPERIMENT'),
+  target_id VARCHAR(256),
+  edge_type ENUM('SOURCE_OF','PRODUCES','USED_BY','DEPLOYED_IN'),
+  created_at TIMESTAMP,
+  INDEX (source_type, source_id),
+  INDEX (target_type, target_id)
+);
+
+-- ===== 运行记录表 =====
+materialization_jobs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  view_id BIGINT NOT NULL,
+  view_version INT NOT NULL,
+  job_type ENUM('SPARK','FLINK','CPP_BUILD'),
+  job_external_id VARCHAR(256),         -- Airflow DAG run ID / Flink Job ID
+  status ENUM('BUILDING','RUNNING','SUCCESS','FAILED','CANCELLED'),
+  started_at TIMESTAMP,
+  finished_at TIMESTAMP,
+  row_count BIGINT,                     -- 处理行数
+  error_message TEXT,
+  resource_usage JSON                   -- {cpu_hours, memory_gb_hours}
+);
+
+-- ===== 质量指标表 =====
+feature_quality_metrics (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  feature_id BIGINT NOT NULL,
+  metric_date DATE,
+  psi FLOAT,
+  missing_rate FLOAT,
+  coverage_rate FLOAT,
+  value_min DOUBLE,
+  value_max DOUBLE,
+  distinct_count BIGINT,
+  INDEX (feature_id, metric_date)
+);
+
+-- ===== 审计日志 =====
+audit_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  operator VARCHAR(128),
+  action ENUM('CREATE','UPDATE','DELETE','STATUS_CHANGE'),
+  object_type VARCHAR(64),
+  object_id BIGINT,
+  old_value JSON,
+  new_value JSON,
+  timestamp TIMESTAMP DEFAULT NOW()
+);
+
+-- ===== 权限表 =====
+access_controls (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  project_id BIGINT,
+  user_id VARCHAR(128),
+  role ENUM('ADMIN','OWNER','MEMBER','VIEWER'),
+  granted_by VARCHAR(128),
+  granted_at TIMESTAMP
+);</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: API ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">5</div>
+Registry API 设计 — 对外暴露的核心接口
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">写入类 API (低频, ~100 QPS)</div>
+<div class="cd">
+<div class="code">// Entity 管理
+RegisterEntity(name, join_keys, desc, owner) → entity_id
+UpdateEntity(entity_id, desc, owner)
+DeleteEntity(entity_id) // 需检查无 View 引用
+
+// Feature View 管理
+RegisterFeatureView(entity, name, source, transform, 
+  store, schedule, features[], owner) → view_id, version
+UpdateFeatureView(view_id, ...) → new_version
+  // 自动: 兼容性校验 → version++ → 生成新 schema_hash
+ChangeViewStatus(view_id, version, new_status)
+  // DEV→STAGING: 需通过自动化测试
+  // STAGING→PROD: 需人工审批 (灰度通过后)
+  // PROD→DEPRECATED: 需检查无 Model 引用
+
+// Model Binding 管理
+BindModelToViews(model_id, [{view_id, version, feature_ids, slot_mapping}])
+UnbindModel(model_id, view_id)
+
+// 质量指标写入
+ReportQualityMetrics(feature_id, date, psi, missing_rate, ...)</div>
+</div>
+</div>
+<div class="c">
+<div class="ct">读取类 API (高频, ~10K QPS)</div>
+<div class="cd">
+<div class="code">// 配置拉取 (Feature Serving 核心接口)
+GetModelFeatureConfig(model_id) → feature_config.pb
+  // 返回该模型的完整特征配置 (含 slot mapping)
+  // 高频调用, 必须走 Redis 缓存
+
+// 元数据查询
+GetEntity(entity_id) → Entity
+GetFeatureView(view_id, version?) → FeatureView
+GetFeature(feature_id) → Feature
+ListFeatureViews(entity_id?, status?, tags?) → []FeatureView
+
+// 搜索 (走 Elasticsearch)
+SearchFeatures(query, filters) → SearchResult
+
+// 血缘查询
+GetUpstream(object_type, object_id, depth?) → LineageGraph
+GetDownstream(object_type, object_id, depth?) → LineageGraph
+GetImpactAnalysis(object_type, object_id) → ImpactReport
+
+// 质量查询
+GetQualityHistory(feature_id, start_date, end_date) → []Metrics
+
+// Watch (长轮询/gRPC Stream)
+WatchConfigChanges(model_id) → Stream<ConfigChangeEvent>
+  // Feature Serving 用此接口实现热更新</div>
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>GetModelFeatureConfig 是 Registry 中最关键的 API</strong>。Feature Serving SDK 在 Ad Server 启动时调用它一次获取全量配置，之后通过 WatchConfigChanges 接收增量更新。由于 Ad Server 有 ~3000 台实例，启动时的并发全量拉取会产生瞬时 QPS 洪峰。<br><br>
+
+<strong>解法</strong>: feature_config.pb 序列化后存入 Redis (key=config:{model_id})。Feature Serving SDK 先查 Redis (P99 &lt;1ms)，Redis miss 才查 Registry API (P99 ~5ms)。Redis 的 TTL=5min，但 CDC 事件驱动主动失效——变更后 ~1s 内所有缓存就失效，SDK 的下一次拉取会获得新配置。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: Feature Serving Integration ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+Registry 与 Feature Serving 的交互 — 配置热更新机制
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">Feature Serving SDK 如何消费 Registry</div>
+
+<strong>启动阶段 (Ad Server 进程启动)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ Feature Serving SDK 初始化</span><br>
+<span style="color:var(--color-text-tertiary)">├ 调用 Registry: GetModelFeatureConfig(model_ids=[...]) → 全量 configs</span><br>
+<span style="color:var(--color-text-tertiary)">├ 解析 feature_config.pb → 构建内存数据结构:</span><br>
+<span style="color:var(--color-text-tertiary)">│   ConfigManager { model_id → ViewConfig[] → SlotConfig[] }</span><br>
+<span style="color:var(--color-text-tertiary)">├ 根据 config 中的 key_template 初始化 Key Generator</span><br>
+<span style="color:var(--color-text-tertiary)">├ 根据 config 中的 store_config 初始化 Tair 连接池</span><br>
+<span style="color:var(--color-text-tertiary)">└ SDK Ready → 开始接受请求</span><br><br>
+
+<strong>运行阶段 (持续)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 后台 goroutine: WatchConfigChanges(model_ids) → gRPC Stream</span><br>
+<span style="color:var(--color-text-tertiary)">├ 收到变更事件:</span><br>
+<span style="color:var(--color-text-tertiary)">│   事件类型 A: Feature 新增 → 追加到 ConfigManager (原子操作)</span><br>
+<span style="color:var(--color-text-tertiary)">│   事件类型 B: Feature View 版本切换 → 替换整个 ViewConfig (原子操作)</span><br>
+<span style="color:var(--color-text-tertiary)">│   事件类型 C: Model Binding 变更 → 重新拉取全量 config</span><br>
+<span style="color:var(--color-text-tertiary)">├ 所有更新都是原子操作 (Go: atomic.Value / C++: shared_ptr swap)</span><br>
+<span style="color:var(--color-text-tertiary)">│   当前正在处理的请求继续使用旧 config，新请求使用新 config</span><br>
+<span style="color:var(--color-text-tertiary)">└ 无需重启 Ad Server，零停机时间</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Watch 机制的容错</div>
+<div class="cd">
+<strong>gRPC Stream 断开怎么办？</strong><br>
+• 自动重连 (指数退避: 1s, 2s, 4s, 最大 30s)<br>
+• 重连后重新全量拉取一次 config (防止断开期间错过事件)<br>
+• 断开期间使用内存中的旧 config (不影响服务)<br><br>
+
+<strong>Registry 不可用怎么办？</strong><br>
+• Feature Serving SDK 在本地磁盘缓存最后一次成功拉取的 config (JSON 文件)<br>
+• Registry 不可用时从本地磁盘加载 → 可以正常服务 (用旧 config)<br>
+• 代价: 错过 Registry 中的变更，直到 Registry 恢复<br><br>
+
+<strong>字节实践</strong>: SDK 的本地缓存路径: <code style="font-family:var(--font-mono);font-size:10px">/var/cache/bytefeature/configs/{model_id}.pb</code>。每次从 Registry 成功拉取后更新此文件。启动时加载顺序: Redis → Registry API → 本地磁盘缓存。三级 fallback 确保 100% 可启动。
+</div>
+</div>
+<div class="c">
+<div class="ct">配置一致性保证</div>
+<div class="cd">
+<strong>问题</strong>: 3000 台 Ad Server 同时运行。Feature View 版本切换后，如何保证所有实例在"几乎同时"切换到新 config？<br><br>
+
+<strong>当前方案 (最终一致性, 字节)</strong>:<br>
+• CDC 事件 → Kafka → 各 SDK 消费 → ~1~3s 内全部更新<br>
+• 短暂的不一致窗口 (~3s) 中，部分实例用旧 config、部分用新 config<br>
+• 对广告系统可接受 (不是金融系统，几秒不一致不影响业务)<br><br>
+
+<strong>强一致方案 (未采用)</strong>:<br>
+• 配置中心 (Consul/Nacos) 做版本原子切换<br>
+• 所有 SDK Watch 同一个 Consul key<br>
+• key 变更后所有 Watcher 在 ~100ms 内收到通知<br>
+• 字节未采用是因为 Consul 作为单点的可用性风险 > 几秒不一致的业务风险<br><br>
+
+<strong>真正需要强一致的场景</strong>: 双缓冲 Tair namespace 切换。这个由 Consul 的 atomic flag 控制，而非 Registry Event。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Tech Stack ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">7</div>
+完整技术栈
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">Registry 核心服务</div>
+<div class="cd">
+<span class="p pp">Go / Java</span> API 服务 (gRPC+REST)<br>
+<span class="p pp">MySQL 8.0</span> 元数据持久化 (主从)<br>
+<span class="p pb">Redis</span> 配置缓存 (feature_config)<br>
+<span class="p pb">Elasticsearch</span> 特征搜索索引<br>
+<span class="p pa">Kafka</span> 变更事件总线<br>
+<span class="p pa">Debezium</span> MySQL CDC<br>
+<span class="p pp">Protobuf</span> Config 序列化格式<br>
+<span class="p pp">K8s</span> 无状态部署
+</div>
+</div>
+<div class="c">
+<div class="ct">血缘与治理</div>
+<div class="cd">
+<span class="p pg">MySQL / Neo4j</span> 血缘图存储<br>
+<span class="p pg">Lineage Service</span> 血缘推导引擎<br>
+<span class="p pg">Impact Analyzer</span> 影响分析<br>
+<span class="p pk">RBAC Engine</span> 权限校验<br>
+<span class="p pr">Schema Validator</span> 兼容性检查<br>
+<span class="p pr">Audit Logger</span> 操作审计<br>
+<span class="p pa">Dead Feature Detector</span> 废弃检测
+</div>
+</div>
+<div class="c">
+<div class="ct">前端与对外</div>
+<div class="cd">
+<span class="p pb">Feature Market</span> React Web UI<br>
+<span class="p pb">Python SDK</span> 算法工程师使用<br>
+<span class="p pb">CLI Tool</span> 命令行工具<br>
+<span class="p pb">REST API</span> OpenAPI/Swagger<br>
+<span class="p pb">gRPC API</span> 内部系统调用<br>
+<span class="p pr">Prometheus + Grafana</span> Registry 自身监控<br>
+<span class="p pr">PagerDuty</span> Registry 异常告警
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+Feature Registry 规模 (字节 DSP): MySQL 表 ~10MB | Redis 缓存 feature_config ~50MB | ES 索引 ~5MB | API QPS: 读 ~10K/s (缓存后), 写 ~100/s | CDC 事件: ~200/天 | 血缘边: ~500 条 | 审计日志: ~3000 条/天 | 可用性 SLA: 99.99%
+</div>
+</div>

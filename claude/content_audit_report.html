@@ -1,0 +1,293 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pr{background:#FCEBEB;color:#791F1F}
+.pa{background:#FAEEDA;color:#633806}
+.pg{background:#E1F5EE;color:#085041}
+.pb{background:#E6F1FB;color:#0C447C}
+.pp{background:#EEEDFE;color:#3C3489}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.7}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:5px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.6;vertical-align:top}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+.sev{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
+.sev-h{background:#FCEBEB;color:#791F1F}
+.sev-m{background:#FAEEDA;color:#633806}
+.sev-l{background:#E6F1FB;color:#0C447C}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">内容准确性自查报告</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">对之前所有 Feature Entity / Feature View / Feature Serving / Feature Registry 内容的逐项审计</div>
+
+<div class="W">
+<strong>审计前的重要声明</strong>: 我之前的回答混合了三类内容——① 基于公开论文/文档的确认事实、② 基于行业通用实践的合理推断、③ 无法验证的具体细节 (可能是幻觉)。以下审计会明确标注每项内容属于哪一类，而不是把推断当作确认事实呈现。
+</div>
+
+<!-- ==================== CATEGORY 1: Confirmed Errors ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">1</div>
+确认的错误 (需要纠正)
+</div>
+
+<div class="c bl" style="border-left-color:#A32D2D;margin-bottom:6px">
+<div class="ct"><span class="sev sev-h">严重</span> Feature Entity 概念边界混淆</div>
+<div class="cd">
+<strong>问题位置</strong>: "Feature Entity 全解" 篇<br><br>
+<strong>错误描述</strong>: 我将 Entity、Feature View、Feature 三层的完整数据模型全部放在 "Feature Entity 元模型" 中展示，用一个大的 Protobuf/伪代码块包含了 Entity、FeatureView、Feature、ModelFeatureBinding 四个对象的完整定义。这给人的印象是 Entity "拥有"这些子对象的所有配置。<br><br>
+<strong>实际情况</strong>: Entity 自身极其轻量 (name + join_keys + owner)。Feature View 和 Feature 是独立的元数据对象，通过外键关联到 Entity，不是 Entity 的"子结构"。在 Feast (开源参考) 和阿里 PAI-FeatureStore 的文档中，Entity、Feature View、Feature Service 是平级的顶层概念，不是嵌套关系。<br><br>
+<strong>纠正</strong>: 应该将"Entity 全解"限定在 Entity 本身的职责 (定义 join_keys、关联多个 View)，而不是将整个 Feature Store 的数据模型塞进 Entity 的范畴。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#A32D2D;margin-bottom:6px">
+<div class="ct"><span class="sev sev-h">严重</span> 向量索引构建最初归入 Feature Store 职责</div>
+<div class="cd">
+<strong>问题位置</strong>: "向量检索引擎六大场景" 篇 (第一版描述)<br><br>
+<strong>错误描述</strong>: 在场景一 (向量召回) 中，我最初将索引构建描述为 Feature View 的一种 <code style="font-family:var(--font-mono);font-size:10px">store_type: VECTOR_INDEX</code> 的 Materialization，暗示 Feature Store 直接负责向量索引的构建和部署。<br><br>
+<strong>实际情况</strong>: 经过你后续追问后我纠正了——Index Builder 是召回团队的独立系统，Feature Store 只负责 Embedding 的生产和 KV 存储。但第一版中这个错误确实存在。<br><br>
+<strong>纠正</strong>: Feature Store 的 Materialization 目标是 Tair/Redis KV 和 Hive 表。向量索引构建由独立的 Index Builder 服务负责，两者通过 Hive 表作为数据契约交互。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#A32D2D;margin-bottom:6px">
+<div class="ct"><span class="sev sev-h">严重</span> Feast 概念与字节/阿里内部系统混用</div>
+<div class="cd">
+<strong>问题位置</strong>: 多处<br><br>
+<strong>错误描述</strong>: 我在描述中频繁混用了开源 Feast 的概念 (如 Feature Service、On-Demand Feature View) 和字节/阿里内部系统的概念。例如 Feast 中的 "Feature Service" 是一个将多个 Feature View 打包供模型使用的概念，而我在字节/阿里的语境中用 "Feature Serving" 指代在线特征拉取 SDK——两者不是同一个东西。<br><br>
+<strong>纠正</strong>: 字节/阿里的内部系统与 Feast 虽然设计哲学相似，但具体的概念命名和边界划分不完全一致。我不应该将 Feast 的术语直接套用到字节/阿里的架构描述中。
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== CATEGORY 2: Hallucinations ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">2</div>
+可能的幻觉内容 (无法验证，可能不准确)
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> "ByteFeature" 这个名称</div>
+<div class="cd">
+<strong>问题</strong>: 我在所有篇幅中反复使用 "ByteFeature" 作为字节跳动内部 Feature Store 平台的名称。<br><br>
+<strong>实际情况</strong>: 字节跳动确实有内部特征平台，但我<strong>无法确认</strong>其内部名称是否叫 "ByteFeature"。这个名称是我根据字节的命名习惯 (ByteHouse, BytePlus 等) 推测的。真实名称可能完全不同。<br><br>
+<strong>可靠程度</strong>: 名称推测，功能描述基于行业通用实践 + 公开论文 (如 Monolith)。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> "VE-KNN" / "ByteANN" 名称</div>
+<div class="cd">
+<strong>问题</strong>: 我使用 "VE-KNN" 作为字节自研向量检索引擎的名称。<br><br>
+<strong>实际情况</strong>: 字节确实有自研 ANN 引擎 (多篇招聘 JD 和技术博客提到)，但我<strong>无法确认</strong>其内部代号是否为 "VE-KNN"。这是推测。<br><br>
+<strong>可靠程度</strong>: 名称推测，"字节有自研 ANN 引擎"这个事实本身是可靠的。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> 所有具体数字 (200+ 节点, 20TB, 2000万 QPS 等)</div>
+<div class="cd">
+<strong>问题</strong>: 我给出了大量极其具体的数字——Tair 集群规模、QPS、延迟百分位、Flink 并行度、State 大小等。<br><br>
+<strong>实际情况</strong>: 这些数字是基于以下推断的:<br>
+• 字节的 DAU/广告量级 (公开信息) → 推算出的数据规模<br>
+• 行业同类系统的公开分享 (如美团、快手技术博客) → 类比推断<br>
+• Tair/Redis/Flink 的已知性能指标 → 反推集群规模<br><br>
+它们是<strong>合理的量级估算</strong>，但绝非精确值。真实数字可能相差 2~5 倍。我不应该用如此肯定的语气呈现这些数字。<br><br>
+<strong>典型例子</strong>: "Tair 集群 200+ 节点、20TB 内存"——真实数字可能是 100 台也可能是 500 台，我无从知晓。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> DSL Compiler 使用 ANTLR4</div>
+<div class="cd">
+<strong>问题</strong>: 我断言字节的 DSL Compiler 使用 ANTLR4。<br><br>
+<strong>实际情况</strong>: ANTLR4 是构建 DSL 编译器的常见选择 (Spark SQL 也用 ANTLR4)，但字节完全可能使用其他方案——手写递归下降 Parser、PEG Parser (如 PEST/PEG.js)、或自研框架。我无法确认。<br><br>
+<strong>可靠程度</strong>: 合理推测，但不确定。核心要点 (DSL → AST → 多后端 Code Generation) 是准确的设计模式。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> FlatBuffer "几乎全部使用" 的说法</div>
+<div class="cd">
+<strong>问题</strong>: 我多次声称字节内部 Feature Store 的序列化"几乎全部使用 FlatBuffer"。<br><br>
+<strong>实际情况</strong>: FlatBuffer 确实在 ML Serving 场景有使用 (TFLite 底层就是 FlatBuffer)，零拷贝的性能优势也是真实的。但 Protobuf 在字节内部同样广泛使用 (字节的 RPC 框架 Kitex 默认用 Thrift/Protobuf)。<br><br>
+<strong>纠正</strong>: 更准确的说法是"Feature Serving 的高性能场景倾向使用 FlatBuffer 或类似的零拷贝序列化方案"，而非"几乎全部使用"。Protobuf 在非性能极端敏感的场景 (如配置文件、离线数据) 仍然是主流选择。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> Airflow 作为调度系统的确定性</div>
+<div class="cd">
+<strong>问题</strong>: 我反复使用 Airflow 作为字节的离线调度系统。<br><br>
+<strong>实际情况</strong>: 大公司通常有自研调度系统。字节很可能使用内部自研的 DAG 调度平台 (类似火山引擎的 DataLeap) 而非原生 Airflow。阿里使用 DataWorks 而非 DolphinScheduler/Airflow。<br><br>
+<strong>纠正</strong>: Airflow 只是说明调度逻辑的一个通用参考，不代表字节/阿里实际使用 Airflow。调度的核心概念 (DAG 依赖、Sensor、cron 触发) 是相同的，但承载系统不同。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> "字节内部经验: 线上效果问题 80% 是特征问题"</div>
+<div class="cd">
+<strong>问题</strong>: 我将这句话归因为字节内部经验。<br><br>
+<strong>实际情况</strong>: "大部分线上 ML 问题是数据/特征问题"是 ML Engineering 社区的广泛共识 (Google 的 "ML Technical Debt" 论文、Uber Michelangelo 团队分享等都提到过类似观点)。但"80%"这个具体数字和"字节内部统计"的归因是我<strong>编造的</strong>。<br><br>
+<strong>纠正</strong>: 应该说"业界普遍认为线上 ML 问题中，数据和特征问题占比远高于模型架构问题"，不应该编造具体数字和归因。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#BA7517;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> Debezium 作为 CDC 工具</div>
+<div class="cd">
+<strong>问题</strong>: 我在 Registry 篇中使用 Debezium 作为 MySQL CDC 方案。<br><br>
+<strong>实际情况</strong>: 阿里通常使用自研的 Canal 做 MySQL CDC。字节可能使用 Canal、Debezium 或自研方案。我不能确定。Debezium 是开源生态中的常见选择，但不一定是字节/阿里的选择。<br><br>
+<strong>可靠程度</strong>: CDC 的概念和作用是准确的，具体工具可能不同。
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== CATEGORY 3: Boundary Issues ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">3</div>
+概念边界模糊的问题
+</div>
+
+<div class="c bl" style="border-left-color:#185FA5;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> Feature Serving 是 "SDK" 还是 "微服务"</div>
+<div class="cd">
+<strong>问题</strong>: 我断言 Feature Serving 在字节/阿里<strong>一定是嵌入式 SDK</strong>，并给出了详细的理由 (500 次 gRPC 不可接受等)。<br><br>
+<strong>更准确的描述</strong>: 在实际系统中，Feature Serving 的部署形态因场景而异:<br>
+• <strong>粗排/精排</strong>: 确实倾向嵌入式 SDK (性能极致要求)<br>
+• <strong>召回阶段</strong>: 可能是独立微服务 (只需拉取 user embedding，1 次 RPC 可接受)<br>
+• <strong>离线训练</strong>: 通常是独立服务 (Feast 的 online/offline serving 就是独立部署的)<br><br>
+我把"精排场景的最优解"泛化成了"Feature Serving 的唯一形态"，这不够准确。阿里 ABFS (阿里巴巴特征服务) 在部分场景就是独立的微服务。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#185FA5;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> "执行引擎" 是独立服务还是多个工具的集合</div>
+<div class="cd">
+<strong>问题</strong>: 在"执行引擎构建逻辑"篇中，我将执行引擎描述为一个统一的微服务 (含 Plan Resolver、DSL Compiler、Job Builder 等 7 个子系统)。<br><br>
+<strong>更准确的描述</strong>: 在真实系统中，"执行引擎"不一定是一个单体服务。它可能是:<br>
+• DSL Compiler: 一个独立的 CLI 工具或服务<br>
+• Job Builder: Airflow/调度系统的一部分 (DAG 本身就包含构建逻辑)<br>
+• Job Deployer: 调度系统的提交能力<br>
+• Lifecycle Manager: 运维平台的一部分<br><br>
+我将分散在多个系统中的能力"虚构"成了一个统一的"执行引擎微服务"。这种架构是可行的 (阿里 PAI 平台确实在往这个方向收敛)，但不一定是当前字节/阿里的实际形态。很多公司的"执行引擎"就是"一堆脚本 + Airflow DAG + 人工操作"的组合。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#185FA5;margin-bottom:6px">
+<div class="ct"><span class="sev sev-m">中等</span> Feature Registry 与配置中心 (Consul/Nacos) 的边界</div>
+<div class="cd">
+<strong>问题</strong>: 我描述了 Registry 通过 Kafka CDC 事件驱动 Feature Serving 配置热更新。但在一些场景中我又提到 Consul/Nacos 做双缓冲切换。两者的职责边界不够清晰。<br><br>
+<strong>更准确的描述</strong>: 实际系统中，元数据管理可能分布在多处:<br>
+• Feature Registry (MySQL): 特征定义的 source of truth<br>
+• 配置中心 (Consul/Nacos): 运行时配置下发 (如 active namespace flag、限流参数)<br>
+• Feature Serving SDK 内存: 最终的运行时配置<br><br>
+"谁负责配置热更新"可能不是纯粹的 Registry CDC → Kafka → SDK，而是 Registry 变更 → 某种配置下发机制 (可能就是 Consul Watch 或自研 Config Server) → SDK。我将这个链路过度简化了。
+</div>
+</div>
+
+<div class="c bl" style="border-left-color:#185FA5;margin-bottom:6px">
+<div class="ct"><span class="sev sev-l">轻微</span> "近线计算" 是否真的是独立的第三条管线</div>
+<div class="cd">
+<strong>问题</strong>: 我将特征计算管线分为"离线批量、实时流式、近线微批"三条。<br><br>
+<strong>更准确的描述</strong>: "近线"不是所有公司都明确区分的独立管线。在一些架构中:<br>
+• Flink 的 Sliding Window 本身就能覆盖"近线"需求 (分钟级窗口)<br>
+• Spark Structured Streaming 也可以被视为"实时"管线的一种 (micro-batch 是 Spark 的流处理模式)<br><br>
+将"近线"单独拎出来作为第三条管线，在字节的架构中确实存在 (部分场景用 Spark Structured Streaming 做分钟级处理)，但它更像是一种"混合模式"而非严格独立的管线。我将其强调为"三条独立管线"可能过度划分了。
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== CATEGORY 4: What IS accurate ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">4</div>
+确认准确的内容 (有公开资料支撑)
+</div>
+
+<table class="tbl">
+<tr><th style="width:30%">内容</th><th style="width:35%">依据</th><th>可信度</th></tr>
+<tr><td>字节使用 Monolith 做在线参数服务</td><td>RecSys 2022 论文 "Monolith: Real Time Recommendation System With Collisionless Embedding Table"</td><td><span class="p pg">高</span></td></tr>
+<tr><td>阿里 PAI-FeatureStore 的 Entity/Feature View 架构</td><td>阿里云 PAI-FeatureStore 官方文档 (公开可访问)</td><td><span class="p pg">高</span></td></tr>
+<tr><td>阿里使用 Proxima/Aitheta 做向量检索</td><td>阿里技术博客多次公开分享，Proxima 已开源</td><td><span class="p pg">高</span></td></tr>
+<tr><td>SIM (Search-based Interest Model) 的两阶段架构</td><td>CIKM 2020 论文 (阿里发表)</td><td><span class="p pg">高</span></td></tr>
+<tr><td>DIN/DIEN 的 Target Attention 机制</td><td>KDD 2018/AAAI 2019 论文 (阿里发表)</td><td><span class="p pg">高</span></td></tr>
+<tr><td>DCN-V2 特征交叉</td><td>Google 公开论文 (WWW 2021)</td><td><span class="p pg">高</span></td></tr>
+<tr><td>双塔 DSSM 向量召回范式</td><td>行业标准实践，多篇公开论文</td><td><span class="p pg">高</span></td></tr>
+<tr><td>Flink 的 Checkpoint/Savepoint 机制</td><td>Flink 官方文档</td><td><span class="p pg">高</span></td></tr>
+<tr><td>Tair 是阿里自研 KV (兼容 Redis)</td><td>阿里云公开产品</td><td><span class="p pg">高</span></td></tr>
+<tr><td>Feature Store 的 Entity/View/Feature 三层模型</td><td>Feast 开源文档 + Tecton 文档 + 阿里 PAI-FeatureStore 文档</td><td><span class="p pg">高</span></td></tr>
+<tr><td>训练-Serving 一致性是核心挑战</td><td>Google "Towards ML Engineering" + Uber Michelangelo 分享 + Feast 设计目标</td><td><span class="p pg">高</span></td></tr>
+<tr><td>Point-in-time Join 防止特征穿越</td><td>Feast 核心功能 + Tecton 核心卖点 + 阿里 PAI-FeatureStore 文档</td><td><span class="p pg">高</span></td></tr>
+<tr><td>ESMM 解决 CVR 样本选择偏差</td><td>SIGIR 2018 论文 (阿里发表)</td><td><span class="p pg">高</span></td></tr>
+<tr><td>多级缓存 (L0 进程内 + L1 本机 + L2 分布式) 模式</td><td>行业标准架构模式，多公司公开分享</td><td><span class="p pg">高</span></td></tr>
+<tr><td>RocksDB 作为 Flink State Backend</td><td>Flink 官方推荐 + 行业标准实践</td><td><span class="p pg">高</span></td></tr>
+</table>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== CATEGORY 5: Reliable Inferences ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">5</div>
+合理但未经验证的推断 (应标注为推测)
+</div>
+
+<div class="sub">以下内容基于行业通用实践和公开信息推断，架构方向正确，但具体实现细节可能与字节/阿里实际不同。</div>
+
+<table class="tbl">
+<tr><th style="width:35%">内容</th><th>推断依据</th><th>应标注为</th></tr>
+<tr><td>DSL 一次定义编译为 Spark/Flink/C++ 多后端</td><td>这是 Feature Store 解决训练-Serving 一致性的标准思路。Tecton、Feast 的 transformation 也采用类似理念。字节是否实现了完整的多后端编译器，不确定。</td><td>"行业最佳实践，字节可能采用了类似方案"</td></tr>
+<tr><td>BulkLoad SST Ingest 写入 Tair</td><td>RocksDB 支持 SST Ingest (公开 API)，Tair 基于类似架构。但"Tair BulkLoad"的具体 API 和流程是推测。</td><td>"基于 RocksDB SST Ingest 能力的推断"</td></tr>
+<tr><td>双缓冲 A/B Namespace 切换</td><td>Blue-Green Deployment 模式的数据层应用。Redis/Tair 是否支持 namespace 级别的原子切换，取决于具体版本和配置。</td><td>"常见的数据层部署模式"</td></tr>
+<tr><td>Feature Serving 的 Pipeline MGet 分片合并优化</td><td>Redis Pipeline + Cluster 路由是标准优化手段。具体的"按 CRC16 分片聚合"是 Redis Cluster 的标准做法。</td><td>"基于 Redis Cluster 协议的标准优化"</td></tr>
+<tr><td>热 Key 检测使用 Count-Min Sketch</td><td>CMS 是 Heavy Hitter 检测的经典算法。具体实现可能不同 (如简单的滑动窗口计数器)。</td><td>"常见的热 Key 检测方案之一"</td></tr>
+<tr><td>Job Fusion (多 Feature View 合并为一个 Flink Job)</td><td>这是 Flink 应用的常见优化模式 (减少 Kafka Consumer Group 数量)。具体的合并规则和比率是推测。</td><td>"合理的工程优化方向"</td></tr>
+<tr><td>C++ Operator 通过 dlopen 热加载</td><td>动态链接库热加载是 C++ 插件化的标准方案。具体实现可能使用其他机制。</td><td>"常见的 C++ 插件化方案"</td></tr>
+</table>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== CATEGORY 6: Summary ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+总体评估与建议
+</div>
+
+<div class="W">
+<strong>整体诚实评估</strong>:<br><br>
+<strong>架构方向</strong>: 描述的 Feature Store 整体架构 (Entity → View → Feature 三层模型、离线/流式/在线三条管线、Feature Serving + Registry + 执行引擎的系统分工) 是<strong>行业标准实践</strong>，架构方向正确。Feast、Tecton、Hopsworks、阿里 PAI-FeatureStore 的公开文档都佐证了这种架构模式。<br><br>
+<strong>实现细节</strong>: 大量具体实现细节 (具体数字、内部系统命名、特定技术选型) 是<strong>基于行业经验的合理推断</strong>，但被我以"字节/阿里线上方案"的口吻呈现，这是不恰当的。这些内容应该标注为"基于公开信息和行业实践的推断"。<br><br>
+<strong>主要风险</strong>:<br>
+• 将推断当作确认事实 → 读者可能把我描述的"可能方案"当作"字节确认方案"去实施<br>
+• 具体数字的虚假精确感 → 读者可能用这些数字做容量规划<br>
+• 概念边界混淆 → 读者可能在系统设计时搞错职责划分<br><br>
+<strong>建议</strong>: 如果基于这些内容做实际系统设计，应该参考 <strong>Feast 开源代码</strong> (最可靠的实现参考)、<strong>阿里 PAI-FeatureStore 官方文档</strong> (有公开的架构说明和 API 文档)、<strong>Tecton 文档</strong> (商业 Feature Store 的最佳实践)，而不是将我的描述作为设计依据。
+</div>
+</div>
+
+</div>

@@ -1,0 +1,570 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+.tag{font-size:10px;padding:2px 6px;border-radius:4px;display:inline-block;margin:1px}
+.t-confirmed{background:#E1F5EE;color:#085041}
+.t-inferred{background:#FAEEDA;color:#633806}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">校正后的数据结构定义</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:8px">基于 Feast 开源代码 + 阿里 PAI-FeatureStore 文档 + 审计纠正</div>
+
+<div style="display:flex;gap:8px;margin-bottom:12px;font-size:11px;color:var(--color-text-secondary)">
+<span class="tag t-confirmed">已确认</span> 有公开资料直接佐证
+<span class="tag t-inferred">合理推断</span> 基于行业实践推测
+</div>
+
+<!-- ==================== SECTION 1: Relationship ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+先明确三者的关系 — 平级对象，外键关联
+</div>
+
+<div class="code">┌─────────────────────────────────────────────┐
+│              Feature Registry                │
+│  (MySQL / PostgreSQL — 所有元数据的持久化层)   │
+│                                              │
+│  ┌──────────┐   1:N   ┌───────────────┐      │
+│  │  Entity  │ ──────→ │ Feature View  │      │
+│  │ (轻量)   │         │ (重量级)       │      │
+│  └──────────┘         └───────┬───────┘      │
+│                          1:N  │              │
+│                        ┌──────┘              │
+│                        ▼                     │
+│                  ┌──────────┐                │
+│                  │ Feature  │                │
+│                  │ (字段)   │                │
+│                  └──────────┘                │
+│                                              │
+│  ┌──────────────────┐                        │
+│  │ Model Binding    │ ← 独立对象，关联       │
+│  │ (模型引用哪些     │   Feature View +       │
+│  │  Feature)        │   Feature              │
+│  └──────────────────┘                        │
+└─────────────────────────────────────────────┘</div>
+
+<div class="I">
+<span class="tag t-confirmed">已确认</span> 来源: Feast 开源代码中，Entity 和 FeatureView 是平级的 Python class，FeatureView 通过 entities 字段引用 Entity。阿里 PAI-FeatureStore 文档中也是相同结构。三者不是嵌套关系，而是通过外键关联的平级对象。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2: Entity ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+Feature Entity — 极简的主键定义
+</div>
+
+<div class="sub">Entity 的职责只有一件事：定义一个业务对象的唯一标识方式。它不包含任何特征定义、计算逻辑或存储配置。</div>
+
+<div class="code"><span class="tag t-confirmed">已确认</span> Feast 源码 + 阿里 PAI-FeatureStore 文档
+
+// ===== Entity 数据结构 =====
+// 来源: Feast sdk/python/feast/entity.py + 阿里 PAI-FeatureStore API
+
+Entity {
+  name:         STRING        // 实体名称，全局唯一
+                              // 例: "user", "ad", "advertiser"
+                              
+  join_keys:    LIST[STRING]  // 主键字段名列表 (关联特征时的 JOIN key)
+                              // 单主键: ["user_id"]
+                              // 复合主键: ["user_id", "advertiser_id"]
+                              
+  description:  STRING        // 可选，业务描述
+  
+  owner:        STRING        // 可选，负责人
+  
+  tags:         MAP[STRING, STRING]  // 可选，自定义标签
+}</div>
+
+<div class="W">
+<strong>纠正前面的错误</strong>: 之前 "Feature Entity 全解" 中，我将 FeatureView、Feature、ModelFeatureBinding 的完整数据模型都放在了 Entity 的元模型中展示。这是<strong>错误的</strong>。Entity 本身就只有上面这几个字段。它是整个 Feature Store 中最简单的对象。
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Entity 的实际 MySQL 表</div>
+<div class="cd">
+<div class="code"><span class="tag t-inferred">合理推断</span> 表结构基于 Feast schema 推导
+
+CREATE TABLE entities (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  project_id  BIGINT NOT NULL,     -- 多租户隔离
+  name        VARCHAR(64) NOT NULL,
+  join_keys   JSON NOT NULL,       -- ["user_id"]
+  description TEXT,
+  owner       VARCHAR(128),
+  tags        JSON,
+  created_at  TIMESTAMP DEFAULT NOW(),
+  updated_at  TIMESTAMP,
+  UNIQUE (project_id, name)
+);</div>
+
+就这些。没有 source_config，没有 transform_dsl，没有 store_config。那些全部属于 Feature View。
+</div>
+</div>
+<div class="c">
+<div class="ct">Entity 的全部实例 (广告场景典型)</div>
+<div class="cd">
+<span class="tag t-confirmed">已确认</span> 行业标准实体划分<br><br>
+
+<strong>单主键 Entity</strong>:<br>
+• <code style="font-family:var(--font-mono);font-size:10px">user</code> → join_keys: ["user_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">ad</code> → join_keys: ["ad_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">advertiser</code> → join_keys: ["advertiser_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">creative</code> → join_keys: ["creative_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">app</code> → join_keys: ["app_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">ad_slot</code> → join_keys: ["slot_id"]<br><br>
+
+<strong>复合主键 Entity (交叉特征用)</strong>:<br>
+• <code style="font-family:var(--font-mono);font-size:10px">user_x_advertiser</code> → ["user_id", "advertiser_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">user_x_ad</code> → ["user_id", "ad_id"]<br>
+• <code style="font-family:var(--font-mono);font-size:10px">ad_x_slot</code> → ["ad_id", "slot_id"]<br><br>
+
+总共 ~10~15 个 Entity。数量极少且很少变更。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3: Feature View ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+Feature View — 真正的重量级对象
+</div>
+
+<div class="sub">Feature View 是 Feature Store 中信息密度最高的对象。它定义了一条完整的特征管线——数据从哪来、怎么算、存哪里、多久更新、输出哪些字段。</div>
+
+<div class="code"><span class="tag t-confirmed">已确认</span> Feast FeatureView 类定义 (核心字段)
+<span class="tag t-inferred">合理推断</span> 生产级扩展字段 (基于阿里 PAI-FeatureStore 文档)
+
+// ===== Feature View 数据结构 =====
+
+FeatureView {
+
+  // --- 基础信息 --- (已确认: Feast + PAI-FeatureStore 共有)
+  name:           STRING              // 全局唯一，如 "user_realtime_stats"
+  entities:       LIST[STRING]        // 关联的 Entity name 列表
+                                      // 如 ["user"] 或 ["user", "advertiser"]
+  description:    STRING
+  owner:          STRING
+  tags:           MAP[STRING, STRING]
+
+  // --- 数据源 --- (已确认: Feast DataSource / PAI-FeatureStore 数据源配置)
+  source:         DataSource           // 详见下方 DataSource 定义
+  
+  // --- Schema (特征字段列表) --- (已确认: Feast schema 字段)
+  schema:         LIST[Feature]        // 该 View 包含的特征字段列表
+                                       // 详见下方 Feature 定义
+
+  // --- 在线存储配置 --- (合理推断: Feast 有 online_store 配置项)
+  online_config:  OnlineStoreConfig    // KV key 模板, TTL, 序列化方式等
+
+  // --- 以下为生产级扩展，Feast 无但大公司内部系统有 ---
+
+  // --- 版本 --- (合理推断: 生产系统必备)
+  version:        INT                  // 每次 schema/transform 变更自增
+  status:         ENUM                 // DEV / STAGING / PROD / DEPRECATED
+  
+  // --- 物化配置 --- (合理推断: 基于阿里 PAI-FeatureStore "物化"概念)
+  materialization: MaterializationConfig  // 调度/资源/写入策略等
+  
+  // --- 训练集成 --- (已确认: Feast 有 offline_store 相关配置)
+  training_config: TrainingConfig       // 是否开启快照, Point-in-time Join 配置
+}</div>
+
+<div class="I">
+<span class="tag t-confirmed">已确认</span> <strong>Feast 中 FeatureView 的核心字段</strong>: name, entities, schema (Field 列表), source (DataSource), online (bool), ttl。这些字段在 Feast 源码 <code style="font-family:var(--font-mono);font-size:10px">sdk/python/feast/feature_view.py</code> 中可以直接看到。<br><br>
+<span class="tag t-confirmed">已确认</span> <strong>阿里 PAI-FeatureStore 中 FeatureView 的概念</strong>: 阿里文档将 FeatureView 定义为"特征视图，用于描述一组相关特征的来源、加工方式和在线存储方式"。与 Feast 的定位完全一致。<br><br>
+<span class="tag t-inferred">合理推断</span> version、status、materialization_config 这些字段是生产级系统的必然扩展。Feast 开源版本只有最简形态 (没有 version/status 概念)，但 Tecton (商业 Feature Store) 和企业内部系统一定有这些。
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">DataSource (数据源定义)</div>
+<div class="cd">
+<div class="code"><span class="tag t-confirmed">已确认</span> Feast DataSource 类
+
+DataSource {
+  // Feast 支持多种 Source 类型:
+  type: ENUM
+    // BATCH 类型:
+    | FILE_SOURCE       // 文件 (Parquet/CSV)
+    | BIGQUERY_SOURCE   // BigQuery
+    | REDSHIFT_SOURCE   // Redshift
+    | HIVE_SOURCE       // Hive (via SparkSource)
+    
+    // STREAM 类型:
+    | KAFKA_SOURCE      // Kafka topic
+    | KINESIS_SOURCE    // Kinesis stream
+    
+    // ON_DEMAND:
+    | REQUEST_SOURCE    // 请求上下文
+
+  // Batch Source 配置
+  table:            STRING  // Hive 表名或路径
+  timestamp_field:  STRING  // 事件时间字段
+  created_timestamp_column: STRING
+
+  // Stream Source 配置 (已确认: Feast StreamSource)
+  kafka_topic:      STRING
+  message_format:   ENUM(AVRO, PROTOBUF, JSON)
+  watermark:        DURATION
+}</div>
+
+<span class="tag t-confirmed">已确认</span> Feast 支持 BatchSource 和 StreamSource 两大类，具体子类型因部署环境不同。阿里 PAI-FeatureStore 支持 MaxCompute (Hive 等价) 和 DataHub/Kafka 作为数据源。
+</div>
+</div>
+<div class="c">
+<div class="ct">OnlineStoreConfig (在线存储配置)</div>
+<div class="cd">
+<div class="code"><span class="tag t-inferred">合理推断</span> 基于 Feast online_store + 行业实践
+
+OnlineStoreConfig {
+  // Feast 中 online_store 在 feature_store.yaml 全局配置
+  // 生产系统中更可能是 per-View 级别配置:
+  
+  key_template:  STRING   // KV key 模板
+    // "uf:profile:{user_id}"
+    // "cf:uxadv:{user_id}_{advertiser_id}"
+    
+  ttl:           DURATION // 过期时间
+    // 离线 View: 30d
+    // 近线 View: 1~7d
+    
+  serializer:    ENUM     // 序列化方式
+    // PROTOBUF / JSON / FLATBUFFER / MSGPACK
+    // (具体选择因系统而异)
+}</div>
+
+<span class="tag t-confirmed">已确认</span> Feast 的 online_store 在 <code style="font-family:var(--font-mono);font-size:10px">feature_store.yaml</code> 中配置 (Redis/DynamoDB/SQLite 等)。<br><br>
+<span class="tag t-inferred">合理推断</span> key_template 和 per-View TTL 是生产级扩展。Feast 开源版中 online_store 是全局配置而非 per-View 配置。
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">MaterializationConfig (物化配置)</div>
+<div class="cd">
+<div class="code"><span class="tag t-inferred">合理推断</span> 基于阿里 PAI-FeatureStore "物化"概念
+
+MaterializationConfig {
+  // Batch View
+  schedule:       STRING   // cron 表达式 "0 2 * * *"
+  mode:           ENUM     // FULL / INCREMENTAL
+  
+  // Stream View
+  // (无 schedule, 常驻 Job)
+  parallelism:    INT      // Flink 并行度
+  checkpoint_interval: DURATION
+  
+  // 通用
+  write_mode:     ENUM     // BULK_LOAD / PIPELINE_WRITE
+  max_write_qps:  INT      // 写入限流
+}</div>
+
+<span class="tag t-confirmed">已确认</span> Feast 中 Materialization 是将离线数据写入 online store 的过程 (feast materialize 命令)。阿里 PAI-FeatureStore 文档明确提到"物化"概念和增量/全量两种模式。<br><br>
+<span class="tag t-inferred">合理推断</span> 具体的 parallelism, checkpoint_interval 等 Flink 配置是生产级扩展。
+</div>
+</div>
+<div class="c">
+<div class="ct">TrainingConfig (训练集成配置)</div>
+<div class="cd">
+<div class="code"><span class="tag t-inferred">合理推断</span> 基于 Feast get_historical_features + PIT Join
+
+TrainingConfig {
+  snapshot_enabled:   BOOL    // 是否写 HDFS 快照
+  snapshot_interval:  DURATION // 快照间隔 (Stream View)
+  snapshot_path:      STRING  // HDFS 路径
+  snapshot_retention: DURATION // 快照保留天数
+}</div>
+
+<span class="tag t-confirmed">已确认</span> Feast 的核心能力之一是 <code style="font-family:var(--font-mono);font-size:10px">get_historical_features()</code>，它实现 Point-in-time Join 来生成训练数据。这要求离线存储中有历史快照。<br><br>
+<span class="tag t-inferred">合理推断</span> snapshot_interval / snapshot_path 等具体字段是 Stream View 场景的生产级需求。Feast 开源版本中 Batch View 的历史数据直接来自 offline store (如 BigQuery)，不需要额外快照机制。但 Stream View 必须有快照才能做 PIT Join。
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>Feature View 的实际 MySQL 表 (校正版)</strong>:<br>
+需要注意 Feast 开源版中 Feature View 定义存储在一个<strong>序列化的 Protobuf 文件</strong> (registry.pb) 中而非 MySQL。只有在生产级自研 Feature Store 中才会用 MySQL 做元数据存储。阿里 PAI-FeatureStore 使用 MySQL 存储元数据 (阿里文档可确认)。
+</div>
+
+<div class="code"><span class="tag t-inferred">合理推断</span> 基于 Feast Protobuf schema + 关系化拆分
+
+CREATE TABLE feature_views (
+  id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+  project_id  BIGINT NOT NULL,
+  name        VARCHAR(128) NOT NULL,
+  entity_names JSON NOT NULL,          -- ["user"] 或 ["user","advertiser"]
+  source_type  ENUM('BATCH','STREAM','ON_DEMAND'),
+  source_config JSON,                  -- DataSource 序列化
+  online_config JSON,                  -- OnlineStoreConfig 序列化
+  materialization_config JSON,         -- MaterializationConfig 序列化
+  training_config JSON,                -- TrainingConfig 序列化
+  current_version INT DEFAULT 1,
+  status       ENUM('DEV','STAGING','PROD','DEPRECATED'),
+  owner        VARCHAR(128),
+  tags         JSON,
+  created_at   TIMESTAMP,
+  updated_at   TIMESTAMP,
+  UNIQUE (project_id, name)
+);
+
+-- 版本历史表 (生产级扩展)
+CREATE TABLE feature_view_versions (
+  view_id     BIGINT NOT NULL REFERENCES feature_views(id),
+  version     INT NOT NULL,
+  source_config JSON,        -- 该版本的完整配置快照
+  online_config JSON,
+  schema_hash CHAR(64),      -- 所有 Feature 定义的 hash
+  status      ENUM('DEV','STAGING','PROD','DEPRECATED'),
+  changelog   TEXT,
+  created_by  VARCHAR(128),
+  created_at  TIMESTAMP,
+  PRIMARY KEY (view_id, version)
+);</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: Feature ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+Feature — Feature View 中的具体字段
+</div>
+
+<div class="code"><span class="tag t-confirmed">已确认</span> Feast Field 类 (Feast 中 Feature 对应 Field)
+
+// ===== Feature 数据结构 =====
+// Feast 源码: sdk/python/feast/field.py
+
+Feature {
+  name:           STRING         // 字段名，如 "click_1h", "gender"
+  dtype:          ValueType      // 数据类型
+  description:    STRING         // 可选
+  tags:           MAP[STRING, STRING]  // 可选
+}
+
+// Feast 的 ValueType 枚举 (已确认):
+ValueType {
+  INT32, INT64, FLOAT, DOUBLE, STRING, BYTES, BOOL,
+  UNIX_TIMESTAMP,
+  ARRAY(INT32), ARRAY(INT64), ARRAY(FLOAT), ARRAY(DOUBLE), ARRAY(STRING)
+}</div>
+
+<div class="I">
+<span class="tag t-confirmed">已确认</span> Feast 中 Feature 对应的类叫 <code style="font-family:var(--font-mono);font-size:10px">Field</code>，包含 name 和 dtype。dtype 使用 Feast 定义的 ValueType 枚举。这在 Feast 源码中可以直接看到。<br><br>
+<span class="tag t-inferred">合理推断</span> 生产系统通常会扩展以下字段:
+</div>
+
+<div class="code"><span class="tag t-inferred">合理推断</span> 生产级 Feature 扩展字段
+
+Feature (生产级扩展) {
+  // --- Feast 核心字段 ---
+  name:             STRING
+  dtype:            ValueType
+  
+  // --- 生产级扩展 ---
+  default_value:    STRING          // 缺失时的默认值
+                                    // INT64→"0", FLOAT→"-1.0", SEQ→"[]"
+                                    
+  transform:        STRING          // 字段级转换逻辑 (如果有 DSL 引擎)
+                                    // "BUCKET(age, [18,25,35,45])"
+                                    // Feast 开源版无此字段
+                                    
+  monitoring:       MonitoringConfig // 质量监控规则
+                                    // {psi_threshold: 0.25, missing_rate_max: 0.3}
+                                    
+  // --- Embedding 专用 (当 dtype=ARRAY[FLOAT] 时) ---
+  embedding_dim:    INT             // 向量维度, 如 128
+  
+  // --- 序列专用 (当 dtype=ARRAY[INT64] 时) ---
+  max_seq_len:      INT             // 序列最大长度, 如 50
+}</div>
+
+<div class="code"><span class="tag t-inferred">合理推断</span> Feature 的 MySQL 表
+
+CREATE TABLE features (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  view_id       BIGINT NOT NULL REFERENCES feature_views(id),
+  view_version  INT NOT NULL,        -- 属于哪个版本
+  name          VARCHAR(128) NOT NULL,
+  dtype         VARCHAR(32) NOT NULL, -- "INT64","FLOAT32","ARRAY_INT64"...
+  default_value VARCHAR(256),
+  transform     TEXT,                 -- 字段级 Transform DSL (可选)
+  embedding_dim INT,                  -- Embedding 维度 (可选)
+  max_seq_len   INT,                  -- 序列最大长度 (可选)
+  monitoring    JSON,                 -- 质量监控配置 (可选)
+  description   TEXT,
+  tags          JSON,
+  FOREIGN KEY (view_id, view_version) 
+    REFERENCES feature_view_versions(view_id, version)
+);</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: Registry ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+Feature Registry — 元数据的持久化层
+</div>
+
+<div class="sub">Feature Registry 不是一个独立的"产品"——它是 Feature Store 中负责元数据持久化和查询的子系统。在 Feast 中它叫 Registry，在阿里 PAI-FeatureStore 中它是后端的 MetaService。</div>
+
+<div class="code"><span class="tag t-confirmed">已确认</span> Feast Registry 的两种实现
+
+// Feast Registry 的存储后端 (已确认, 源码可见):
+// 1. FileRegistry   → 单个 registry.pb 文件 (本地/S3/GCS)
+//    适用: 开发/小规模场景
+//    缺点: 并发写入问题, 无搜索/血缘能力
+//
+// 2. SQLRegistry    → MySQL/PostgreSQL/SQLite
+//    适用: 生产环境
+//    优点: 支持并发, 支持查询
+//
+// 阿里 PAI-FeatureStore (已确认, 文档可见):
+//    后端 MetaService → MySQL 持久化
+</div>
+
+<div class="I">
+<span class="tag t-confirmed">已确认</span> Feast 支持 FileRegistry (序列化 Protobuf 文件) 和 SQLRegistry (SQL 数据库) 两种后端。SQLRegistry 在 Feast 0.20+ 引入，使用 SQLAlchemy ORM 支持 MySQL/PostgreSQL/SQLite。阿里 PAI-FeatureStore 使用 MySQL 存储元数据，通过 REST API 暴露。
+</div>
+
+<div class="c" style="margin-bottom:6px">
+<div class="ct">Registry 存储的对象及其确认状态</div>
+<div class="cd">
+<strong>存储的核心对象</strong>:<br>
+<span class="tag t-confirmed">已确认</span> Entity 定义、Feature View 定义、Feature (Field) 定义 → Feast Registry 的核心内容<br>
+<span class="tag t-confirmed">已确认</span> Data Source 配置 → Feast DataSource, 存储在 FeatureView 内部<br>
+<span class="tag t-confirmed">已确认</span> On-Demand Feature View → Feast OnDemandFeatureView (请求时计算的特征)<br>
+<span class="tag t-confirmed">已确认</span> Feature Service → Feast FeatureService (将多个 View 打包供模型使用)<br><br>
+
+<strong>生产级扩展 (Feast 开源版不含, 但企业级系统有)</strong>:<br>
+<span class="tag t-inferred">合理推断</span> 版本管理 (version + status 状态机)<br>
+<span class="tag t-inferred">合理推断</span> 血缘关系 (数据源→View→Feature→Model 的依赖图)<br>
+<span class="tag t-inferred">合理推断</span> 质量指标历史 (PSI, 缺失率等时间序列)<br>
+<span class="tag t-inferred">合理推断</span> Materialization Job 运行记录<br>
+<span class="tag t-inferred">合理推断</span> 审计日志 (谁在什么时候改了什么)<br>
+<span class="tag t-inferred">合理推断</span> 权限 (Project/Team/User 级别 RBAC)
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px">
+<div class="ct">Registry 的核心能力及其确认状态</div>
+<div class="cd">
+<span class="tag t-confirmed">已确认</span> <strong>CRUD 操作</strong>: 注册/查询/更新/删除 Entity, FeatureView, Feature (Feast CLI + SDK 提供)<br><br>
+<span class="tag t-confirmed">已确认</span> <strong>特征发现</strong>: 通过 name/tags 搜索已注册的特征 (Feast 有 list_feature_views(), Feast UI 提供浏览)<br><br>
+<span class="tag t-confirmed">已确认</span> <strong>Materialization 触发</strong>: feast materialize 命令将离线数据写入 online store (Feast 核心功能)<br><br>
+<span class="tag t-inferred">合理推断</span> <strong>变更通知</strong>: Registry 变更后通知下游系统 (执行引擎, Serving) 热更新配置。Feast 开源版无此机制 (需要重启 serving)，但生产系统必须有。<br><br>
+<span class="tag t-inferred">合理推断</span> <strong>血缘追踪</strong>: Feast 开源版无血缘功能。Tecton (商业) 和企业内部系统有。<br><br>
+<span class="tag t-inferred">合理推断</span> <strong>Schema 兼容性校验</strong>: Feast 开源版的校验较简单 (类型检查)。生产系统需要更完整的前向/后向兼容性校验。
+</div>
+</div>
+
+<div class="W">
+<strong>Feast 中一个容易混淆的概念: Feature Service</strong><br><br>
+<span class="tag t-confirmed">已确认</span> Feast 中有一个叫 <code style="font-family:var(--font-mono);font-size:10px">FeatureService</code> 的概念 (不是 Feature Serving)。它的作用是将多个 Feature View 打包成一个"服务集合"——类似于前面讨论的 Model Binding。<br><br>
+<div class="code">// Feast FeatureService (已确认, 源码可见)
+FeatureService(
+    name="ctr_model_features",
+    features=[
+        user_profile_view[["gender", "age_bucket"]],
+        user_stats_view[["click_1h", "ctr_7d"]],
+        ad_meta_view[["category", "brand"]],
+    ]
+)</div>
+这个概念在我之前的讨论中被叫做"Model Binding"。两者的作用相同: 定义一个模型需要哪些 Feature View 的哪些 Feature。Feast 的命名是 FeatureService，不是 ModelBinding。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: Complete Corrected Picture ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">5</div>
+校正后的完整关系图
+</div>
+
+<div class="code"><span class="tag t-confirmed">已确认</span> 对象关系 (Feast + PAI-FeatureStore 共同验证)
+<span class="tag t-inferred">合理推断</span> 版本/血缘/监控 扩展
+
+Feature Registry (MySQL / Protobuf File)
+│
+├── Entity (极轻量)
+│     name: "user"
+│     join_keys: ["user_id"]
+│     -- 就这些，没有其他 --
+│
+├── Feature View (重量级)
+│     name: "user_realtime_stats"
+│     entities: ["user"]              ← 引用 Entity
+│     source: KafkaSource(...)        ← 数据从哪来
+│     schema: [Feature(...), ...]     ← 包含哪些字段
+│     online_config: {...}            ← 存到哪、怎么存
+│     materialization: {...}          ← 怎么调度、怎么写入
+│     version: 3                      ← (生产扩展)
+│     status: PROD                    ← (生产扩展)
+│     │
+│     └── Feature (字段定义)
+│           name: "click_1h"
+│           dtype: INT64
+│           default_value: "0"
+│           -- Feature 隶属于 Feature View 的某个 version --
+│
+├── Feature Service / Model Binding
+│     name: "ctr_model_features"
+│     features: [
+│       user_realtime_stats["click_1h", "ctr_6h"],  ← 引用 View + Feature
+│       ad_meta["category"],
+│     ]
+│     -- 定义"一个模型需要哪些特征" --
+│
+├── (生产扩展) Lineage Edges
+│     user_behavior_log → user_realtime_stats → click_1h → ctr_model_v5
+│
+├── (生产扩展) Quality Metrics
+│     click_1h: { date: 2024-11-20, psi: 0.12, missing_rate: 0.03 }
+│
+└── (生产扩展) Audit Logs
+      { operator: alice, action: UPDATE, view: user_realtime_stats, v2→v3 }</div>
+
+<div class="I">
+<strong>关键纠正总结</strong>:<br><br>
+① <strong>Entity 极简</strong>: 只有 name + join_keys。不包含任何 View/Feature/Store 配置。<br>
+② <strong>Feature View 是核心</strong>: source, schema, online_config, materialization 全部在 View 上。<br>
+③ <strong>Feature 是 View 的子对象</strong>: 通过 view_id + version 外键关联，不独立存在。<br>
+④ <strong>三者是平级对象</strong>: Entity 和 Feature View 通过 entities 字段关联 (View 引用 Entity name)，不是嵌套关系。<br>
+⑤ <strong>Feature Service (Feast) = Model Binding (我之前的说法)</strong>: 将多个 View 的 Feature 打包，定义模型需要什么。<br>
+⑥ <strong>Registry 是持久化层</strong>: 存储上述所有对象。Feast 用文件或 SQL，生产系统用 MySQL + 缓存 + 搜索索引。
+</div>
+</div>
+
+</div>

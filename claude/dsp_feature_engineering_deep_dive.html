@@ -1,0 +1,533 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.root{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.sec{margin-bottom:1.5rem}
+.sec-h{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.sec-h .num{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.6}
+.pill{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.p-off{background:#E6F1FB;color:#0C447C}
+.p-near{background:#E1F5EE;color:#085041}
+.p-on{background:#FAECE7;color:#712B13}
+.p-mw{background:#EEEDFE;color:#3C3489}
+.p-store{background:#FAEEDA;color:#633806}
+.p-warn{background:#FCEBEB;color:#791F1F}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.c-t{font-weight:500;font-size:12px;margin-bottom:4px}
+.c-d{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.info{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.warn{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.flow{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sep{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5}
+.arr{color:var(--color-text-tertiary);text-align:center;margin:6px 0;font-size:14px}
+</style>
+<div class="root">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">DSP 特征工程 & 特征拼接 — 深度拆解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature / 阿里 PAI-FeatureStore 真实线上方案</div>
+
+<!-- ========== SECTION 1: Feature Generation ========== -->
+<div class="sec">
+<div class="sec-h">
+<div class="num" style="background:#E6F1FB;color:#0C447C">1</div>
+特征生成 — 四大类特征从何而来
+</div>
+
+<!-- 1.1 User Features -->
+<div class="c" style="border-left:2px solid #185FA5;border-radius:0 8px 8px 0;margin-bottom:6px">
+<div class="c-t" style="color:#185FA5">1.1 用户侧特征 (User features)</div>
+<div class="c-d">
+<table class="tbl">
+<tr><th style="width:22%">特征名</th><th style="width:28%">生成方式</th><th style="width:18%">时效性</th><th>具体说明</th></tr>
+<tr><td>基础画像</td><td>Spark SQL 从用户注册表 + 行为推断</td><td><span class="p-off">T+1 离线</span></td><td>性别/年龄/城市/学历/设备档次。年龄和性别常由模型预测 (LR/XGB)，准确率 ~85%</td></tr>
+<tr><td>长期兴趣标签</td><td>Spark: 近 30d 行为 TF-IDF / Topic Model 聚合</td><td><span class="p-off">T+1 离线</span></td><td>一级/二级/三级品类偏好度，如 "数码>手机>旗舰机:0.82"。通常保留 Top-20 标签</td></tr>
+<tr><td>消费能力分层</td><td>Spark: 近 90d 购买金额/频次 → 分位数分桶</td><td><span class="p-off">T+1 离线</span></td><td>高/中/低 3~5 档。字节用 LTV 预估模型打分；阿里用 AIPL 人群分层</td></tr>
+<tr><td>用户 embedding</td><td>双塔 User Tower 前向推理</td><td><span class="p-near">近线</span><span class="p-on">在线</span></td><td>维度 64~128d。离线预计算覆盖 90% 活跃用户，剩余 10% 在线实时推理</td></tr>
+<tr><td>近期行为序列</td><td>Flink: 滑动窗口收集近 N 次点击/转化 ID</td><td><span class="p-near">近线 分钟级</span></td><td>保留近 50~200 条行为，按时间倒序。DIN/DIEN 模型的核心输入</td></tr>
+<tr><td>Session 实时行为</td><td>请求链路内直接透传</td><td><span class="p-on">在线 毫秒级</span></td><td>本次 session 浏览/点击序列，由客户端埋点 SDK 上报，Gateway 解析后传入</td></tr>
+<tr><td>统计类特征</td><td>Flink 窗口聚合: 近 1h/6h/1d/7d CTR/CVR</td><td><span class="p-near">近线</span></td><td>用户维度的点击率/转化率/曝光数。多窗口并行计算，结果写入 Tair</td></tr>
+<tr><td>人群包标记</td><td>DMP 圈选 → Bitmap 位图标记</td><td><span class="p-off">T+1 离线</span></td><td>广告主自定义人群、Look-alike 扩展人群。RoaringBitmap 压缩存储</td></tr>
+</table>
+</div>
+</div>
+
+<!-- 1.2 Ad Features -->
+<div class="c" style="border-left:2px solid #0F6E56;border-radius:0 8px 8px 0;margin-bottom:6px">
+<div class="c-t" style="color:#0F6E56">1.2 广告侧特征 (Ad features)</div>
+<div class="c-d">
+<table class="tbl">
+<tr><th style="width:22%">特征名</th><th style="width:28%">生成方式</th><th style="width:18%">时效性</th><th>具体说明</th></tr>
+<tr><td>广告基础属性</td><td>广告主投放系统写入 MySQL/Hive</td><td><span class="p-off">准实时</span></td><td>广告 ID、创意 ID、广告主 ID、品类、品牌、落地页 URL、出价类型 (CPC/CPM/OCPM)</td></tr>
+<tr><td>创意素材 embedding</td><td>预训练 CV/NLP 模型离线推理</td><td><span class="p-off">T+1 离线</span></td><td>图片: ResNet/ViT 提取 128d 向量；文本: BERT/SentenceTransformer 提取 64d 向量。阿里用 M6 多模态模型</td></tr>
+<tr><td>广告历史统计</td><td>Flink: 多窗口 CTR/CVR/CPM 聚合</td><td><span class="p-near">近线 分钟级</span></td><td>广告维度的近 1h/6h/1d/7d 点击率/转化率。冷启动广告用品类平均值平滑</td></tr>
+<tr><td>广告质量分</td><td>离线模型: 素材质量 + 落地页体验 + 历史表现</td><td><span class="p-off">T+1 离线</span></td><td>综合评分 0-10，影响 eCPM 计算和广告准入。字节有创意优选系统自动打分</td></tr>
+<tr><td>广告主预算/出价</td><td>广告投放系统实时查询</td><td><span class="p-on">在线 毫秒级</span></td><td>剩余日预算、实时出价、OCPM 目标 CPA。预算消耗速率由 Pacing 模块控制</td></tr>
+<tr><td>广告 embedding</td><td>双塔 Ad Tower 前向推理</td><td><span class="p-off">T+1 离线</span></td><td>64~128d。全量广告每小时更新一次索引 (用于向量召回)</td></tr>
+</table>
+</div>
+</div>
+
+<!-- 1.3 Context Features -->
+<div class="c" style="border-left:2px solid #D85A30;border-radius:0 8px 8px 0;margin-bottom:6px">
+<div class="c-t" style="color:#D85A30">1.3 上下文特征 (Context features)</div>
+<div class="c-d">
+<table class="tbl">
+<tr><th style="width:22%">特征名</th><th style="width:28%">生成方式</th><th style="width:18%">时效性</th><th>具体说明</th></tr>
+<tr><td>时间特征</td><td>请求时间戳在线提取</td><td><span class="p-on">在线</span></td><td>hour_of_day (0-23)、day_of_week (0-6)、is_weekend、is_holiday。影响用户活跃度和转化率差异巨大</td></tr>
+<tr><td>设备信息</td><td>Bid Request 解析</td><td><span class="p-on">在线</span></td><td>OS (iOS/Android)、OS 版本、屏幕分辨率、设备品牌型号、网络类型 (WiFi/4G/5G)</td></tr>
+<tr><td>媒体/广告位</td><td>Bid Request 中的 app_id + slot_id</td><td><span class="p-on">在线</span></td><td>App 名称、App 分类、广告位 ID、广告位类型 (Banner/开屏/信息流/激励视频)、广告位尺寸</td></tr>
+<tr><td>地理位置</td><td>IP/GPS → 地理编码</td><td><span class="p-on">在线</span></td><td>省/市/区 + 经纬度 → Geohash 编码 (精度 5~7位)。可关联 POI 数据 (商圈/学校/办公区)</td></tr>
+<tr><td>媒体统计特征</td><td>Flink: 广告位维度聚合</td><td><span class="p-near">近线</span></td><td>该广告位近 1h 平均 CTR/CPM/fill rate。反映流量质量变化</td></tr>
+<tr><td>竞价景观</td><td>在线计算模块</td><td><span class="p-on">在线</span></td><td>本次竞价参与广告数、最高出价估计、历史该位置 win rate。用于出价策略优化</td></tr>
+</table>
+</div>
+</div>
+
+<!-- 1.4 Cross Features -->
+<div class="c" style="border-left:2px solid #534AB7;border-radius:0 8px 8px 0;margin-bottom:6px">
+<div class="c-t" style="color:#534AB7">1.4 交叉特征 (Cross features)</div>
+<div class="c-d">
+<table class="tbl">
+<tr><th style="width:22%">特征名</th><th style="width:28%">生成方式</th><th style="width:18%">时效性</th><th>具体说明</th></tr>
+<tr><td>用户×广告 历史</td><td>Flink: user_id × ad_id 曝光/点击计数</td><td><span class="p-near">近线</span></td><td>该用户对该广告的历史曝光次数、点击次数、最后一次点击距今时间差。频次控制的基础</td></tr>
+<tr><td>用户×广告主</td><td>Flink: user_id × advertiser_id 聚合</td><td><span class="p-near">近线</span></td><td>该用户对该广告主的 7d/30d CTR/CVR。反映用户对品牌的偏好</td></tr>
+<tr><td>用户×品类</td><td>Spark + Flink: user_id × category 偏好度</td><td><span class="p-off">离线</span><span class="p-near">近线</span></td><td>品类偏好度评分。离线用 30d 计算基准，近线用 1d 增量修正</td></tr>
+<tr><td>用户×媒体</td><td>Flink: user_id × app_id 活跃度</td><td><span class="p-near">近线</span></td><td>该用户在该 App 的近 7d 活跃天数/平均停留时长。跨媒体行为差异大</td></tr>
+<tr><td>广告×广告位</td><td>Flink: ad_id × slot_id CTR 统计</td><td><span class="p-near">近线</span></td><td>特定广告在特定位置的表现。某些创意在信息流效果好但开屏差</td></tr>
+<tr><td>品类×时段</td><td>Spark: category × hour 转化率矩阵</td><td><span class="p-off">T+1 离线</span></td><td>电商类午间转化高、游戏类晚间转化高。24×N 的稀疏矩阵</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ========== SECTION 2: Feature Processing ========== -->
+<div class="sec">
+<div class="sec-h">
+<div class="num" style="background:#E1F5EE;color:#085041">2</div>
+特征处理 — 原始数据到模型输入的转换
+</div>
+
+<div class="sub">特征不能直接喂给模型，需要经过一系列处理将异构数据 (ID、数值、文本、序列) 统一编码为模型可消费的数值向量。</div>
+
+<div class="g2">
+<div class="c">
+<div class="c-t">2.1 ID 类特征 → Embedding 查表</div>
+<div class="c-d">
+<strong>处理方式</strong>: Hash(ID) % bucket_size → Embedding Table Lookup → 向量<br><br>
+<strong>适用特征</strong>: user_id, ad_id, advertiser_id, campaign_id, creative_id, app_id, slot_id, category_id, brand_id, city_id, device_model 等<br><br>
+<strong>关键参数</strong>:<br>
+• Embedding 维度: 通常 8~64d，高频 ID 用大维度<br>
+• Hash 桶数: 10M~100M (user_id)，1M~10M (ad_id)。Hash 冲突率控制在 &lt;5%<br>
+• 字节方案: Monolith 支持动态 Embedding，低频 ID 自动淘汰；阿里方案: XDL 支持千亿级稀疏参数<br><br>
+<strong>冲突处理</strong>: 多 Hash 函数 + 残差补偿网络 (DCN-V2 中的 Mixed-dimension Embedding)
+<br><span class="pill p-mw">Embedding Table</span> <span class="pill p-mw">PS/GPU</span>
+</div>
+</div>
+<div class="c">
+<div class="c-t">2.2 数值型特征 → 离散化 / 归一化</div>
+<div class="c-d">
+<strong>方式一: 等频分桶 (推荐)</strong><br>
+按分位数切 10~50 个桶。如 age: [0-18, 18-25, 25-35, 35-45, 45+] → bucket_id → Embedding<br><br>
+<strong>方式二: 等宽分桶</strong><br>
+固定步长切分，适用于分布均匀的特征 (如 hour_of_day)<br><br>
+<strong>方式三: 对数变换 + 归一化</strong><br>
+price, impression_count 等长尾分布特征: log(1+x) → MinMaxScaler → [0,1]<br><br>
+<strong>方式四: 自动分桶 (AutoDis)</strong><br>
+字节在 DLRM 中用可学习的分桶边界，端到端训练<br><br>
+<strong>处理后</strong>: 分桶 ID → Embedding 查表 (与 ID 类特征统一处理)
+<br><span class="pill p-mw">Bucketizer</span> <span class="pill p-mw">AutoDis</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="c-t">2.3 序列特征 → Pooling / Attention</div>
+<div class="c-d">
+<strong>行为序列处理管线</strong>:<br>
+原始序列 [item_id_1, item_id_2, ..., item_id_N]<br>
+↓ 每个 item_id → Embedding Lookup → N × d 矩阵<br>
+↓ 附加位置编码 + 时间衰减权重<br>
+↓ Pooling 策略 (二选一):<br><br>
+<strong>Average Pooling</strong>: 简单平均，粗排常用<br>
+<strong>Target Attention</strong>: 以候选广告为 Query，序列中每个 item 为 Key/Value，计算注意力加权和。DIN 核心机制，精排必用<br><br>
+<strong>长序列优化 (SIM/SDIM)</strong>:<br>
+用户行为序列 &gt; 1000 条时，先用 Hard Search (类目/品牌匹配) 或 Soft Search (embedding 近邻) 筛出 Top-K 相关行为 (K=50~100)，再做 Attention
+<br><span class="pill p-mw">DIN/DIEN</span> <span class="pill p-mw">SIM</span>
+</div>
+</div>
+<div class="c">
+<div class="c-t">2.4 多值/集合特征 → Multi-hot Embedding</div>
+<div class="c-d">
+<strong>适用场景</strong>: 用户兴趣标签列表、App 安装列表、搜索关键词集合等<br><br>
+<strong>处理方式</strong>:<br>
+[tag_1, tag_2, ..., tag_K] → 每个 tag Embedding Lookup → K × d 矩阵 → Sum/Mean Pooling → 1 × d 向量<br><br>
+<strong>带权版本</strong>:<br>
+每个 tag 有置信度分数: [(tag_1, 0.9), (tag_2, 0.7), ...]<br>
+→ Weighted Sum Pooling: Σ(weight_i × embedding_i)<br><br>
+<strong>注意</strong>: 需做截断，保留 Top-K 高权重标签 (K=20~50)，避免 padding 过长影响效率
+<br><span class="pill p-mw">Multi-hot</span> <span class="pill p-mw">Weighted Pool</span>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="c-t">2.5 文本特征 → 预训练 Embedding</div>
+<div class="c-d">
+<strong>广告标题/描述</strong>: 离线通过 BERT/SentenceTransformer 提取句向量 (64~256d)，存入特征 KV<br><br>
+<strong>搜索 Query</strong>: 在线实时 tokenize → 轻量 Bi-Encoder 推理 → 64d 向量<br><br>
+<strong>关键词集合</strong>: 分词后转 Multi-hot Embedding (同 2.4)<br><br>
+<strong>字节方案</strong>: 自研 ByteTransformer 做文本编码，推理耗时 &lt; 2ms<br>
+<strong>阿里方案</strong>: M6 多模态预训练模型统一处理文本 + 图像
+<br><span class="pill p-mw">BERT</span> <span class="pill p-mw">ByteTransformer</span>
+</div>
+</div>
+<div class="c">
+<div class="c-t">2.6 交叉特征 → 显式 / 隐式交叉</div>
+<div class="c-d">
+<strong>显式交叉 (离线预计算)</strong>:<br>
+• user_city × ad_category → 拼接后 Hash → Embedding<br>
+• user_gender × hour_of_day → 拼接后 Hash → Embedding<br>
+• 只做少量 (5~10 组) 业务先验强的交叉<br><br>
+<strong>隐式交叉 (模型内学习)</strong>:<br>
+• DCN-V2: Cross Network 自动学习高阶交叉<br>
+• AutoInt: Multi-head Self-Attention 做特征交叉<br>
+• CAN (Co-Action Network): 阿里提出的参数化交叉<br><br>
+<strong>原则</strong>: 离线做确定性强的交叉，模型内做探索性交叉
+<br><span class="pill p-mw">DCN-V2</span> <span class="pill p-mw">CAN</span>
+</div>
+</div>
+</div>
+
+<div class="info">
+<strong>特征处理统一视角</strong>: 不论原始类型，最终所有特征都转化为 Embedding 向量，然后 Concat 成一个大向量 (通常 200~500d)，输入 DNN 上层网络。这就是 "Embedding + MLP" 范式的核心思想。字节在 Monolith 论文中明确提到，他们的特征处理层统一为 Embedding Layer → Interaction Layer → MLP Layer 三层架构。
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ========== SECTION 3: Feature Processing Pitfalls ========== -->
+<div class="sec">
+<div class="sec-h">
+<div class="num" style="background:#FCEBEB;color:#791F1F">3</div>
+特征处理的关键注意点 — 踩坑与防线
+</div>
+
+<div class="g2">
+<div class="c" style="border-left:2px solid #A32D2D;border-radius:0 8px 8px 0">
+<div class="c-t" style="color:#A32D2D">3.1 训练-serving 一致性 (最重要)</div>
+<div class="c-d">
+<strong>问题</strong>: 训练时用离线 Hive 数据处理特征，serving 时用在线 C++/Go 处理，两套代码逻辑不一致导致特征值偏差 → 模型效果线下好线上差<br><br>
+<strong>解决方案 (字节 ByteFeature)</strong>:<br>
+• 特征处理逻辑统一注册，生成 DSL (领域特定语言)<br>
+• DSL 同时编译为 Spark UDF (离线) 和 C++ 算子 (在线)<br>
+• 自动化一致性校验: 定期抽样对比离线/在线特征值，diff &gt; 0.1% 报警<br><br>
+<strong>解决方案 (阿里 PAI-FeatureStore)</strong>:<br>
+• Feature Transform 定义一次，自动生成离线 (MaxCompute) + 在线 (ABFS) 双链路代码<br>
+• 用 "Point-in-time Join" 确保训练样本的特征值与当时 serving 一致
+</div>
+</div>
+<div class="c" style="border-left:2px solid #A32D2D;border-radius:0 8px 8px 0">
+<div class="c-t" style="color:#A32D2D">3.2 特征穿越 (Feature leakage)</div>
+<div class="c-d">
+<strong>问题</strong>: 训练时误用了 "未来信息"。典型: 用 T 时刻的统计特征预测 T 时刻的点击行为<br><br>
+<strong>常见穿越场景</strong>:<br>
+• 用当天全天 CTR 训练当天样本 (应该用截至当前请求时刻的 CTR)<br>
+• 样本拼接时用了点击/转化后才产生的特征<br>
+• 近线特征窗口包含了标签事件本身<br><br>
+<strong>防御手段</strong>:<br>
+• 样本拼接严格按时间戳 join (Point-in-time Join)<br>
+• Flink 窗口设置 "水位线" (watermark)，确保窗口关闭后才输出<br>
+• 离线回放校验: 随机抽 1% 样本，用请求时刻重算特征，与训练特征对比
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c" style="border-left:2px solid #BA7517;border-radius:0 8px 8px 0">
+<div class="c-t" style="color:#854F0B">3.3 特征缺失 & 默认值</div>
+<div class="c-d">
+<strong>问题</strong>: 新用户/新广告没有历史数据，特征缺失率可达 10~30%<br><br>
+<strong>策略</strong>:<br>
+• <strong>ID 类缺失</strong>: 使用默认 Embedding (全局均值或可训练的 default embedding)。字节 Monolith 中每个 Embedding Table 有一个 slot-0 作为 default<br>
+• <strong>数值类缺失</strong>: 填中位数或全局均值 + 增加 "is_missing" 二值指示特征<br>
+• <strong>统计类缺失 (冷启动)</strong>: 用上级粒度平滑。如广告无 CTR → 用广告主 CTR → 用品类 CTR → 全局 CTR。层级回退<br>
+• <strong>序列类缺失</strong>: 空序列 → 零向量 or 全局平均 embedding
+</div>
+</div>
+<div class="c" style="border-left:2px solid #BA7517;border-radius:0 8px 8px 0">
+<div class="c-t" style="color:#854F0B">3.4 特征稳定性 & 监控</div>
+<div class="c-d">
+<strong>问题</strong>: 特征分布漂移 (data drift) 导致模型效果衰减<br><br>
+<strong>监控指标</strong>:<br>
+• <strong>PSI (Population Stability Index)</strong>: 对比训练集 vs 线上分布，PSI &gt; 0.25 报警<br>
+• <strong>缺失率</strong>: 超过历史均值 2 倍报警<br>
+• <strong>覆盖率</strong>: 特征非零值占比突降报警<br>
+• <strong>值域异常</strong>: 出现超出训练集 min/max 的极端值报警<br><br>
+<strong>字节实践</strong>: ByteFeature 内置特征质量看板，自动计算每个特征的日级 PSI，超阈值触发 PagerDuty 告警并自动回滚到上一版本特征
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c" style="border-left:2px solid #0F6E56;border-radius:0 8px 8px 0">
+<div class="c-t" style="color:#0F6E56">3.5 特征维度爆炸 & 效率</div>
+<div class="c-d">
+<strong>问题</strong>: 千万级广告 × 亿级用户 → 交叉特征空间爆炸<br><br>
+<strong>控制手段</strong>:<br>
+• <strong>Hash Trick</strong>: 限定桶数 (如 user_id Hash 到 10M 桶) 控制参数量<br>
+• <strong>特征裁剪</strong>: 定期通过特征重要性 (Gain/SHAP) 淘汰低价值特征。字节每月做一次全量特征评估<br>
+• <strong>Embedding 维度自适应</strong>: 高频 ID 用 32d，低频用 8d (Mixed-dimension Embedding)<br>
+• <strong>量化压缩</strong>: FP32 → FP16/INT8 embedding，内存减半性能几乎无损
+</div>
+</div>
+<div class="c" style="border-left:2px solid #0F6E56;border-radius:0 8px 8px 0">
+<div class="c-t" style="color:#0F6E56">3.6 样本拼接延迟 & 归因窗口</div>
+<div class="c-d">
+<strong>问题</strong>: 点击发生在曝光后几秒，转化可能在几天后，样本何时 "关闭"？<br><br>
+<strong>样本拼接管线</strong>:<br>
+• 曝光日志 (立即产生) → Kafka<br>
+• 点击日志 (延迟 ~秒) → Kafka<br>
+• 转化日志 (延迟 ~小时/天) → Kafka<br>
+• Flink 用 Event Time + 归因窗口做 Interval Join:<br>
+  - 点击归因: 曝光后 30min 内的点击<br>
+  - 转化归因: 点击后 7d / 曝光后 1d<br><br>
+<strong>延迟标签</strong>: 转化延迟样本用 "延迟反馈模型" (DFM/ESDF) 修正 CVR 估计偏差
+</div>
+</div>
+</div>
+
+<div class="warn">
+<strong>字节内部经验: 线上效果问题 80% 是特征问题</strong>。模型架构迭代带来的增益通常是 0.1~0.5%，而特征 bug (穿越、不一致、缺失) 造成的损失可以达到 5~10%。因此特征工程的 "防守" (一致性、监控、回滚) 比 "进攻" (新特征) 更重要。
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ========== SECTION 4: Engineering Architecture ========== -->
+<div class="sec">
+<div class="sec-h">
+<div class="num" style="background:#EEEDFE;color:#3C3489">4</div>
+工程架构 — Feature Store 全景
+</div>
+
+<div class="sub">Feature Store 是特征工程的核心基础设施，承担特征的定义、生产、存储、服务、监控全生命周期管理。</div>
+
+<!-- Offline Pipeline -->
+<div class="flow">
+<div style="font-weight:500;font-size:12px;margin-bottom:4px">4.1 离线特征生产管线 (Batch Pipeline)</div>
+<span class="pill p-store">用户行为日志 (HDFS)</span> + <span class="pill p-store">广告元数据 (MySQL)</span> + <span class="pill p-store">转化日志 (Hive)</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">调度: Airflow DAG, 每天 02:00~06:00 执行</span>
+<br><span class="pill p-mw">Spark SQL / PySpark</span> 特征加工 (聚合、分桶、交叉)
+<br>↓ <span style="color:var(--color-text-tertiary)">输出: 特征 Hive 表 (分区: ds=日期)</span>
+<br><span class="pill p-mw">Spark BulkLoad / DataX</span> 批量导入在线存储
+<br>↓
+<br><span class="pill p-store">Tair (阿里) / ByteKV (字节)</span> — KV 存储，key = feature_name:entity_id，value = 序列化特征值
+<br><span style="color:var(--color-text-tertiary)">全量导入 + 增量 merge，TTL = 30d，写入 QPS 峰值 ~500K/s</span>
+</div>
+
+<!-- Near-line Pipeline -->
+<div class="flow">
+<div style="font-weight:500;font-size:12px;margin-bottom:4px">4.2 近线特征生产管线 (Streaming Pipeline)</div>
+<span class="pill p-store">客户端埋点 SDK</span> → <span class="pill p-store">数据采集 (Scribe/LogAgent)</span>
+<br>↓
+<br><span class="pill p-store">Kafka Topic</span> (行为日志: 点击/浏览/搜索/转化，QPS 峰值 ~10M/s)
+<br>↓
+<br><span class="pill p-mw">Flink Job 集群</span> — 特征实时聚合
+<br><span style="color:var(--color-text-tertiary)">• 窗口函数: Sliding(30min, 5min), Tumbling(1h, 6h, 1d)</span>
+<br><span style="color:var(--color-text-tertiary)">• 聚合算子: COUNT, SUM, AVG, DISTINCT_COUNT, TOP_K, LAST_N</span>
+<br><span style="color:var(--color-text-tertiary)">• Embedding 更新: 增量 Average (加权) 更新用户兴趣向量</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">Sink: 异步批量写入 (micro-batch 5s)</span>
+<br><span class="pill p-store">Tair / Redis Cluster</span> — 与离线特征使用相同 KV 命名空间
+<br><span style="color:var(--color-text-tertiary)">近线特征 TTL 较短 (1~7d)，覆盖离线同名特征 (新值优先)</span>
+</div>
+
+<!-- Online Pipeline -->
+<div class="flow">
+<div style="font-weight:500;font-size:12px;margin-bottom:4px">4.3 在线特征服务 (Online Serving)</div>
+<span class="pill p-on">Bid Request 到达 Ad Server</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">Step 1: 请求解析 + 在线特征实时计算 (~1ms)</span>
+<br><span style="color:var(--color-text-tertiary)">• 解析 device_id → OneID 映射 (本地 LRU Cache 命中率 ~90%，miss 查 Tair)</span>
+<br><span style="color:var(--color-text-tertiary)">• 提取 context 特征: 时间分桶、设备信息、地理编码</span>
+<br><span style="color:var(--color-text-tertiary)">• 计算在线统计: 竞价景观、预算实时余额</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">Step 2: 批量拉取远端特征 (~5-8ms)</span>
+<br><span class="pill p-mw">Feature Serving 模块</span> 根据 user_id + candidate_ad_ids 批量构造 keys
+<br>↓ <span style="color:var(--color-text-tertiary)">并行 MGet (Pipeline 模式)</span>
+<br><span class="pill p-store">Tair/Redis Cluster</span> — 一次 MGet 拉取该用户所有特征 (通常 50~100 个 key)
+<br><span style="color:var(--color-text-tertiary)">• P99 延迟 &lt; 3ms (同机房)</span>
+<br><span style="color:var(--color-text-tertiary)">• 本地 LRU Cache: 热 key 命中率 &gt; 85%，大幅降低远端访问</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">Step 3: 特征拼接 + 编码 (~2ms)</span>
+<br><span class="pill p-mw">Feature Assembler</span>
+<br><span style="color:var(--color-text-tertiary)">• 按模型配置 (feature_config.pb) 指定的顺序拼接特征</span>
+<br><span style="color:var(--color-text-tertiary)">• 缺失填充: 根据配置选择 default_value / 上级粒度回退</span>
+<br><span style="color:var(--color-text-tertiary)">• 序列化为 FlatBuffer / Protobuf 传给模型 Serving</span>
+<br>↓
+<br><span class="pill p-mw">模型推理 (TF Serving / Triton)</span> — Embedding Layer 接收特征 ID，进行查表 + 前向传播
+</div>
+
+<div class="info">
+<strong>Feature Serving 的核心优化技巧</strong><br><br>
+<strong>① 批量化 (Batching)</strong>: 精排有 200~500 个候选广告，每个需要拉取广告特征。将所有广告 ID 的特征 key 合并为一次 MGet，而非逐条查询。一次 MGet 500 个 key 的耗时 ≈ 一次 Get 1 个 key。<br><br>
+<strong>② 用户特征只拉一次</strong>: 用户特征对所有候选广告相同，只拉取一次缓存在内存中。广告特征按候选集动态拉取。上下文特征在线计算不需要远端访问。<br><br>
+<strong>③ 预取 (Prefetch)</strong>: 在召回阶段就启动用户特征的异步拉取，与召回计算并行。等到特征拼接阶段时，用户特征已就绪。字节的做法是在请求进入时立刻启动一个 goroutine 拉取用户特征。<br><br>
+<strong>④ 本地缓存分层</strong>: L1 = 进程内 LRU (Go sync.Map / C++ LRUCache，容量 ~100K key)，L2 = 本机 RocksDB (SSD)，L3 = Tair/Redis。热门广告特征可以在 L1 命中 &gt; 95%。<br><br>
+<strong>⑤ 特征压缩</strong>: Embedding 使用 FP16 存储 (vs FP32)，序列特征截断到 Top-K，多值特征只保留 Top-20 高权重标签。总特征传输量控制在每请求 &lt; 10KB。
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ========== SECTION 5: Feature Assembly Detail ========== -->
+<div class="sec">
+<div class="sec-h">
+<div class="num" style="background:#FAEEDA;color:#633806">5</div>
+特征拼接实战 — 一次请求中的完整拼接流程
+</div>
+
+<div class="sub">以精排阶段为例，展示一个请求中 500 个候选广告如何完成特征拼接。</div>
+
+<div class="flow">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">精排特征拼接时序 (单次请求，~10ms)</div>
+
+<strong>T+0ms</strong> — 请求到达，解析 Bid Request<br>
+<span style="color:var(--color-text-tertiary)">├ 提取 device_id, ip, ua, app_id, slot_id, geo</span><br>
+<span style="color:var(--color-text-tertiary)">├ device_id → OneID 映射 (本地 Cache 查询)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 在线 Context 特征就地计算 (hour_bucket, device_type, network_type, geohash)</span><br><br>
+
+<strong>T+1ms</strong> — 并行启动两个异步任务<br>
+<span style="color:var(--color-text-tertiary)">├ 任务 A: MGet 用户特征 (50~80 个 key)</span><br>
+<span style="color:var(--color-text-tertiary)">│   → user_profile, user_tags, user_embedding, user_behavior_seq,</span><br>
+<span style="color:var(--color-text-tertiary)">│     user_stats_1h, user_stats_6h, user_stats_7d, crowd_bitmap</span><br>
+<span style="color:var(--color-text-tertiary)">└ 任务 B: MGet 广告特征 (500 个候选 × 5~8 个特征 ≈ 2500~4000 key)</span><br>
+<span style="color:var(--color-text-tertiary)">    → ad_meta, ad_embedding, ad_stats, creative_embedding, quality_score</span><br><br>
+
+<strong>T+5ms</strong> — 用户特征 + 广告特征就绪<br>
+<span style="color:var(--color-text-tertiary)">├ MGet 交叉特征 (user×advertiser, user×category, user×ad 曝光次数)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 按 feature_config 规定的 slot 顺序组装特征向量</span><br><br>
+
+<strong>T+8ms</strong> — 特征拼接完成，构造模型输入<br>
+<span style="color:var(--color-text-tertiary)">├ 共享特征 (用户 + 上下文): 所有候选共用 1 份，不重复拷贝</span><br>
+<span style="color:var(--color-text-tertiary)">├ 个性化特征 (广告 + 交叉): 每个候选独有</span><br>
+<span style="color:var(--color-text-tertiary)">├ 缺失特征填充 default value</span><br>
+<span style="color:var(--color-text-tertiary)">└ 序列化为 FlatBuffer batch (500 条样本 × ~200 个特征 slot)</span><br><br>
+
+<strong>T+9ms</strong> — 发送到 TF Serving / Triton GPU 推理<br>
+<span style="color:var(--color-text-tertiary)">└ Embedding Lookup + DNN Forward，返回 500 个 pCTR/pCVR 分数</span>
+</div>
+
+<div class="info">
+<strong>Feature Config (特征配置表) 示例</strong><br>
+特征配置是一个 Protobuf 文件，定义了模型期望的每个特征 slot:<br><br>
+<code style="font-family:var(--font-mono);font-size:11px">
+slot_id: 1 | name: "user_gender" | type: ID | source: TAIR | key_tpl: "uf:gender:{user_id}" | default: 0 | emb_dim: 4<br>
+slot_id: 2 | name: "user_age_bucket" | type: ID | source: TAIR | key_tpl: "uf:age:{user_id}" | default: 0 | emb_dim: 8<br>
+slot_id: 3 | name: "user_city" | type: ID | source: TAIR | key_tpl: "uf:city:{user_id}" | default: 0 | emb_dim: 16<br>
+slot_id: 10 | name: "user_behavior_seq" | type: SEQ | source: TAIR | key_tpl: "uf:seq:{user_id}" | max_len: 50 | emb_dim: 32<br>
+slot_id: 20 | name: "ad_category" | type: ID | source: TAIR | key_tpl: "af:cat:{ad_id}" | default: 0 | emb_dim: 16<br>
+slot_id: 30 | name: "hour_of_day" | type: ID | source: ONLINE | default: 0 | emb_dim: 8<br>
+slot_id: 40 | name: "user_x_advertiser_ctr" | type: FLOAT | source: TAIR | key_tpl: "cf:ua_ctr:{user_id}_{adv_id}" | default: -1<br>
+</code><br>
+每个 slot 定义了特征名、类型、来源、KV key 模板、默认值、Embedding 维度。Feature Assembler 遍历此配置，逐 slot 填充值。
+</div>
+</div>
+
+<div class="sep"></div>
+
+<!-- ========== SECTION 6: Tech Stack ========== -->
+<div class="sec">
+<div class="sec-h">
+<div class="num" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">6</div>
+完整技术栈清单
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="c-t">特征生产层</div>
+<div class="c-d">
+<strong>离线计算</strong><br>
+• Spark 3.x (PySpark/SparkSQL)<br>
+• Hive (数据仓库)<br>
+• HDFS (分布式存储)<br>
+• Airflow (DAG 调度)<br><br>
+<strong>近线计算</strong><br>
+• Flink 1.17+ (流计算引擎)<br>
+• Kafka 3.x (消息队列)<br>
+• RocketMQ (阿里方案备选)<br><br>
+<strong>模型推理 (离线特征)</strong><br>
+• PyTorch / TensorFlow (训练)<br>
+• ONNX Runtime (推理加速)
+</div>
+</div>
+<div class="c">
+<div class="c-t">特征存储层</div>
+<div class="c-d">
+<strong>在线 KV</strong><br>
+• Tair (阿里自研，兼容 Redis)<br>
+• ByteKV (字节自研)<br>
+• Redis Cluster (开源方案)<br><br>
+<strong>本地缓存</strong><br>
+• RocksDB (嵌入式 KV)<br>
+• Go LRU / C++ LRUCache<br>
+• Caffeine (Java 方案)<br><br>
+<strong>离线存储</strong><br>
+• Hive / Iceberg / Hudi<br>
+• HDFS / OSS / S3
+</div>
+</div>
+<div class="c">
+<div class="c-t">特征服务层</div>
+<div class="c-d">
+<strong>Feature Serving</strong><br>
+• 自研 C++/Go 服务 (字节/阿里)<br>
+• Feast (开源 Feature Store)<br>
+• Tecton (商业方案)<br><br>
+<strong>模型 Serving</strong><br>
+• TF Serving (TensorFlow)<br>
+• Triton (NVIDIA，多框架)<br>
+• TensorRT (推理优化)<br><br>
+<strong>监控 & 治理</strong><br>
+• Prometheus + Grafana<br>
+• 自研特征质量看板<br>
+• PagerDuty (告警)
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="c-t">特征平台核心能力 (字节 ByteFeature)</div>
+<div class="c-d">
+<strong>特征注册中心</strong>: 统一元信息管理，每个特征有唯一 ID + 版本 + Owner + 血缘关系<br>
+<strong>DSL 引擎</strong>: 一份逻辑定义，编译为离线 Spark UDF + 在线 C++ 算子<br>
+<strong>特征市场</strong>: 跨团队特征共享与复用，避免重复开发<br>
+<strong>AB 实验集成</strong>: 特征与模型绑定实验分桶，支持灰度上线<br>
+<strong>自动化回测</strong>: 新特征上线前自动跑离线 AUC/GAUC 评估
+</div>
+</div>
+<div class="c">
+<div class="c-t">特征平台核心能力 (阿里 PAI-FeatureStore)</div>
+<div class="c-d">
+<strong>Feature Entity</strong>: 以实体 (User/Item/Context) 为中心组织特征<br>
+<strong>Feature View</strong>: 特征逻辑视图，自动生成离线 + 在线双链路<br>
+<strong>Point-in-time Join</strong>: 训练样本自动按事件时间拼接历史特征，防穿越<br>
+<strong>ABFS (阿里巴巴特征服务)</strong>: 在线特征服务，P99 &lt; 2ms<br>
+<strong>特征血缘追踪</strong>: 从数据源 → 特征表 → 模型的全链路血缘
+</div>
+</div>
+</div>
+</div>
+
+<div class="sep"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+特征拼接延迟预算: 总计 ≤10ms | OneID 映射 ~1ms | 用户特征 MGet ~3ms (并行) | 广告特征 MGet ~3ms (并行) | 交叉特征 MGet ~2ms | 拼接编码 ~1ms
+</div>
+</div>

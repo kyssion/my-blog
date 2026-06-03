@@ -1,0 +1,303 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">Feature Store vs 索引构建服务 — 职责边界</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">真实生产系统中 Embedding 从"特征"变为"可检索索引"的过程，涉及两个不同系统的协作</div>
+
+<!-- ==================== SECTION 0 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+核心结论 — Feature Store 的职责在 Embedding 写入 KV 后结束
+</div>
+
+<div class="I">
+<strong>你的判断完全正确。</strong>在字节和阿里的真实架构中，Feature Store 负责的是 Embedding 的<strong>生产和 KV 存储</strong>，而向量索引的<strong>构建和部署</strong>由另一个独立系统负责——在字节叫<strong>召回引擎服务 (Recall Engine Service)</strong>，在阿里叫<strong>BE (Basic Engine) / HA3 索引构建平台</strong>。<br><br>
+
+两者的边界可以用一句话概括：<br>
+<strong>Feature Store 产出 Embedding 值 → 存入 Tair/Hive</strong> (到此为止)<br>
+<strong>Index Builder 从 Tair/Hive 读取 Embedding → 构建向量索引 → 部署到 VE-KNN/Proxima</strong> (另一个系统)<br><br>
+
+Feature Store 不知道也不关心 Embedding 最终会被谁消费——它可能被 Feature Serving 直接拉取作为精排特征 (这是 Feature Store 的管辖范围)，也可能被 Index Builder 读取去构建向量索引 (这不是 Feature Store 的管辖范围)。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 1 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+三个独立系统及其各自职责
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">完整的 Embedding 生命周期涉及三个系统</div>
+
+<strong>系统 A: Feature Store (ByteFeature / PAI-FeatureStore)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 职责: Embedding 的生产、存储、版本管理、质量监控</span><br>
+<span style="color:var(--color-text-tertiary)">├ 输入: 模型推理输出 (双塔 User/Ad Tower 的 forward 结果)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 输出 1: Tair KV → key="uf:emb:{user_id}", value=FP16[128]</span><br>
+<span style="color:var(--color-text-tertiary)">│         (供 Feature Serving 在线拉取，作为精排模型的 dense 特征)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 输出 2: Hive 表 → feature_output.ad_embedding/ds=today</span><br>
+<span style="color:var(--color-text-tertiary)">│         (供 Index Builder 离线读取构建索引)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 边界: 到此结束。Feature Store 不负责索引构建。</span><br><br>
+
+<strong>系统 B: Index Builder (索引构建服务)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 职责: 从 Feature Store 的存储中读取 Embedding，构建向量索引并部署</span><br>
+<span style="color:var(--color-text-tertiary)">├ 输入: Hive 表中的 ad_embedding (从 Feature Store 产出)</span><br>
+<span style="color:var(--color-text-tertiary)">│        + 广告元信息 (品类/地域/预算状态，来自广告投放系统)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 做什么:</span><br>
+<span style="color:var(--color-text-tertiary)">│   ① 读取全量广告 Embedding + 属性 (Spark Job)</span><br>
+<span style="color:var(--color-text-tertiary)">│   ② 调用 Faiss 构建 HNSW+PQ 索引</span><br>
+<span style="color:var(--color-text-tertiary)">│   ③ 构建属性倒排/Bitmap 索引</span><br>
+<span style="color:var(--color-text-tertiary)">│   ④ 索引分片 + 上传到索引存储 (HDFS)</span><br>
+<span style="color:var(--color-text-tertiary)">│   ⑤ 通知 Recall Engine 加载新索引 (双缓冲切换)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 调度: 独立的 Airflow DAG (如每小时 xx:30 触发)</span><br>
+<span style="color:var(--color-text-tertiary)">│        依赖 Feature Store 的 Embedding 产出完成</span><br>
+<span style="color:var(--color-text-tertiary)">└ Owner: 通常是召回/检索团队，不是特征团队</span><br><br>
+
+<strong>系统 C: Recall Engine (在线召回引擎)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 职责: 加载索引、服务在线 ANN 检索请求</span><br>
+<span style="color:var(--color-text-tertiary)">├ 引擎: VE-KNN (字节) / Proxima (阿里) / Milvus (开源)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 做什么:</span><br>
+<span style="color:var(--color-text-tertiary)">│   ① 从 HDFS 加载 Index Builder 产出的索引文件</span><br>
+<span style="color:var(--color-text-tertiary)">│   ② 服务在线 gRPC 请求: query_embedding → Top-K ad_ids</span><br>
+<span style="color:var(--color-text-tertiary)">│   ③ 管理增量缓冲 (新广告实时写入)</span><br>
+<span style="color:var(--color-text-tertiary)">└ Owner: 召回/检索团队</span>
+</div>
+
+<div class="W">
+<strong>组织架构上的分离</strong>: 在字节跳动内部，Feature Store (ByteFeature) 由<strong>基础架构/数据平台团队</strong>维护，Index Builder 和 Recall Engine 由<strong>广告引擎/召回团队</strong>维护。两个团队通过 Hive 表和 Tair 作为数据契约 (Data Contract) 交互，各自独立迭代。这种组织边界直接反映在系统架构上。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+系统间的数据流和依赖关系
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">以广告 Embedding 为例的完整数据流</div>
+
+<strong>02:00</strong> — <span class="p pp">Feature Store</span> 触发 ad_dssm_embedding 的 Batch Materialization<br>
+<span style="color:var(--color-text-tertiary)">├ 双塔模型 Ad Tower 对全量广告做 forward 推理</span><br>
+<span style="color:var(--color-text-tertiary)">├ 输出 Hive 表: feature_output.ad_embedding_v1/ds=today</span><br>
+<span style="color:var(--color-text-tertiary)">│   Schema: (ad_id BIGINT, embedding ARRAY&lt;FLOAT&gt;, category_id INT, ...)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 同时写入 Tair: key="af:emb:{ad_id}" (供 Feature Serving 精排使用)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 完成时间: ~03:30</span><br>
+<span style="color:var(--color-text-tertiary)">└ Feature Store 的工作到此结束</span><br><br>
+
+<strong>03:30</strong> — <span class="p pb">Index Builder</span> 的 Airflow DAG 被依赖触发<br>
+<span style="color:var(--color-text-tertiary)">├ HivePartitionSensor 检测到 feature_output.ad_embedding_v1/ds=today 就绪</span><br>
+<span style="color:var(--color-text-tertiary)">├ 同时读取广告投放系统的元数据 (广告状态/预算/定向条件)</span><br>
+<span style="color:var(--color-text-tertiary)">├ JOIN: embedding 表 × 广告元数据表 → 完整的索引输入</span><br>
+<span style="color:var(--color-text-tertiary)">├ 过滤: 只索引"在投"状态的广告 (下线/暂停的不入索引)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Spark Job 中调用 Faiss 构建 HNSW+PQ 索引</span><br>
+<span style="color:var(--color-text-tertiary)">├ 构建属性倒排索引 (category, region, budget_status)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 索引分片 + 上传 HDFS</span><br>
+<span style="color:var(--color-text-tertiary)">└ 完成时间: ~04:30</span><br><br>
+
+<strong>04:30</strong> — <span class="p pg">Recall Engine</span> 加载新索引<br>
+<span style="color:var(--color-text-tertiary)">├ Index Builder 通知 Recall Engine: "新索引就绪"</span><br>
+<span style="color:var(--color-text-tertiary)">├ Recall Engine 从 HDFS 下载索引文件到本地</span><br>
+<span style="color:var(--color-text-tertiary)">├ 加载到内存 (双缓冲: 新索引加载完毕后原子切换)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 新索引上线，开始服务在线检索请求</span>
+</div>
+
+<div class="I">
+<strong>依赖关系的实现方式</strong>:<br><br>
+Index Builder 如何知道 Feature Store 的 Embedding 已经产出完毕？两种主流方式:<br><br>
+<strong>方式一: Airflow 跨 DAG 依赖 (字节)</strong><br>
+Feature Store 的 DAG (fv_ad_embedding_v1) 完成后，Index Builder 的 DAG (idx_ad_recall) 中的 ExternalTaskSensor 感知到上游完成 → 触发索引构建。两个 DAG 在同一个 Airflow 集群但属于不同 Owner。<br><br>
+<strong>方式二: 数据就绪事件 (阿里)</strong><br>
+Feature Store 的 Materialization 完成后，向 MetaService 发送"分区就绪"事件 (类似 Hive metastore 的 partition event)。Index Builder 订阅此事件，收到后启动构建。更加解耦，不需要 Airflow 跨 DAG 依赖。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+为什么要分离 — 不让 Feature Store 直接写向量索引的原因
+</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#993C1D">
+<div class="ct" style="color:#993C1D">原因一: 关注点不同</div>
+<div class="cd">
+Feature Store 关心的是特征的"生产、存储、版本、质量"——它管理的是 KV 形态的数据 (key=entity_id, value=特征值)。<br><br>
+Index Builder 关心的是"索引算法、分片策略、查询性能"——它管理的是专用检索数据结构 (HNSW 图、PQ 码本、倒排表)。<br><br>
+两者的技术栈完全不同: Feature Store 是数据工程 (Spark/Flink/Tair)；Index Builder 是检索工程 (Faiss/自研 ANN/C++ 高性能)。让一个系统同时精通两个领域是不现实的。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#993C1D">
+<div class="ct" style="color:#993C1D">原因二: 索引需要额外信息</div>
+<div class="cd">
+向量索引不只是"把 Embedding 存进去"这么简单。它还需要:<br><br>
+• <strong>广告状态过滤</strong>: 下线/暂停/预算耗尽的广告不应该入索引。这个信息来自广告投放系统，不在 Feature Store 中。<br><br>
+• <strong>属性索引构建</strong>: category_id, region_id 等倒排索引需要来自广告投放系统的定向配置，Feature Store 不持有这些数据。<br><br>
+• <strong>索引参数调优</strong>: HNSW 的 M、efConstruction、PQ 子空间数等参数由召回团队根据检索精度/延迟 tradeoff 调优，与 Feature Store 无关。<br><br>
+Index Builder 需要 JOIN 多个数据源——Feature Store 只是其中之一。
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#BA7517">
+<div class="ct" style="color:#854F0B">原因三: 更新频率不同</div>
+<div class="cd">
+Feature Store 中 Embedding 的更新频率和索引重建频率不一定一致:<br><br>
+• Feature Store 的 ad_embedding: 每天凌晨全量更新 (T+1)<br>
+• Index Builder 的索引重建: 每小时一次 (因为广告状态每小时变化——新广告上线、旧广告预算耗尽)<br><br>
+索引每小时重建时，Embedding 不变 (还是 T+1 的版本)，但广告的"是否在投"状态变了。Index Builder 需要用最新的广告状态重新过滤 + 重建属性索引，而向量索引部分可以复用。<br><br>
+这说明索引重建的触发条件和 Embedding 更新的触发条件是<strong>解耦的</strong>。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#BA7517">
+<div class="ct" style="color:#854F0B">原因四: 故障隔离</div>
+<div class="cd">
+Feature Store 故障 (如 Embedding 产出延迟) 不应该直接导致向量召回不可用。Index Builder 有自己的容错机制:<br><br>
+• 今天的 Embedding 没产出？Index Builder 用昨天的 Embedding + 今天的广告状态重建索引。召回质量略降但服务不中断。<br><br>
+• Tair 故障导致 Embedding KV 不可读？只影响 Feature Serving 的精排特征拉取。Index Builder 从 Hive 读，不受 Tair 影响。<br><br>
+• Index Builder 自身故障？Recall Engine 继续用上一版索引服务。Feature Store 完全不受影响。<br><br>
+分离后任何一个系统的故障都被控制在自己的范围内。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+同一份 Embedding 的两条消费路径
+</div>
+
+<div class="sub">Feature Store 产出的同一份 ad_embedding 被两个完全不同的下游系统消费，用于不同目的。这是"生产者-消费者"模式的典型实践。</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#534AB7">
+<div class="ct" style="color:#534AB7">路径一: Feature Serving 消费 (精排)</div>
+<div class="cd">
+<strong>消费者</strong>: Feature Serving SDK (嵌入 Ad Server)<br>
+<strong>读取源</strong>: Tair KV (key="af:emb:{ad_id}")<br>
+<strong>用途</strong>: 作为精排模型的 dense 输入特征。候选广告的 128d 向量直接送入 MLP。<br>
+<strong>读取时机</strong>: 每次广告请求，实时拉取<br>
+<strong>延迟要求</strong>: &lt;2ms (Tair P99)<br>
+<strong>数据格式</strong>: FlatBuffer 序列化的 FP16 数组<br><br>
+这条路径完全在 Feature Store 的管辖范围内——从 Materialization 到 Tair 到 Feature Serving，全链路由 Feature Store 平台管理。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">路径二: Index Builder 消费 (召回)</div>
+<div class="cd">
+<strong>消费者</strong>: Index Builder (召回团队的独立服务)<br>
+<strong>读取源</strong>: Hive 表 (feature_output.ad_embedding_v1)<br>
+<strong>用途</strong>: 构建 HNSW+PQ 向量索引，部署到 VE-KNN/Proxima<br>
+<strong>读取时机</strong>: 每小时/每天定时任务<br>
+<strong>延迟要求</strong>: 小时级 (离线批处理)<br>
+<strong>数据格式</strong>: Hive Parquet 中的 ARRAY&lt;FLOAT&gt; 列<br><br>
+这条路径在 Feature Store 的管辖范围之外——Feature Store 只负责确保 Hive 表分区按时就绪，不关心下游怎么使用。Index Builder 从 Hive 读取后，执行索引构建、分片、部署等一系列操作。
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>为什么 Index Builder 从 Hive 读而不从 Tair 读?</strong><br><br>
+理论上 Index Builder 可以从 Tair 批量读取 Embedding。但实际中<strong>几乎不这么做</strong>，原因:<br><br>
+① <strong>批量 scan 会冲击在线 Tair</strong>: 索引构建需要全量读取 1000 万条 Embedding。从 Tair 批量 scan 会产生巨大的读 QPS 洪峰，影响在线 Feature Serving 的延迟。Hive/HDFS 是天然的批量读取存储，对在线系统零影响。<br><br>
+② <strong>Hive 有分区版本</strong>: Hive 表按 ds 分区，天然支持"读昨天/读今天"的版本选择。如果今天的 Embedding 有问题，Index Builder 可以回退到 ds=yesterday 重建索引。Tair 是 last-write-wins，没有版本回溯能力。<br><br>
+③ <strong>属性 JOIN 在 Hive 中做更自然</strong>: Index Builder 需要 JOIN 广告元数据。在 Spark SQL 中 JOIN 两张 Hive 表是最自然的。从 Tair 读 Embedding + 从 MySQL 读广告属性 → 再在内存中 JOIN，工程复杂且容易出错。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">5</div>
+六大场景的系统归属 — 谁负责什么
+</div>
+
+<table class="tbl">
+<tr><th style="width:22%">应用场景</th><th style="width:28%">Feature Store 负责</th><th style="width:28%">其他系统负责</th><th>交接界面</th></tr>
+<tr><td>向量召回 (U2I/I2I)</td><td>生产 ad/user embedding，写入 Tair + Hive</td><td><strong>Index Builder</strong>: 构建索引<br><strong>Recall Engine</strong>: 在线检索</td><td>Hive embedding 表</td></tr>
+<tr><td>SIM 长序列</td><td>生产并存储用户行为序列 (click_ad_seq) 到 Tair</td><td><strong>Feature Serving (OnDemand)</strong>: 内嵌 mini Faiss 做 TopK 检索。这部分由 Feature Serving 自己做，<strong>不需要外部向量引擎</strong></td><td>Tair 行为序列 KV</td></tr>
+<tr><td>Look-alike 人群扩展</td><td>生产 user_embedding 写入 Hive</td><td><strong>DMP 平台</strong>: 从 Hive 读 embedding → Faiss KNN → 生成人群包 Bitmap。DMP 是又一个独立系统</td><td>Hive embedding 表</td></tr>
+<tr><td>创意 Embedding 生产</td><td>调度 CV/NLP 模型推理，产出 creative_embedding 写入 Tair + Hive</td><td><strong>创意审核平台</strong>: 从 Hive 读 embedding → Faiss 聚类 + 去重检测。这也是独立系统</td><td>Hive embedding 表</td></tr>
+<tr><td>I2I 相似度特征</td><td>存储 ad_embedding 到 Tair；Feature Serving 计算候选广告与历史行为的内积</td><td>内积计算是 Feature Serving OnDemand 算子，<strong>在 Feature Store 管辖范围内</strong></td><td>Tair embedding KV</td></tr>
+<tr><td>Embedding 实时更新</td><td>Flink 流式更新 user_embedding_rt 写入 Tair</td><td><strong>Recall Engine</strong>: 新广告 embedding 实时写入增量缓冲。这由 Recall Engine 的实时写入接口负责</td><td>Tair / Kafka 事件</td></tr>
+</table>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+例外情况 — Feature Store 确实会直接写向量引擎的场景
+</div>
+
+<div class="sub">虽然主流是分离的，但有少数场景 Feature Store 会直接与向量引擎交互。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">例外一: 小规模向量索引</div>
+<div class="cd">
+一些非核心场景 (如创意去重的向量索引) 的规模较小 (~500万向量)，不需要专门的 Index Builder。Feature Store 的 Batch Materialization Job 可以直接将 Embedding 写入 Milvus (通过 Milvus SDK 作为一种特殊的 Sink)。<br><br>
+这类场景通常将 Milvus 视为"另一种在线存储" (类似 Tair)，在 Feature View 配置中指定 <code style="font-family:var(--font-mono);font-size:10px">store_type: MILVUS</code>。<br><br>
+但核心召回引擎 (VE-KNN/Proxima) 的索引构建<strong>从不</strong>由 Feature Store 直接执行。
+</div>
+</div>
+<div class="c">
+<div class="ct">例外二: 实时增量写入</div>
+<div class="cd">
+新广告上线时，广告投放系统会触发一个事件 → 模型推理服务生成 ad_embedding → 同时写入两个地方:<br><br>
+① Tair (Feature Store 管辖) — 精排特征<br>
+② Recall Engine 的实时增量接口 (Recall Engine 管辖) — 实时可检索<br><br>
+这两个写入通常由同一个 Flink Job 或微服务完成 (称为 "Ad Lifecycle Service")，它<strong>既不属于 Feature Store 也不属于 Recall Engine</strong>，而是广告投放系统的一部分。<br><br>
+Feature Store 的 Flink Stream Job 只负责用户侧 Embedding 的更新 (用户维度)，不负责广告上线/下线的生命周期事件 (广告维度)。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+总结: Feature Store 是 Embedding 的"生产工厂"和"KV 仓库"，Index Builder 是"索引工匠"，Recall Engine 是"在线搜索引擎"。三者通过 Hive 表 + Tair KV 作为数据契约交互，各自独立迭代和运维。这种职责分离是大型广告系统架构成熟度的标志。
+</div>
+</div>

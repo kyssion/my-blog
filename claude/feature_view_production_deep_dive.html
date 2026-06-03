@@ -1,0 +1,778 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}
+.pg{background:#E1F5EE;color:#085041}
+.po{background:#FAECE7;color:#712B13}
+.pp{background:#EEEDFE;color:#3C3489}
+.pa{background:#FAEEDA;color:#633806}
+.pr{background:#FCEBEB;color:#791F1F}
+.pk{background:#FBEAF0;color:#72243E}
+.pgy{background:#F1EFE8;color:#444441}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">Feature View 生产级架构全解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature / 阿里 PAI-FeatureStore 线上方案 — Feature View 是 Feature Store 中承上 (Entity) 启下 (Serving) 的核心执行单元</div>
+
+<!-- ==================== SECTION 0 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+Feature View 的定位 — 它到底是什么
+</div>
+
+<div class="sub">Feature View 是 Feature Entity 体系中<strong>最核心的执行单元</strong>。如果说 Entity 定义了"谁"，Feature 定义了"什么属性"，那 Feature View 定义的是"这些属性<strong>从哪来、怎么算、存哪里、怎么更新、怎么服务</strong>"的完整管线。每个 Feature View 是一条从数据源到在线 KV 的端到端特征管线 (Pipeline)。</div>
+
+<div class="I">
+<strong>一个类比帮助理解</strong>: 如果把 Feature Store 比作数据库，那么 Entity 相当于表的主键定义，Feature 相当于列定义，而 Feature View 相当于<strong>物化视图 (Materialized View)</strong>——它指定了数据源 (FROM)、转换逻辑 (SELECT)、刷新策略 (REFRESH)、存储引擎 (STORED AS)。这也是它叫 "View" 的原因。<br><br>
+<strong>与 Entity 的关系</strong>: 一个 Entity 下通常挂载 3~8 个 Feature View，每个 View 代表一个独立的特征生产管线。例如 User Entity 下:<br>
+<span class="p pb">user_profile</span> 离线画像 | <span class="p pg">user_behavior_seq</span> 近线行为序列 | <span class="p po">user_realtime_stats</span> 实时统计 | <span class="p pp">user_embedding</span> 向量特征<br>
+它们有不同的数据源、更新频率、Owner，但通过同一个 user_id (Entity join_key) 关联。
+</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#185FA5">
+<div class="ct" style="color:#185FA5">Batch Feature View</div>
+<div class="cd">
+<strong>数据源</strong>: Hive/MaxCompute 表<br>
+<strong>更新频率</strong>: T+1 (每天凌晨)<br>
+<strong>计算引擎</strong>: Spark SQL / PySpark<br>
+<strong>调度</strong>: Airflow cron DAG<br>
+<strong>典型特征</strong>: 用户画像、长期兴趣、消费能力分层、广告质量分、创意 embedding<br>
+<strong>特点</strong>: 覆盖率高 (90%+)、数据完整、但时效差
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">Stream Feature View</div>
+<div class="cd">
+<strong>数据源</strong>: Kafka / RocketMQ topic<br>
+<strong>更新频率</strong>: 分钟~小时级<br>
+<strong>计算引擎</strong>: Flink (窗口聚合)<br>
+<strong>调度</strong>: 常驻 Flink Job<br>
+<strong>典型特征</strong>: 近 N 小时行为统计、实时兴趣漂移、短期 CTR/CVR、行为序列<br>
+<strong>特点</strong>: 时效好、能捕捉短期信号、但计算资源消耗大
+</div>
+</div>
+<div class="c bl" style="border-left-color:#D85A30">
+<div class="ct" style="color:#D85A30">OnDemand Feature View</div>
+<div class="cd">
+<strong>数据源</strong>: 请求上下文 (Bid Request)<br>
+<strong>更新频率</strong>: 每次请求实时计算<br>
+<strong>计算引擎</strong>: Ad Server 内嵌 C++/Go<br>
+<strong>调度</strong>: 无 (请求驱动)<br>
+<strong>典型特征</strong>: 时间分桶、设备信息、地理编码、竞价景观、预算余额<br>
+<strong>特点</strong>: 零延迟、不落存储、但只能用请求内信息
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 1: Complete Config ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+Feature View 完整配置模型 — 15 个核心配置项
+</div>
+
+<div class="sub">每个 Feature View 在注册时需要填写以下配置。这些配置驱动了从数据生产到在线服务的全链路自动化。</div>
+
+<div class="code">FeatureView {
+  // ===== 基础信息 =====
+  view_name:         "user_realtime_stats_v3"      // 全局唯一名称，含版本后缀
+  entity_name:       "user"                         // 归属 Entity
+  description:       "用户实时行为统计特征，滑动窗口聚合"
+  owner:             "ads-algo-team@bytedance.com"  // 负责人 (邮件组/飞书群)
+  tags:              ["广告", "实时", "核心", "用户侧"]
+
+  // ===== 数据源配置 =====
+  source_type:       STREAM                         // BATCH | STREAM | ON_DEMAND
+  source_config: {
+    // BATCH 时: { hive_table: "dw.user_events", partition_field: "ds", format: "parquet" }
+    // STREAM 时:
+    kafka_topic:     "user_behavior_log"
+    kafka_group:     "fv_user_stats_v3"
+    timestamp_field: "event_time"                   // 事件时间字段 (Event Time 语义)
+    watermark:       "10s"                          // 水位线容忍延迟
+    // ON_DEMAND 时: { request_fields: ["timestamp","device_info","ip","geo"] }
+  }
+
+  // ===== 特征定义 (Schema) =====
+  features: [
+    { name: "click_1h",       dtype: INT64,   transform: "COUNT(action='click') OVER SLIDING(1h, 5min)",
+      default: 0,  monitoring: { psi_max: 0.3, missing_max: 0.2 } },
+    { name: "imp_1h",         dtype: INT64,   transform: "COUNT(action='impression') OVER SLIDING(1h, 5min)",
+      default: 0 },
+    { name: "ctr_6h",         dtype: FLOAT32, transform: "SAFE_DIV(SUM(click),SUM(imp)) OVER SLIDING(6h, 30min)",
+      default: -1.0, monitoring: { psi_max: 0.25 } },
+    { name: "click_cat_seq",  dtype: SEQ_INT64,
+      transform: "COLLECT_LIST(category_id) OVER SLIDING(30min) LIMIT 20",
+      max_seq_len: 20, default: [] },
+    { name: "active_minutes",  dtype: INT64,
+      transform: "COUNT_DISTINCT(FLOOR(event_time/60000)) OVER SLIDING(1h)",
+      default: 0 },
+  ]
+
+  // ===== 存储配置 =====
+  store_config: {
+    store_type:      "TAIR"                         // TAIR | REDIS | BYTEKV | ABFS
+    key_template:    "uf:rts:{user_id}"             // KV key 模板
+    serializer:      "FLATBUFFER"                   // FLATBUFFER | PROTOBUF | JSON | MSGPACK
+    ttl_seconds:     86400                          // 1 天过期
+    compression:     "LZ4"                          // 可选压缩 (大 value 用)
+  }
+
+  // ===== 调度 & 物化配置 =====
+  schedule:          "realtime"                     // cron 表达式 (batch) 或 "realtime" (stream)
+  materialization: {
+    mode:            "INCREMENTAL"                  // FULL (全量) | INCREMENTAL (增量)
+    batch_interval:  "5s"                           // Flink sink micro-batch 攒批间隔
+    parallelism:     64                             // Flink job 并行度
+    checkpoint:      "60s"                          // Flink checkpoint 间隔
+    max_write_qps:   100000                         // Tair 写入限流
+  }
+
+  // ===== 训练集成 =====
+  training_config: {
+    snapshot_enabled: true                          // 是否开启 HDFS 快照 (用于 PIT Join)
+    snapshot_path:    "hdfs:///feature_snapshots/user_rts_v3/"
+    snapshot_interval: "5min"                       // 快照写入间隔
+    snapshot_format:  "PARQUET"                     // 快照文件格式
+    retention_days:   7                             // 快照保留天数
+  }
+
+  // ===== 版本管理 =====
+  version:           3                              // 每次 Schema/Transform 变更自增
+  status:            PROD                           // DEV → STAGING → PROD → DEPRECATED
+  created_at:        "2024-06-15T10:30:00Z"
+  updated_at:        "2024-11-20T08:15:00Z"
+  changelog:         "v3: 增加 active_minutes 特征，ctr 窗口从 1h 调整为 6h"
+}</div>
+
+<div class="I">
+<strong>15 个核心配置项中最关键的 5 个设计决策</strong><br><br>
+<strong>① key_template 决定了在线查询的性能</strong>: 同一 Entity 的所有 Feature View 使用不同的 key 前缀 (uf:profile, uf:rts, uf:seq)，但 Entity key 部分相同 (user_id)。这样在线 MGet 时可以按前缀分批，同一 Tair 分片的 key 自然聚集。<br><br>
+<strong>② serializer 选择 FlatBuffer 的原因</strong>: FlatBuffer 支持零拷贝反序列化——不需要将整个 value 解析到内存对象，而是直接在序列化 buffer 上随机访问字段。对比 Protobuf (需要完整反序列化)，在线 serving 场景 FlatBuffer 快 3~5 倍。字节内部几乎全部使用 FlatBuffer。<br><br>
+<strong>③ snapshot_enabled 是 PIT Join 的前提</strong>: 没有快照，训练样本拼接只能用"当前时刻"的特征值，导致穿越。开启后 Flink Sink 双写 (Tair + HDFS)，每 5 分钟输出一份 Parquet 快照。代价是 HDFS 存储 (+20%~30%)。<br><br>
+<strong>④ watermark 影响数据完整性 vs 延迟的 tradeoff</strong>: watermark="10s" 意味着允许 10 秒的乱序数据。设太小会丢数据，设太大会增加特征更新延迟。字节经验值: 用户行为日志 watermark=10s，转化日志 watermark=300s (转化回调延迟大)。<br><br>
+<strong>⑤ batch_interval 决定 Tair 写入压力</strong>: Flink 逐条写 Tair 会产生百万级 QPS 洪峰。batch_interval="5s" 将同一窗口内的更新攒批为一次 Pipeline MSet，将写 QPS 从 200 万降到 10 万。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2: Batch FV ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">2</div>
+Batch Feature View — 离线管线深度拆解
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">Batch FV 端到端执行流程 (以 user_profile 为例)</div>
+
+<strong>02:00</strong> — <span class="p pa">Airflow DAG 触发</span><br>
+<span style="color:var(--color-text-tertiary)">├ 依赖检查: 上游 Hive 表 dw.user_events (ds=昨天) 分区就绪？</span><br>
+<span style="color:var(--color-text-tertiary)">├ 依赖检查: dw.user_registration 表最新分区存在？</span><br>
+<span style="color:var(--color-text-tertiary)">└ 全部就绪 → 启动 Spark Job</span><br><br>
+
+<strong>02:05</strong> — <span class="p pb">Spark Job Phase 1: Transform 执行</span><br>
+<span style="color:var(--color-text-tertiary)">├ DSL Compiler 将 Feature View 的 transform 编译为 Spark SQL</span><br>
+<span style="color:var(--color-text-tertiary)">├ 执行 SQL: SELECT user_id, BUCKET(age,[18,25,35,45]) AS age_bucket,</span><br>
+<span style="color:var(--color-text-tertiary)">│   gender, city_id, purchase_level, ... FROM dw.user_profile_daily</span><br>
+<span style="color:var(--color-text-tertiary)">│   WHERE ds = '${yesterday}'</span><br>
+<span style="color:var(--color-text-tertiary)">├ 输出: 中间 Hive 表 feature_output.user_profile_v2 (ds=今天)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 行数: ~5 亿 (全量活跃用户), 耗时 ~40min, 资源: 200 executor × 4core</span><br><br>
+
+<strong>02:50</strong> — <span class="p pb">Spark Job Phase 2: 数据质量校验</span><br>
+<span style="color:var(--color-text-tertiary)">├ 行数校验: 与昨天对比波动 &lt; 5%？ (防止上游数据丢失)</span><br>
+<span style="color:var(--color-text-tertiary)">├ NULL 率校验: 每个 Feature 的 NULL 率 &lt; monitoring.missing_max？</span><br>
+<span style="color:var(--color-text-tertiary)">├ 值域校验: age_bucket ∈ {0,1,2,3,4}？ gender ∈ {0,1,2}？</span><br>
+<span style="color:var(--color-text-tertiary)">├ PSI 校验: 与前 7 天分布对比 PSI &lt; 0.25？</span><br>
+<span style="color:var(--color-text-tertiary)">├ 抽样校验: 随机 1000 条，用在线 C++ 算子重算，对比 diff &lt; 0.01%</span><br>
+<span style="color:var(--color-text-tertiary)">└ 全部通过 → Phase 3; 任一失败 → 告警 + 中止，线上继续用昨天数据</span><br><br>
+
+<strong>03:30</strong> — <span class="p pg">Phase 3: Materialization (写入在线 KV)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 方式一 (BulkLoad): Spark 直接生成 Tair SST 文件 → Ingest 导入</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 吞吐 ~50万 key/s, 全量 5 亿 key 耗时 ~15min</span><br>
+<span style="color:var(--color-text-tertiary)">├ 方式二 (Pipeline Write): Spark → Tair Pipeline MSet</span><br>
+<span style="color:var(--color-text-tertiary)">│   → 吞吐 ~20万 key/s, 耗时 ~40min, 适合增量更新</span><br>
+<span style="color:var(--color-text-tertiary)">├ 写入内容: key="uf:profile:{user_id}", value=FlatBuffer(所有 Feature 字段打包)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 双缓冲切换: 写入 shadow namespace → 校验 → 原子 swap 指针</span><br><br>
+
+<strong>04:00</strong> — <span class="p pp">Phase 4: 验证上线</span><br>
+<span style="color:var(--color-text-tertiary)">├ 从在线 KV 随机读 10000 条，与 Hive 表对比完全一致</span><br>
+<span style="color:var(--color-text-tertiary)">├ 原子切换: 将线上读取指针从旧 namespace 切到新 namespace</span><br>
+<span style="color:var(--color-text-tertiary)">└ 记录日志: 本次 Materialization 成功，耗时、行数、KV 写入量</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">全量 vs 增量 Materialization</div>
+<div class="cd">
+<strong>全量 (FULL)</strong>:<br>
+每次重建全部 key。适用于画像类特征 (数据量大但逻辑简单)。<br>
+优点: 简单可靠，不累积数据一致性问题<br>
+缺点: 资源消耗大，5 亿 key 全量写入需 15~40min<br><br>
+<strong>增量 (INCREMENTAL)</strong>:<br>
+只更新有变化的 key (通过上游增量表/CDC 识别)。<br>
+优点: 资源消耗小 (通常只更新 5~10% 的 key)<br>
+缺点: 长期运行可能累积脏数据，需要定期全量 "Clean Sweep"<br><br>
+<strong>字节实践</strong>: 工作日用增量 (快速，06:00 前完成)，周末跑一次全量 (修正增量累积误差)。阿里 PAI-FeatureStore 的 Materialization 默认支持自动切换——数据变更 &gt;30% 时自动触发全量。
+</div>
+</div>
+<div class="c">
+<div class="ct">双缓冲 (Double Buffering) 机制</div>
+<div class="cd">
+<strong>问题</strong>: 如果直接覆盖写线上 KV 的 key，写入期间 (15~40min) 会出现"新旧混合"——部分 key 是今天的值，部分还是昨天的。模型面对混合分布的特征可能表现异常。<br><br>
+<strong>解决方案</strong>:<br>
+维护两个 namespace (A 和 B)。假设当前线上用 A:<br>
+① 新数据全量写入 B (offline，线上无感知)<br>
+② B 写入完成 → 质量校验通过<br>
+③ 原子操作: 将读取路由从 A 切到 B<br>
+④ 下一天: 新数据写入 A，切换回 A<br><br>
+<strong>实现</strong>: Tair 层面通过 namespace/table 切换；业务层面通过配置中心 (Consul/Nacos) 的一个 flag 指向当前 active namespace。<br><br>
+<span class="p pb">Namespace A</span> ⇄ <span class="p pg">Namespace B</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3: Stream FV ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">3</div>
+Stream Feature View — 近线流式管线深度拆解
+</div>
+
+<div class="sub">Stream Feature View 是三类中工程复杂度最高的，因为它要在"分钟级时效性"和"计算正确性"之间找到平衡。字节 DSP 内部约 60% 的新增特征来自 Stream View。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">Stream FV 的 Flink Job 内部架构</div>
+
+<span class="p pa">Kafka Source</span> (user_behavior_log, ~10M msg/s 峰值)
+<br>↓ <span style="color:var(--color-text-tertiary)">Deserialization: Protobuf → Java POJO (user_id, event_time, action, category_id, ad_id, ...)</span>
+<br>↓ <span style="color:var(--color-text-tertiary)">Filter: 过滤无效事件 (event_time 为空, user_id 为空, 非广告相关行为)</span>
+<br>↓
+<br><span class="p pg">Watermark Assigner</span> <span style="color:var(--color-text-tertiary)">(BoundedOutOfOrdernessWatermarks, maxOutOfOrderness=10s)</span>
+<br>↓
+<br><span class="p pg">KeyBy(user_id)</span> <span style="color:var(--color-text-tertiary)">→ 按用户分区，保证同一用户的事件在同一个 Task 处理</span>
+<br>↓
+<br><span style="color:var(--color-text-tertiary)">分支并行处理 (同一个 KeyedStream 上注册多个窗口):</span>
+<br>
+<br>├─ <span class="p pg">Window 1: SLIDING(1h, 5min)</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 计算 click_1h = COUNT(action='click')</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 计算 imp_1h = COUNT(action='impression')</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 每 5min 触发一次窗口输出</span>
+<br>│
+<br>├─ <span class="p pg">Window 2: SLIDING(6h, 30min)</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 计算 ctr_6h = SAFE_DIV(SUM(click), SUM(imp))</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 每 30min 触发一次窗口输出</span>
+<br>│
+<br>├─ <span class="p pg">Window 3: SLIDING(30min, 1min)</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 计算 click_cat_seq = COLLECT_LIST(category_id) LIMIT 20</span>
+<br>│  <span style="color:var(--color-text-tertiary)">→ 每 1min 触发一次窗口输出</span>
+<br>│
+<br>└─ <span class="p pg">Window 4: SLIDING(1h, 1min)</span>
+<br>   <span style="color:var(--color-text-tertiary)">→ 计算 active_minutes = COUNT_DISTINCT(FLOOR(event_time/60000))</span>
+<br>
+<br>↓ <span style="color:var(--color-text-tertiary)">各窗口输出合并 (Union) → 同一 user_id 的多个窗口结果 merge 为完整 Feature View</span>
+<br>↓
+<br><span class="p pg">Tair Sink (Micro-batch)</span>
+<br><span style="color:var(--color-text-tertiary)">├ 攒批: 每 5s 收集一批输出，合并同一 user_id 的多次更新</span>
+<br><span style="color:var(--color-text-tertiary)">├ 序列化: FlatBuffer Pack (所有字段打包为一个 value)</span>
+<br><span style="color:var(--color-text-tertiary)">├ 写入: Pipeline MSet → Tair (key = "uf:rts:{user_id}")</span>
+<br><span style="color:var(--color-text-tertiary)">└ 限流: max_write_qps=100000，超过则背压 (backpressure)</span>
+<br>
+<br><span class="p pa">HDFS Snapshot Sink (并行)</span>
+<br><span style="color:var(--color-text-tertiary)">├ 每 5min 将窗口输出写一份 Parquet 快照到 HDFS</span>
+<br><span style="color:var(--color-text-tertiary)">├ 路径: hdfs:///feature_snapshots/user_rts_v3/dt=2024-11-20/hh=10/mm=05/</span>
+<br><span style="color:var(--color-text-tertiary)">└ 用于训练时 Point-in-time Join</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Flink Job 关键配置参数</div>
+<div class="cd">
+<table class="tbl">
+<tr><th style="width:35%">参数</th><th>值 (字节线上)</th><th>说明</th></tr>
+<tr><td>parallelism</td><td>64~128</td><td>根据 Kafka partition 数设置，通常 1:1 或 2:1</td></tr>
+<tr><td>checkpoint interval</td><td>60s</td><td>Flink 状态快照间隔。太短影响吞吐，太长故障恢复慢</td></tr>
+<tr><td>state backend</td><td>RocksDB</td><td>窗口状态存 RocksDB (本地 SSD)，支持增量 checkpoint</td></tr>
+<tr><td>state ttl</td><td>= 最大窗口 × 1.5</td><td>如最大窗口 6h，state TTL=9h。防止状态无限膨胀</td></tr>
+<tr><td>max parallelism</td><td>512</td><td>Flink 内部 key group 上限，决定了未来最大可扩展的并行度</td></tr>
+<tr><td>sink batch size</td><td>5000 keys</td><td>Tair Pipeline MSet 单批大小</td></tr>
+<tr><td>sink batch interval</td><td>5s</td><td>攒批时间窗口</td></tr>
+<tr><td>backpressure threshold</td><td>0.8</td><td>Tair 写入延迟 P99 &gt; 10ms 时触发背压</td></tr>
+</table>
+</div>
+</div>
+<div class="c">
+<div class="ct">Stream FV 特有的难点与解法</div>
+<div class="cd">
+<strong>① 窗口状态膨胀</strong><br>
+问题: SLIDING(6h, 30min) 窗口需要在 state 中保留 6h 的原始事件<br>
+解法: 对 COUNT/SUM 使用<strong>增量聚合 (AggregateFunction)</strong>，只保存聚合中间状态 (计数器)，不保存原始事件。状态从 GB 级降到 MB 级。对 COLLECT_LIST 类算子无法增量化，需保留原始事件，用 state TTL 兜底。<br><br>
+<strong>② 窗口触发延迟</strong><br>
+问题: SLIDING(1h, 5min) 意味着每 5min 才触发一次输出。最坏情况特征延迟 5min。<br>
+解法: 字节对核心特征 (click_1h) 额外注册一个<strong>每事件触发 (ProcessFunction)</strong> 版本，事件到达立刻更新。两个版本写同一个 key，process 版覆盖 window 版。<br><br>
+<strong>③ 数据倾斜 (Hot User)</strong><br>
+问题: 少量高活跃用户 (如 bot) 产生大量事件，导致单个 Task 过载。<br>
+解法: 两阶段聚合 (Local Aggregate + Global Aggregate)。先按 user_id + random_suffix KeyBy 做本地预聚合，再按 user_id 做全局合并。
+</div>
+</div>
+</div>
+
+<div class="W">
+<strong>Flink Job 故障恢复流程</strong>: Job 崩溃 → 从最近一次 checkpoint 恢复 (回退 ~60s) → Kafka offset 回溯到 checkpoint 时刻 → 重新消费重放 → 窗口状态从 RocksDB snapshot 恢复 → 追赶消费直到追上实时位点 (通常 1~3min)。期间线上使用 Tair 中的旧值 (容忍分钟级延迟)。字节实践: 核心 Stream FV 的 Flink Job 配置了自动重启策略 (fixed-delay, 3 次重试, 间隔 30s)，非核心 Job 允许更长恢复时间。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: OnDemand FV ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">4</div>
+OnDemand Feature View — 在线实时计算管线
+</div>
+
+<div class="sub">OnDemand Feature View 不需要离线/近线管线，但需要在 Ad Server 内部嵌入高性能计算逻辑，在毫秒内完成。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">OnDemand FV 的执行位置</div>
+<div class="cd">
+OnDemand FV 的 Transform 逻辑被编译为<strong> C++ 算子</strong>，直接嵌入 Ad Server 进程中执行。不涉及任何网络 I/O 或外部存储查询。<br><br>
+<strong>输入来源</strong>:<br>
+• Bid Request 中的原始字段 (timestamp, device_info, ip, app_id, slot_id, geo)<br>
+• 来自其他 Feature View 的已拉取值 (可以引用)<br>
+• Ad Server 内部状态 (如当前竞价候选数量)<br><br>
+<strong>输出</strong>:<br>
+直接写入 FeatureBatch 的对应 slot，不落存储。<br><br>
+<strong>性能</strong>:<br>
+单次计算全部 OnDemand 特征耗时 &lt; 0.5ms (纯 CPU 计算)
+</div>
+</div>
+<div class="c">
+<div class="ct">典型 OnDemand 特征及其 Transform</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>特征</th><th>Transform DSL</th></tr>
+<tr><td>hour_bucket</td><td><code style="font-family:var(--font-mono);font-size:10px">HOUR_OF_DAY(request_time)</code></td></tr>
+<tr><td>day_of_week</td><td><code style="font-family:var(--font-mono);font-size:10px">DAY_OF_WEEK(request_time)</code></td></tr>
+<tr><td>is_weekend</td><td><code style="font-family:var(--font-mono);font-size:10px">IS_WEEKEND(request_time)</code></td></tr>
+<tr><td>device_type</td><td><code style="font-family:var(--font-mono);font-size:10px">CASE WHEN os='iOS' THEN 1 WHEN os='Android' THEN 2 ELSE 0</code></td></tr>
+<tr><td>network_type</td><td><code style="font-family:var(--font-mono);font-size:10px">HASH(network, 4)</code><br>WiFi=0,4G=1,5G=2,other=3</td></tr>
+<tr><td>geohash</td><td><code style="font-family:var(--font-mono);font-size:10px">GEOHASH(lat, lng, 5)</code></td></tr>
+<tr><td>screen_bucket</td><td><code style="font-family:var(--font-mono);font-size:10px">BUCKET(screen_width*screen_height, [480000, 921600, 2073600])</code></td></tr>
+<tr><td>candidate_count</td><td><code style="font-family:var(--font-mono);font-size:10px">LEN(candidate_ad_list)</code></td></tr>
+<tr><td>time_since_last_click</td><td><code style="font-family:var(--font-mono);font-size:10px">TIME_DIFF(request_time, user_feature['last_click_ts'], 'minute')</code><br>引用其他 View 的值</td></tr>
+</table>
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>OnDemand FV 的训练样本处理</strong>: OnDemand 特征不落存储，但训练需要。解法: Ad Server 在返回 Bid Response 后，将当前请求的所有 OnDemand 特征值附加到曝光日志中 (作为日志字段一起写入 Kafka)。Sample Factory 从日志中直接提取 OnDemand 特征值，不需要 PIT Join。这是最简单也最可靠的方式——"用了什么值，就记录什么值"。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: Version Management ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">5</div>
+版本管理 & Schema 演进 — 线上不停机变更
+</div>
+
+<div class="sub">Feature View 的 Schema (特征字段、Transform 逻辑) 必然会频繁变更。如何在不中断线上服务的情况下安全地演进，是生产级系统的核心挑战。</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#993556">
+<div class="ct" style="color:#993556">5.1 三种变更类型及处理策略</div>
+<div class="cd">
+<strong>Type A: 新增字段 (最常见, ~70%)</strong><br>
+在现有 View 中增加新 Feature。<br>
+处理: 新字段的 default_value 确保旧模型不受影响。FlatBuffer 天然支持向后兼容——新字段追加在 schema 末尾，旧 reader 忽略新字段。<br>
+流程: 注册新 Feature → 更新 Materialization (新 Spark/Flink job 同时输出新字段) → 新模型引用新字段 → 旧模型不受影响<br>
+风险: 低<br><br>
+
+<strong>Type B: Transform 逻辑变更 (~25%)</strong><br>
+修改现有 Feature 的计算方式 (如分桶边界调整)。<br>
+处理: 必须新建 version (如 v2→v3)。<strong>旧 version 不修改</strong>，新旧并行运行。<br>
+流程: 创建 v3 → 新 Materialization job 写入新 namespace → Shadow 验证 → 新模型绑定 v3 → 旧模型继续用 v2 → 确认旧模型全部迁移后下线 v2<br>
+风险: 中 (需确保新旧 version 的 KV namespace 隔离)<br><br>
+
+<strong>Type C: 删除字段 (罕见, ~5%)</strong><br>
+移除不再使用的 Feature。<br>
+处理: 先检查 ModelFeatureBinding——有模型引用则拒绝删除。无引用后标记 DEPRECATED，30 天后物理删除。<br>
+风险: 低 (有依赖检查保护)
+</div>
+</div>
+<div class="c bl" style="border-left-color:#993556">
+<div class="ct" style="color:#993556">5.2 版本并行运行机制</div>
+<div class="cd">
+<strong>为什么需要并行运行？</strong><br>
+模型 A 依赖 user_profile_v2 (age 分桶边界 [18,25,35,45])。<br>
+模型 B (新训练) 依赖 user_profile_v3 (age 分桶边界 [18,22,30,40,50,60])。<br>
+两个模型可能同时在线 (AB 实验)，因此 v2 和 v3 必须同时存在。<br><br>
+
+<strong>实现方式:</strong><br>
+每个 version 有独立的:<br>
+• KV key namespace: <code style="font-family:var(--font-mono);font-size:10px">uf:profile_v2:{uid}</code> vs <code style="font-family:var(--font-mono);font-size:10px">uf:profile_v3:{uid}</code><br>
+• Materialization job: 独立的 Spark/Flink job<br>
+• 监控面板: 独立的 PSI/缺失率指标<br><br>
+
+<strong>资源优化:</strong><br>
+共享上游数据源 (同一个 Hive 表/Kafka topic)。v2 和 v3 的 Spark Job 可以合并为一个 Job，输出到不同 namespace。Flink Job 也可以在同一个 JobGraph 中注册多个 Sink (v2 sink + v3 sink)。<br><br>
+
+<strong>生命周期:</strong><br>
+<code style="font-family:var(--font-mono);font-size:10px">v2 PROD + v3 STAGING → v3 验证通过 → v2 DEPRECATED + v3 PROD → 旧模型全部迁移 → v2 DELETED</code><br><br>
+字节内部规定: DEPRECATED 后最长保留 90 天。超时自动 DELETED + 回收 KV 存储。
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>FlatBuffer 的向后/向前兼容性设计</strong><br><br>
+FlatBuffer schema 的演进规则 (字节内部强制执行):<br>
+• 新增字段<strong>只能追加到末尾</strong>，不能插入中间<br>
+• 字段一旦发布不能删除或修改类型 (只能标记 deprecated)<br>
+• 字段 ID (slot number) 是永久的，删除字段后其 ID 保留不复用<br>
+• 旧 reader 遇到新 schema 的 value → 忽略末尾的新字段 (向前兼容)<br>
+• 新 reader 遇到旧 schema 的 value → 新字段返回 default_value (向后兼容)<br><br>
+这意味着 Type A (新增字段) 变更是零风险的——不需要停机，不需要全量重写 KV，新 Materialization job 输出新格式的 value，旧 value 在 TTL 内自然过期被替换。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: Testing ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">6</div>
+测试体系 — Feature View 从开发到上线的 5 层验证
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Layer 1: 单元测试 (注册时自动)</div>
+<div class="cd">
+<strong>触发</strong>: Feature View 注册/变更时<br>
+<strong>内容</strong>:<br>
+• DSL 语法和语义校验 (类型检查、函数签名)<br>
+• 用上游数据 mock 样本 (100 条) 执行 Transform<br>
+• 验证输出类型、值域、非 NULL 率<br>
+<strong>自动化程度</strong>: 100%，平台内置<br>
+<strong>耗时</strong>: &lt;10s<br>
+<span class="p pp">DSL Compiler</span> <span class="p pb">Mock Runner</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">Layer 2: 一致性测试 (注册时自动)</div>
+<div class="cd">
+<strong>触发</strong>: 包含 Transform DSL 的 View<br>
+<strong>内容</strong>:<br>
+• 用同一批 1000 条数据分别跑:<br>
+  - Spark UDF (离线编译产物)<br>
+  - Flink Operator (近线编译产物)<br>
+  - C++ Operator (在线编译产物)<br>
+• Assert: 三者输出完全一致 (diff=0)<br>
+<strong>自动化程度</strong>: 100%<br>
+<strong>耗时</strong>: ~2min<br>
+<span class="p pp">Consistency Checker</span>
+</div>
+</div>
+</div>
+<div class="g2">
+<div class="c">
+<div class="ct">Layer 3: 离线评估 (上线前)</div>
+<div class="cd">
+<strong>触发</strong>: 新 Feature 或 Transform 变更<br>
+<strong>内容</strong>:<br>
+• 将新特征加入训练样本<br>
+• 重训模型，对比 AUC/GAUC 提升<br>
+• 特征重要性排名 (SHAP/Gain)<br>
+• 与已有相似特征的相关性分析 (去重复)<br>
+<strong>自动化程度</strong>: 半自动 (平台提供一键评估)<br>
+<strong>耗时</strong>: 2~8 小时 (取决于模型训练时间)<br>
+<span class="p pp">Auto-Evaluation Pipeline</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">Layer 4: Shadow 验证 (灰度前)</div>
+<div class="cd">
+<strong>触发</strong>: Feature View 进入 STAGING<br>
+<strong>内容</strong>:<br>
+• 在线服务同时计算新旧 version (Shadow 模式)<br>
+• 旧 version 作为实际输出，新 version 仅记录<br>
+• 对比新旧 version 的输出分布差异<br>
+• 确认新 version 不引入延迟恶化 (&lt;1ms)<br>
+<strong>自动化程度</strong>: 100%<br>
+<strong>耗时</strong>: 24~48 小时 (充分观察)<br>
+<span class="p po">Shadow Runner</span>
+</div>
+</div>
+</div>
+<div class="c" style="margin-bottom:6px">
+<div class="ct">Layer 5: AB 实验灰度 (上线)</div>
+<div class="cd">
+<strong>触发</strong>: Shadow 验证通过<br>
+<strong>内容</strong>: 5% 流量 → 验证 CTR/CVR/RPM 无回退 → 20% → 50% → 100%。每阶段至少观察 12 小时，核心指标回退 &gt;0.5% 自动停止。Feature View status: STAGING → PROD。绑定 AB 实验平台，与模型实验联动。<br>
+<strong>字节实践</strong>: Feature View 灰度与 Model 灰度解耦——同一个 Feature View 变更可以被多个模型独立灰度验证。<br>
+<span class="p pp">AB Platform</span> <span class="p pa">Experiment Manager</span> <span class="p pg">Auto-Rollback</span>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Monitoring ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">7</div>
+监控体系 — Feature View 级别的全维度观测
+</div>
+
+<div class="sub">每个 Feature View 是一个独立的监控单元。字节 ByteFeature 为每个 View 自动生成一个 Grafana Dashboard。</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#A32D2D">
+<div class="ct" style="color:#A32D2D">数据质量监控</div>
+<div class="cd">
+<strong>PSI (分布稳定性)</strong><br>
+每个 Feature 独立计算 PSI。与前 7 天基线对比。<br>
+&gt;0.1 Warning, &gt;0.25 P1 告警<br><br>
+<strong>缺失率 (Missing Rate)</strong><br>
+在线 serving 中 key 未命中 Tair 的比率。<br>
+&gt;10% Warning, &gt;30% 熔断该 View<br><br>
+<strong>值域异常</strong><br>
+出现训练集 min/max 之外的值。<br>
+单次异常 Warning, 持续 &gt;5min P2<br><br>
+<strong>数据延迟 (仅 Stream FV)</strong><br>
+Flink 输出 event_time 与 processing_time 的差值。<br>
+&gt;5min P2, &gt;15min P1 + 考虑回退到离线值
+</div>
+</div>
+<div class="c bl" style="border-left-color:#BA7517">
+<div class="ct" style="color:#854F0B">Materialization 监控</div>
+<div class="cd">
+<strong>Batch FV</strong>:<br>
+• 任务执行时间 (环比 &gt;50% 告警)<br>
+• 输出行数 (波动 &gt;5% 告警)<br>
+• KV 写入量 & 耗时<br>
+• 双缓冲切换成功/失败<br><br>
+<strong>Stream FV</strong>:<br>
+• Flink Job 存活状态 (Crash P0)<br>
+• Kafka 消费延迟 (Lag)<br>
+• Checkpoint 成功率 (&lt;99% P2)<br>
+• Backpressure 比率 (&gt;0.5 Warning)<br>
+• State 大小 (超预期 &gt;200% 告警)<br><br>
+<strong>通用</strong>:<br>
+• Tair 写入 QPS / 延迟<br>
+• Tair 存储空间使用率
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#085041">在线 serving 监控</div>
+<div class="cd">
+<strong>查询性能</strong>:<br>
+• MGet P50/P99/P999 延迟<br>
+• L0 (LRU) 命中率<br>
+• L1 (RocksDB) 命中率<br>
+• L2 (Tair) 查询 QPS<br><br>
+<strong>特征质量</strong>:<br>
+• 每个 slot 的实际填充率<br>
+• default_value 使用率 (高于预期说明数据问题)<br>
+• 特征值分布实时直方图<br><br>
+<strong>业务关联</strong>:<br>
+• 该 View 关联的模型数量<br>
+• 模型效果指标 (CTR/CVR) 与特征变更的时间对齐图<br>
+• 特征变更 → 模型效果变化的因果分析
+</div>
+</div>
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:4px">告警与自动恢复策略矩阵</div>
+<table class="tbl">
+<tr><th style="width:20%">故障场景</th><th style="width:10%">级别</th><th style="width:35%">自动处理</th><th>人工介入</th></tr>
+<tr><td>Batch Job 失败</td><td>P2</td><td>自动重试 2 次。成功则继续，失败则线上使用昨天数据 (TTL 兜底)</td><td>排查上游数据源或资源问题</td></tr>
+<tr><td>Flink Job Crash</td><td>P1</td><td>自动从 checkpoint 恢复 (3 次重试)。恢复后追赶消费</td><td>3 次失败后人工排查 (代码 bug / 数据异常)</td></tr>
+<tr><td>Tair 写入超时</td><td>P2</td><td>Flink 背压限流，攒批 interval 加倍。写入恢复后自动放开</td><td>Tair 集群扩容 / 热 key 治理</td></tr>
+<tr><td>PSI 告警</td><td>P1</td><td>自动触发: ① 冻结该 View (不更新) ② 回退到上一个正常 version</td><td>排查数据源分布变化原因</td></tr>
+<tr><td>缺失率突增 &gt;50%</td><td>P0</td><td>熔断该 View: 全部使用 default_value。防止异常特征传入模型</td><td>根因分析: 上游故障/网络/Tair 异常</td></tr>
+<tr><td>Serving 延迟飙升</td><td>P1</td><td>自动降级: 关闭低优先级 View 的 Tair 查询，只保留核心 View</td><td>Tair 扩容 / 热 key 发现</td></tr>
+</table>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 8: Real Examples ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">8</div>
+真实生产案例 — 字节 DSP User Entity 下的全部 Feature View
+</div>
+
+<div class="sub">以下是字节跳动 DSP 广告系统中 User Entity 下典型的 Feature View 全景，展示不同类型的 View 如何协作。</div>
+
+<div class="c" style="margin-bottom:6px;border-left:2px solid #185FA5;border-radius:0 8px 8px 0">
+<div class="ct" style="color:#185FA5">FV-1: user_profile (Batch, T+1)</div>
+<div class="cd">
+<strong>数据源</strong>: <code style="font-family:var(--font-mono);font-size:10px">dw.user_profile_daily</code> (Hive, 每天 01:30 就绪)<br>
+<strong>特征数</strong>: 12 个字段 — gender, age_bucket, city_id, province_id, education, device_brand, device_price_bucket, os_type, carrier, purchase_level, register_days_bucket, app_install_count_bucket<br>
+<strong>KV key</strong>: <code style="font-family:var(--font-mono);font-size:10px">uf:p:{user_id}</code> | TTL=30d | Value ~80 Bytes<br>
+<strong>更新</strong>: Airflow cron 02:00, Spark Job ~40min, BulkLoad ~15min | <strong>Materialization</strong>: FULL (每日全量)<br>
+<strong>在线缺失率</strong>: ~3% (仅极冷用户缺失) | <strong>引用模型数</strong>: 28 (几乎所有广告模型)
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px;border-left:2px solid #185FA5;border-radius:0 8px 8px 0">
+<div class="ct" style="color:#185FA5">FV-2: user_interest_tags (Batch, T+1)</div>
+<div class="cd">
+<strong>数据源</strong>: <code style="font-family:var(--font-mono);font-size:10px">dw.user_interest_model_output</code> (Hive, Topic Model 输出)<br>
+<strong>特征数</strong>: 3 个字段 — interest_tag_ids (SEQ_INT64, top-20 标签 ID), interest_tag_weights (SEQ_FLOAT32), interest_level_1_ids (SEQ_INT64, top-5 一级品类)<br>
+<strong>KV key</strong>: <code style="font-family:var(--font-mono);font-size:10px">uf:tag:{user_id}</code> | TTL=30d | Value ~200 Bytes<br>
+<strong>更新</strong>: Airflow cron 03:00, 依赖 FV-1 完成 | <strong>Materialization</strong>: INCREMENTAL (仅更新活跃用户)<br>
+<strong>引用模型数</strong>: 15
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px;border-left:2px solid #185FA5;border-radius:0 8px 8px 0">
+<div class="ct" style="color:#185FA5">FV-3: user_dssm_embedding (Batch, T+1)</div>
+<div class="cd">
+<strong>数据源</strong>: 双塔模型 User Tower 推理输出 (每天全量用户前向推理)<br>
+<strong>特征数</strong>: 1 个字段 — user_vec (EMBEDDING, FLOAT16[128])<br>
+<strong>KV key</strong>: <code style="font-family:var(--font-mono);font-size:10px">uf:emb:{user_id}</code> | TTL=7d | Value ~260 Bytes (128维 × FP16)<br>
+<strong>更新</strong>: 依赖双塔模型训练完成 (通常 04:00~06:00) | <strong>特殊处理</strong>: FP16 量化 (vs FP32 省一半存储)<br>
+<strong>引用模型数</strong>: 5 (召回 + 粗排)
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px;border-left:2px solid #0F6E56;border-radius:0 8px 8px 0">
+<div class="ct" style="color:#0F6E56">FV-4: user_behavior_seq (Stream, 分钟级)</div>
+<div class="cd">
+<strong>数据源</strong>: <code style="font-family:var(--font-mono);font-size:10px">Kafka: user_ad_interaction_log</code><br>
+<strong>特征数</strong>: 4 个字段 — click_ad_seq (最近 50 条点击广告 ID), click_cat_seq (最近 50 条点击品类 ID), click_ts_seq (对应时间戳), convert_ad_seq (最近 20 条转化广告 ID)<br>
+<strong>KV key</strong>: <code style="font-family:var(--font-mono);font-size:10px">uf:seq:{user_id}</code> | TTL=3d | Value ~600 Bytes<br>
+<strong>Flink</strong>: parallelism=128, SLIDING(24h, 1min), RocksDB state ~500GB<br>
+<strong>引用模型数</strong>: 12 (精排 DIN/DIEN 的核心输入)<br>
+<strong>Snapshot</strong>: 每 5min 写 HDFS Parquet
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px;border-left:2px solid #0F6E56;border-radius:0 8px 8px 0">
+<div class="ct" style="color:#0F6E56">FV-5: user_realtime_stats (Stream, 分钟级)</div>
+<div class="cd">
+<strong>数据源</strong>: <code style="font-family:var(--font-mono);font-size:10px">Kafka: user_behavior_log</code><br>
+<strong>特征数</strong>: 8 个字段 — click_1h, imp_1h, ctr_6h, click_cat_dist_1h (品类点击分布 MAP), active_minutes_1h, session_count_6h, avg_dwell_time_1h, last_click_ts<br>
+<strong>KV key</strong>: <code style="font-family:var(--font-mono);font-size:10px">uf:rts:{user_id}</code> | TTL=1d | Value ~120 Bytes<br>
+<strong>Flink</strong>: parallelism=64, 多窗口 (1h/6h) 并行 | 增量聚合 (state ~50GB)<br>
+<strong>引用模型数</strong>: 18<br>
+<strong>特殊</strong>: click_1h 额外有 ProcessFunction 版本，事件到达立刻更新
+</div>
+</div>
+
+<div class="c" style="margin-bottom:6px;border-left:2px solid #D85A30;border-radius:0 8px 8px 0">
+<div class="ct" style="color:#D85A30">FV-6: user_context (OnDemand, 毫秒级)</div>
+<div class="cd">
+<strong>数据源</strong>: Bid Request 字段<br>
+<strong>特征数</strong>: 9 个字段 — hour_bucket, day_of_week, is_weekend, device_type, network_type, geohash, screen_bucket, app_category, slot_type<br>
+<strong>存储</strong>: 无 (不落 KV) | <strong>计算</strong>: C++ 算子，&lt;0.3ms<br>
+<strong>训练</strong>: 特征值写入曝光日志，Sample Factory 直接提取<br>
+<strong>引用模型数</strong>: 所有模型 (30+)
+</div>
+</div>
+
+<div class="I">
+<strong>User Entity 下 6 个 View 的在线查询时序</strong><br><br>
+T+0ms: 解析请求 → T+0.5ms: 异步并行启动 FV-1~5 的 Tair MGet (共 5 个 key)<br>
+T+0.5ms: 同时启动 FV-6 OnDemand 计算 (CPU)<br>
+T+1ms: FV-6 完成 → T+3ms: FV-1~5 Tair 响应返回 (P99)<br>
+T+3.5ms: 全部用户特征就绪，进入 Feature Assembler<br><br>
+<strong>总耗时</strong>: ~3.5ms (用户侧特征拉取)。这 5 个 key 通常落在 Tair 的同一个分片 (因为 key 后缀都是同一个 user_id 的 Hash)，所以可以合并为一次 Pipeline MGet。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 9: Tech Stack ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">9</div>
+Feature View 涉及的完整中间件清单
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">数据生产</div>
+<div class="cd">
+<span class="p pb">Spark 3.x</span> Batch FV 计算<br>
+<span class="p pg">Flink 1.17+</span> Stream FV 计算<br>
+<span class="p pa">Kafka 3.x</span> 消息队列<br>
+<span class="p pb">Hive/Iceberg</span> 离线数据仓库<br>
+<span class="p pa">Airflow</span> Batch 调度<br>
+<span class="p pp">ANTLR</span> DSL 编译器<br>
+<span class="p pb">HDFS/OSS</span> 快照存储
+</div>
+</div>
+<div class="c">
+<div class="ct">在线存储 & serving</div>
+<div class="cd">
+<span class="p po">Tair/Redis Cluster</span> L2 在线 KV<br>
+<span class="p po">RocksDB</span> L1 本机缓存<br>
+<span class="p po">LRU Cache</span> L0 进程内缓存<br>
+<span class="p po">FlatBuffer</span> 序列化<br>
+<span class="p po">gRPC</span> 服务间通信<br>
+<span class="p po">Consul/Nacos</span> 配置中心<br>
+<span class="p po">C++/Go Ad Server</span> 在线服务
+</div>
+</div>
+<div class="c">
+<div class="ct">治理 & 监控</div>
+<div class="cd">
+<span class="p pr">Prometheus</span> 指标采集<br>
+<span class="p pr">Grafana</span> 可视化大盘<br>
+<span class="p pr">PagerDuty/飞书</span> 告警<br>
+<span class="p pp">MySQL/PG</span> 元数据存储<br>
+<span class="p pp">ES</span> 特征搜索索引<br>
+<span class="p pp">AB Platform</span> 灰度实验<br>
+<span class="p pp">Feature Market</span> 特征市场
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+Feature View 平台规模 (字节 DSP): Batch FV ~120 个 | Stream FV ~150 个 | OnDemand FV ~30 个 | 总 Feature View ~300 个 | Flink Job ~80 个 (部分 View 共享 Job) | 日均 Tair 写入 ~50 亿次 | 快照 HDFS 存储 ~200TB
+</div>
+</div>

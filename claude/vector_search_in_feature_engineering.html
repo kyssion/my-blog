@@ -1,0 +1,588 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}.pk{background:#FBEAF0;color:#72243E}.pgy{background:#F1EFE8;color:#444441}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">向量检索引擎在特征工程中的六大应用场景</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 VE-KNN / 阿里 Proxima(Aitheta) / 开源 Faiss+Milvus — 向量检索不仅服务召回，它深度嵌入特征生产的多个环节</div>
+
+<!-- ==================== SECTION 0: Engine Comparison ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+向量检索引擎选型 — 各引擎定位与适用场景
+</div>
+
+<table class="tbl">
+<tr><th style="width:13%">引擎</th><th style="width:12%">开发方</th><th style="width:18%">核心索引算法</th><th style="width:12%">部署形态</th><th>适用场景 (字节/阿里实践)</th></tr>
+<tr><td><span class="p pp">Faiss</span></td><td>Meta</td><td>IVF-PQ, HNSW, Flat</td><td>单机 Library</td><td>离线索引构建、单机高性能检索。字节用于离线 Embedding 评估和小规模 Ad 侧索引</td></tr>
+<tr><td><span class="p pg">Milvus</span></td><td>Zilliz</td><td>IVF, HNSW, DiskANN, GPU</td><td>分布式集群</td><td>通用向量数据库。适合中等规模 (千万级) 的在线检索，支持元数据过滤</td></tr>
+<tr><td><span class="p po">Proxima (Aitheta)</span></td><td>阿里</td><td>HNSW, 图检索, PQ</td><td>分布式集群</td><td>阿里妈妈广告核心向量召回引擎。深度优化了广告场景的向量+属性混合检索</td></tr>
+<tr><td><span class="p pb">VE-KNN</span></td><td>字节跳动</td><td>HNSW + PQ + 自研优化</td><td>分布式集群</td><td>字节全系广告的向量召回引擎。针对超大规模 (亿级) + 毫秒级延迟深度优化</td></tr>
+<tr><td><span class="p pa">Vearch</span></td><td>京东</td><td>HNSW, IVF-PQ, Gamma</td><td>分布式集群</td><td>电商场景向量检索，支持实时增删改和多字段混合检索</td></tr>
+<tr><td><span class="p pk">Jina / Weaviate</span></td><td>社区</td><td>HNSW (via hnswlib)</td><td>Cloud/K8s</td><td>多模态搜索框架。更偏向语义搜索产品，广告系统中不常用于核心链路</td></tr>
+</table>
+
+<div class="I">
+<strong>字节/阿里的核心选择</strong>: 字节使用自研 VE-KNN (内部名 ByteANN)，阿里使用自研 Proxima/Aitheta。两者都不直接使用 Faiss/Milvus 作为在线服务引擎，原因是：① 广告场景对延迟极度敏感 (&lt;5ms)，通用向量数据库的 RPC 开销不可接受；② 需要与广告属性过滤 (品类/地域/预算) 深度融合，通用引擎的 filter 性能不够；③ 亿级广告库 + 每秒百万级查询的规模，需要定制化的分布式方案。Faiss 仍然被广泛使用——但主要是作为<strong>离线工具库</strong> (索引构建、Embedding 质量评估、离线 KNN 计算)，而非在线 Serving 引擎。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SCENE 1: Recall ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+场景一: 向量召回 (ANN Recall) — 最核心的应用
+</div>
+
+<div class="sub">向量召回是广告系统中向量检索引擎最重要的应用。它从千万级广告库中，用用户 Embedding 做 ANN (Approximate Nearest Neighbor) 检索，找出语义最相关的 Top-K 广告候选。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">向量召回全链路 (字节 VE-KNN 方案)</div>
+
+<strong>离线阶段: 索引构建</strong> <span class="tag">每小时/每天更新</span><br>
+<span style="color:var(--color-text-tertiary)">├ 双塔模型 (DSSM/YoutubeDNN) 训练完成 → 输出 Ad Tower 参数</span><br>
+<span style="color:var(--color-text-tertiary)">├ 全量广告 forward 推理 → 每条广告得到 ad_embedding (128d FP16)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Embedding + 广告元信息 → 构建 HNSW+PQ 混合索引</span><br>
+<span style="color:var(--color-text-tertiary)">│   ├ HNSW 图索引: M=32, efConstruction=200</span><br>
+<span style="color:var(--color-text-tertiary)">│   ├ PQ 量化: 128d → 64 子空间 × 8bit 码本 = 64 Bytes/向量</span><br>
+<span style="color:var(--color-text-tertiary)">│   └ 索引大小: 1000万广告 × (64B PQ + ~200B HNSW 图) ≈ 2.5GB</span><br>
+<span style="color:var(--color-text-tertiary)">├ 附加属性索引: category_id, region_id, budget_status → 倒排/Bitmap 索引</span><br>
+<span style="color:var(--color-text-tertiary)">├ 分片: 按 ad_id hash 分成 N 个 shard (通常 8~16 个)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 部署: 新索引构建完成 → 双缓冲切换 → 在线生效</span><br><br>
+
+<strong>在线阶段: 向量检索</strong> <span class="tag">每次广告请求, &lt;5ms</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 1: User Embedding 获取</span><br>
+<span style="color:var(--color-text-tertiary)">│   方式 A: 预计算 (从 Tair 读取离线生成的 user_embedding) → 90% 用户</span><br>
+<span style="color:var(--color-text-tertiary)">│   方式 B: 实时推理 (User Tower 在线前向) → 10% 新/冷用户</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 2: 属性预过滤 (Pre-filter)</span><br>
+<span style="color:var(--color-text-tertiary)">│   广告主定向条件 → 倒排索引过滤出合法广告子集</span><br>
+<span style="color:var(--color-text-tertiary)">│   如: region=北京 AND category∈{游戏,电商} AND budget_remaining>0</span><br>
+<span style="color:var(--color-text-tertiary)">│   过滤后: 1000 万 → ~50 万候选</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 3: ANN 检索</span><br>
+<span style="color:var(--color-text-tertiary)">│   user_embedding (128d) → HNSW 图遍历 → PQ 距离粗筛 → Top-200</span><br>
+<span style="color:var(--color-text-tertiary)">│   搜索参数: ef_search=100, nprobe=32 (IVF 模式时)</span><br>
+<span style="color:var(--color-text-tertiary)">│   在 Pre-filter 的候选子集上做 ANN (不是全量搜索)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Step 4: Rerank (可选)</span><br>
+<span style="color:var(--color-text-tertiary)">│   Top-200 用精确内积重排 → Top-200 (FP32 精确计算, 修正 PQ 量化误差)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 输出: 200 个广告 ID → 合并到召回候选集</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">向量索引构建管线 (与 Feature Store 的关系)</div>
+<div class="cd">
+向量索引构建是一种<strong>特殊的 Materialization</strong>——它不是写入 Tair KV，而是写入向量索引引擎。在 Feature Store 体系中，它被建模为一种特殊的 Sink:<br><br>
+<div class="code">FeatureView: ad_dssm_embedding
+  entity: Ad
+  source: 双塔模型推理输出
+  store_config:
+    store_type: VECTOR_INDEX  // 特殊存储类型
+    engine: VE_KNN
+    index_type: HNSW_PQ
+    dimension: 128
+    metric: INNER_PRODUCT
+    pq_subquantizers: 64
+    hnsw_m: 32
+    shard_count: 16
+    attribute_columns: [category_id, region_id, 
+                        advertiser_id, budget_status]
+    refresh_interval: "1h"  // 每小时全量重建</div>
+
+执行引擎 (Job Builder) 看到 <code style="font-family:var(--font-mono);font-size:10px">store_type=VECTOR_INDEX</code> 时，生成的不是 Tair BulkLoad Job，而是<strong>索引构建 Job</strong>:<br>
+① Spark Job 读取 Ad Embedding 表 → ② 调用 Faiss 构建 HNSW+PQ 索引 → ③ 索引分片 → ④ 上传到 VE-KNN 集群 → ⑤ 双缓冲切换<br><br>
+<span class="p pp">Faiss (离线构建)</span> <span class="p pb">VE-KNN (在线服务)</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">Pre-filter + ANN 的混合检索</div>
+<div class="cd">
+<strong>为什么需要 Pre-filter?</strong><br>
+广告主设定了定向条件: "只投北京地区的 18-35 岁男性"。如果不过滤直接 ANN，Top-200 中可能有大量不满足定向的广告——白白浪费了召回配额。<br><br>
+
+<strong>Pre-filter 的两种实现</strong>:<br><br>
+<strong>方式一: 先过滤再检索 (字节 VE-KNN)</strong><br>
+在向量索引旁维护属性倒排索引。先用倒排索引筛出合法 ad_id 集合 → 在这个子集上做 ANN。<br>
+优点: 精确过滤，不浪费 Top-K 配额<br>
+缺点: 子集太小时 HNSW 图变稀疏，检索质量下降<br><br>
+
+<strong>方式二: 检索时过滤 (阿里 Proxima)</strong><br>
+ANN 遍历 HNSW 图时，每到一个节点先检查属性条件。不满足则跳过，不计入 Top-K。<br>
+优点: 不需要额外的倒排索引<br>
+缺点: 过滤率高时需要遍历更多节点，延迟不可控<br><br>
+
+<strong>字节实践</strong>: 默认用方式一 (先过滤)。当过滤后子集 &lt;1000 条时自动切换为暴力搜索 (子集太小 HNSW 退化)。<br><br>
+<span class="p pb">Inverted Index</span> <span class="p pg">Bitmap Filter</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SCENE 2: I2I ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+场景二: I2I 相似广告/商品检索 — 特征生产中的向量应用
+</div>
+
+<div class="sub">I2I (Item-to-Item) 是特征工程中一个被低估的向量检索应用。它不只是一个召回通道——它的输出直接作为<strong>特征</strong>供排序模型使用。</div>
+
+<div class="g2">
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">I2I 作为召回通道</div>
+<div class="cd">
+<strong>触发逻辑</strong>: 用户近期点击/转化的广告 → 取这些广告的 Embedding → 在向量索引中检索相似广告<br><br>
+
+<div class="code">// 行为触发 I2I 召回
+user_clicked_ads = [ad_101, ad_205, ad_389]
+for seed_ad in user_clicked_ads:
+    seed_emb = tair.get(f"af:emb:{seed_ad}")
+    similar_ads = ve_knn.search(
+        query=seed_emb,
+        top_k=50,
+        filter="advertiser_id != seed_ad.advertiser_id"
+    )
+    recall_candidates.extend(similar_ads)</div>
+
+<strong>与 U2I 的区别</strong>:<br>
+U2I (场景一): 用<strong>用户</strong>的 Embedding 检索广告 → 泛化性强<br>
+I2I: 用<strong>已交互广告</strong>的 Embedding 检索相似广告 → 精准性强<br><br>
+
+两者通常并行作为多路召回的不同通道，结果取并集。<br><br>
+<span class="p pg">VE-KNN</span> <span class="p pg">Proxima</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">I2I 相似度作为排序特征</div>
+<div class="cd">
+<strong>这是更隐蔽但非常有价值的应用</strong>。<br><br>
+
+I2I 检索的结果不仅用于召回，其<strong>相似度分数</strong>本身被作为精排模型的输入特征:<br><br>
+
+<div class="code">// Feature View: user_ad_i2i_similarity
+// Entity: User × Ad (交叉特征)
+features:
+  i2i_max_sim:   // 候选广告与用户近期点击广告的最大余弦相似度
+  i2i_avg_sim:   // 平均相似度
+  i2i_click_count: // 用户近期点击的广告中有多少与候选广告相似度>0.7</div>
+
+<strong>计算方式</strong>:<br>
+① 候选广告 ad_embedding (128d) — 来自 Feature Store<br>
+② 用户点击历史中每条广告的 embedding — 来自 Feature Store<br>
+③ 逐一计算内积/余弦相似度 → 取 max/avg/count<br><br>
+
+<strong>为什么有价值</strong>:<br>
+这个特征告诉精排模型："这个候选广告和用户之前喜欢的广告有多像"。它提供了一种<strong>语义级别的相关性信号</strong>，比简单的品类匹配更精细。字节内部实验: 加入 i2i_sim 特征后精排 AUC 提升 0.15%。<br><br>
+<span class="p pp">Feature View</span> <span class="p pa">Cross Feature</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SCENE 3: SIM/SDIM Long Seq ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+场景三: 长序列行为建模 (SIM/SDIM) — 精排中的向量检索
+</div>
+
+<div class="sub">这是向量检索在特征工程中<strong>最精妙的应用</strong>。当用户行为序列长达 1000+ 条时，精排模型无法对全部行为做 Attention (计算量太大)。解法是: 先用向量检索从 1000 条行为中<strong>筛出与候选广告最相关的 Top-K 条</strong>，再做 Attention。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">SIM (Search-based Interest Model) 中向量检索的角色</div>
+
+<strong>背景</strong>: 用户最近 30 天的广告交互序列可能有 1000~10000 条<br>
+<span style="color:var(--color-text-tertiary)">直接做 Target Attention: O(1000 × 128d) → 单次推理 ~5ms → 500 候选 × 5ms = 2500ms → 完全不可接受</span><br><br>
+
+<strong>SIM 的两阶段方案</strong>:<br><br>
+
+<strong>Stage 1: General Search Unit (GSU) — 向量检索</strong> <span class="tag">&lt;1ms</span><br>
+<span style="color:var(--color-text-tertiary)">├ 候选广告 embedding (128d) 作为 query</span><br>
+<span style="color:var(--color-text-tertiary)">├ 用户行为序列中每条广告的 embedding 作为 document 集合</span><br>
+<span style="color:var(--color-text-tertiary)">├ 在 document 集合中做 Top-K ANN 检索 (K=50~100)</span><br>
+<span style="color:var(--color-text-tertiary)">│   方式 A (Hard Search): 按品类/广告主 ID 精确匹配过滤 (倒排)</span><br>
+<span style="color:var(--color-text-tertiary)">│   方式 B (Soft Search): 向量内积 ANN 检索 (Faiss/自研)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 输出: 该候选广告最相关的 K 条历史行为 ID + 时间戳</span><br><br>
+
+<strong>Stage 2: Exact Search Unit (ESU) — 精细 Attention</strong> <span class="tag">~1ms</span><br>
+<span style="color:var(--color-text-tertiary)">├ K 条行为的 embedding → DIN/DIEN style Target Attention</span><br>
+<span style="color:var(--color-text-tertiary)">├ 计算量: O(K × 128d) = O(50 × 128) → 极快</span><br>
+<span style="color:var(--color-text-tertiary)">└ 输出: 用户对该候选广告的兴趣向量 (注意力加权)</span><br><br>
+
+<strong>复杂度对比</strong>:<br>
+<span style="color:var(--color-text-tertiary)">朴素 Attention: O(N × d) = O(1000 × 128) = 128,000 次乘法/候选</span><br>
+<span style="color:var(--color-text-tertiary)">SIM: O(检索) + O(K × d) = O(~100) + O(50 × 128) = ~6,500 次乘法/候选</span><br>
+<span style="color:var(--color-text-tertiary)">加速比: ~20 倍</span>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">GSU 的向量检索实现细节</div>
+<div class="cd">
+<strong>在线 Per-user 索引 vs 预计算</strong>:<br><br>
+
+<strong>方案一: 在线构建 Mini-Index (字节早期)</strong><br>
+每个用户的行为序列 (50~200 条) 在 Feature Serving 阶段从 Tair 拉取后，在内存中构建一个 tiny Faiss index (Flat, 暴力搜索)。对 50 条行为的暴力搜索耗时 &lt;0.1ms，不需要 ANN。<br><br>
+
+<strong>方案二: 品类匹配 Hard Search (字节主流)</strong><br>
+不用向量检索，而是用<strong>属性倒排</strong>: 候选广告的 category_id → 从用户行为序列中找同品类的行为。简单但效果接近 Soft Search。<br><br>
+
+<strong>方案三: 预计算 User-side KNN (阿里 SDIM)</strong><br>
+离线用 Spark 对每个用户的行为序列构建 PQ 码本 → 在线用候选广告 Embedding 做 PQ 距离计算。避免在线建索引的开销。<br><br>
+
+<strong>核心 insight</strong>: SIM/SDIM 场景中的"向量检索"规模很小 (每用户只有几百到几千条 document)，不需要 Milvus/VE-KNN 这种大规模引擎。Faiss Flat/mini-PQ 或纯倒排就够了。<br><br>
+<span class="p pp">Faiss Flat</span> <span class="p po">Inverted Index</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">SIM 在 Feature Store 中的建模</div>
+<div class="cd">
+SIM 的 GSU 检索结果需要作为 Feature 传给模型。在 Feature Store 中它是这样建模的:<br><br>
+
+<div class="code">// Feature View: user_sim_topk_behaviors
+// Entity: User × Ad (交叉特征!)
+// 这是精排阶段为每个候选广告动态计算的
+
+source_type: ON_DEMAND  // 在线实时计算
+
+features:
+  sim_topk_ad_ids:     SEQ_INT64[50]  // GSU 检索出的 Top-50 行为广告 ID
+  sim_topk_timestamps: SEQ_INT64[50]  // 对应的时间戳
+  sim_topk_actions:    SEQ_INT64[50]  // 对应的行为类型 (click/convert)
+  sim_topk_scores:     SEQ_FLOAT[50]  // 对应的检索相似度分数
+
+// 计算逻辑 (OnDemand C++ Operator):
+// 1. 从 user_behavior_seq Feature View 获取完整行为序列
+// 2. 对每个候选广告 ad_embedding, 在序列中做 TopK 检索
+// 3. 输出 Top-50 的行为 ID/时间/分数</div>
+
+<strong>关键</strong>: sim_topk_ad_ids 随后由模型的 Embedding Layer 做 Lookup → 得到 50 个 embedding → ESU Target Attention → 输出兴趣向量。<br><br>
+
+这就是 SIM 的核心: <strong>向量检索变成了特征工程的一部分</strong>，它的输出 (TopK 行为 ID) 直接作为模型输入特征。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SCENE 4: Look-alike ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+场景四: Look-alike 人群扩展 — 离线特征生产中的向量应用
+</div>
+
+<div class="sub">广告主上传一批种子用户 (如已购买用户)，平台需要找到"长得像"的潜在用户群体。这是 DMP (数据管理平台) 的核心能力，底层依赖向量检索。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">Look-alike 的向量检索管线</div>
+<div class="cd">
+<strong>Step 1: 种子用户 Embedding 聚合</strong><br>
+广告主提供 10000 个种子用户 ID → 从 Feature Store 拉取每个用户的 user_embedding (128d) → 计算质心 (Centroid): 所有 embedding 的加权平均向量<br><br>
+
+<strong>Step 2: KNN 扩展</strong><br>
+用质心向量在全量用户 Embedding 索引中做 ANN 检索:<br>
+<div class="code">centroid_embedding = mean(seed_user_embeddings)
+expanded_users = faiss_index.search(
+    query=centroid_embedding,
+    top_k=1_000_000,  // 扩展 100 万用户
+    ef_search=200
+)</div>
+检索引擎: 离线用 <span class="p pp">Faiss</span> (IndexHNSWFlat, 亿级用户索引，~30GB)<br><br>
+
+<strong>Step 3: 输出人群包</strong><br>
+100 万用户 ID → 写入 Tair Bitmap (RoaringBitmap 压缩)<br>
+key: <code style="font-family:var(--font-mono);font-size:10px">crowd:lookalike:{campaign_id}</code><br>
+在线召回阶段用 Bitmap 做定向匹配<br><br>
+
+<strong>更新频率</strong>: 每天凌晨 Spark Job 重算 (用户 embedding 每天更新，人群包随之更新)<br><br>
+<span class="p pp">Faiss IndexHNSW</span> <span class="p pa">RoaringBitmap</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">Look-alike 在 Feature Store 中的建模</div>
+<div class="cd">
+Look-alike 的输出 (人群包) 是一种 <strong>User 维度的离线特征</strong>:<br><br>
+
+<div class="code">// Feature View: user_crowd_tags
+// Entity: User
+// source_type: BATCH (T+1)
+
+features:
+  is_in_crowd_A: INT64  // 是否在人群包 A 中 (0/1)
+  is_in_crowd_B: INT64  // 是否在人群包 B 中
+  crowd_similarity_A: FLOAT32  // 与人群包 A 质心的距离
+  // ... 可能有 50+ 个人群包标记
+
+// Materialization:
+// Spark Job 遍历全量用户，对每个人群包检查 Bitmap 成员关系
+// 输出写入 Tair: key="uf:crowd:{user_id}"</div>
+
+<strong>向量检索参与的环节</strong>:<br>
+① Faiss 构建全量用户 Embedding 索引 (亿级)<br>
+② Faiss KNN 检索扩展人群<br>
+③ 扩展结果 → Bitmap → 用户特征<br><br>
+
+<strong>字节实践</strong>: 同时支持"标准 KNN"和"带约束 KNN"——如扩展时排除近 30 天已看到广告的用户 (去重)，通过 Faiss 的 ID Filter 实现。<br><br>
+
+<strong>阿里实践</strong>: 使用 Proxima 做 Look-alike，支持"分层扩展"——先扩展高相似度核心层 (Top 10万)，再扩展中等相似度外围层 (Top 100万)，广告主可按层出价。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SCENE 5: Creative ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">5</div>
+场景五: 创意素材理解与去重 — 多模态向量应用
+</div>
+
+<div class="sub">广告创意 (图片/视频/文案) 的 Embedding 在特征工程中有两个核心作用: 作为广告侧特征供模型使用，以及做创意去重/相似检测。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">5.1 创意 Embedding 作为广告特征</div>
+<div class="cd">
+<div class="code">// Feature View: ad_creative_embedding
+// Entity: Ad (具体是 Creative)
+// source_type: BATCH (新创意上传时触发)
+
+features:
+  img_embedding:  EMBEDDING[128]  // ResNet/ViT 图片向量
+  text_embedding: EMBEDDING[64]   // BERT 文案向量
+  video_embedding: EMBEDDING[128] // 视频封面帧向量
+  multimodal_embedding: EMBEDDING[256] // 多模态融合向量
+
+// 生产方式:
+// 新创意上传 → Kafka 事件 → Flink Job 触发推理
+// → CV 模型 (ResNet/ViT) 提取 img_embedding
+// → NLP 模型 (BERT) 提取 text_embedding
+// → 多模态模型 (CLIP/M6) 融合 → multimodal_embedding
+// → 写入 Tair + 更新向量索引</div>
+
+<strong>字节方案</strong>: ByteTransformer (自研多模态模型) 对图片+文案联合编码，输出 256d 向量。用于广告侧向量召回和精排特征。<br><br>
+
+<strong>阿里方案</strong>: M6 (Multi-Modality to Multi-Modality Multitask Mega-transformer) 统一处理图文视频。<br><br>
+
+<strong>在精排中的使用</strong>:<br>
+multimodal_embedding 直接作为精排模型的 dense feature 输入 MLP (不走 Embedding Table lookup)。它为模型提供了"这个创意视觉上/语义上是什么样的"信息。
+</div>
+</div>
+<div class="c">
+<div class="ct">5.2 创意去重与相似检测</div>
+<div class="cd">
+<strong>问题</strong>: 同一广告主上传大量相似创意 (微调文案或裁剪图片)，导致用户在一次请求中看到多个"几乎相同"的广告。<br><br>
+
+<strong>解法: 创意向量聚类 + 去重</strong>:<br><br>
+
+<strong>离线聚类</strong>:<br>
+所有创意的 multimodal_embedding → Faiss K-Means 聚类 (K=10000) → 每个创意分配到一个 cluster → 同 cluster 的创意被视为"近似重复"<br><br>
+
+<div class="code">// 创意去重 Feature View
+// Entity: Ad
+features:
+  creative_cluster_id: INT64  // 所属聚类 ID
+  
+// 重排阶段使用:
+// 同一 cluster 的广告只保留 eCPM 最高的一条
+// 实现: 重排模块按 creative_cluster_id 做 group-wise 去重</div>
+
+<strong>在线相似检测 (实时上传场景)</strong>:<br>
+新创意上传 → 提取 embedding → 在创意向量索引中检索 Top-5 最相似创意 → 余弦相似度 &gt;0.95 → 标记为"近似重复"，拒绝投放或限制预算。<br><br>
+
+<strong>使用的引擎</strong>:<br>
+离线聚类: <span class="p pp">Faiss K-Means</span> (GPU 加速)<br>
+在线去重: <span class="p pg">Milvus</span> / <span class="p po">Proxima</span> (支持实时增删改)<br><br>
+
+<strong>字节数据</strong>: 创意去重使创意多样性提升 ~30%，用户体验改善带来 CTR 提升 0.3%。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SCENE 6: User Embedding ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+场景六: 用户 Embedding 实时更新 — 近线特征中的向量应用
+</div>
+
+<div class="sub">用户 Embedding 不是一成不变的——用户的实时行为应该立刻反映到 Embedding 中。这需要一套"Embedding 增量更新"机制，向量检索引擎在其中扮演索引实时更新的角色。</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">6.1 用户 Embedding 增量更新</div>
+<div class="cd">
+<strong>离线 Embedding (T+1)</strong>:<br>
+双塔模型 User Tower 每天对全量用户前向推理 → 存入 Tair (uf:emb:{user_id})。覆盖 90%+ 用户但时效性差。<br><br>
+
+<strong>近线 Embedding 更新 (分钟级)</strong>:<br>
+<div class="code">// Stream Feature View: user_embedding_realtime
+// Flink Job 逻辑:
+// 1. 消费 Kafka 用户行为日志
+// 2. 用户新点击一条广告 → 获取该广告的 ad_embedding
+// 3. 用指数移动平均 (EMA) 更新用户 embedding:
+//    new_user_emb = α × ad_embedding + (1-α) × old_user_emb
+//    α = 0.1 (学习率, 控制更新幅度)
+// 4. 写入 Tair: uf:emb_rt:{user_id} (近线版, TTL=1d)</div>
+
+<strong>在线 Serving 策略</strong>:<br>
+Feature Serving 先查 <code style="font-family:var(--font-mono);font-size:10px">uf:emb_rt:{user_id}</code> (近线版)，miss 则查 <code style="font-family:var(--font-mono);font-size:10px">uf:emb:{user_id}</code> (离线版)。近线版 TTL=1d 过期后自动回退到离线版。<br><br>
+
+<span class="p pg">Flink EMA Update</span> <span class="p po">Tair TTL Fallback</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">6.2 向量索引实时更新</div>
+<div class="cd">
+<strong>问题</strong>: 广告侧向量索引每小时全量重建 (1000 万广告)。但新广告上线后需要<strong>立刻</strong>可被召回，不能等下一次全量重建。<br><br>
+
+<strong>解法: 实时增量索引</strong>:<br><br>
+
+<strong>字节 VE-KNN 方案</strong>:<br>
+• 基础索引: 每小时全量重建的 HNSW+PQ 索引 (只读)<br>
+• 增量缓冲: 新广告的 Embedding 写入一个<strong>实时增量缓冲区</strong> (内存中的小型 Flat Index)<br>
+• 检索时: 同时搜索"基础索引 + 增量缓冲"，结果合并取 Top-K<br>
+• 每小时: 增量缓冲 merge 到基础索引 → 清空缓冲<br><br>
+
+<strong>阿里 Proxima 方案</strong>:<br>
+Proxima 原生支持 Real-time Insert/Delete (基于 HNSW 的动态图更新)。新广告直接 insert 到 HNSW 图中，无需增量缓冲。但频繁 insert 会导致 HNSW 图质量退化，因此仍需定期 rebuild。<br><br>
+
+<strong>Milvus 方案 (开源参考)</strong>:<br>
+Milvus 使用 Growing Segment + Sealed Segment 架构。新数据写入 Growing Segment (内存, brute-force)；后台异步 flush 为 Sealed Segment (磁盘, 带索引)。检索时两者 merge。<br><br>
+
+<strong>广告上线延迟</strong>:<br>
+VE-KNN: ~10s (写入增量缓冲后立刻可检索)<br>
+Proxima: ~5s (HNSW 动态 insert)<br>
+全量重建: ~1h (等待下次 rebuild)
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Architecture ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">7</div>
+向量检索引擎在整体架构中的位置
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">向量检索引擎与 Feature Store 各层的交互关系</div>
+
+<strong>特征生产层 (离线/近线)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ Embedding 生产: 双塔模型/CV模型/NLP模型 → ad/user/creative embedding</span><br>
+<span style="color:var(--color-text-tertiary)">├ 索引构建: Spark + </span><span class="p pp">Faiss</span><span style="color:var(--color-text-tertiary)"> → 构建 HNSW/PQ 离线索引</span><br>
+<span style="color:var(--color-text-tertiary)">├ Look-alike: </span><span class="p pp">Faiss KNN</span><span style="color:var(--color-text-tertiary)"> → 人群扩展 → Bitmap 人群包特征</span><br>
+<span style="color:var(--color-text-tertiary)">├ 创意聚类: </span><span class="p pp">Faiss K-Means</span><span style="color:var(--color-text-tertiary)"> → creative_cluster_id 特征</span><br>
+<span style="color:var(--color-text-tertiary)">└ I2I 预计算: </span><span class="p pp">Faiss</span><span style="color:var(--color-text-tertiary)"> → 相似广告 Pair 表 → I2I 特征</span><br><br>
+
+<strong>在线 Serving 层 (毫秒级)</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 向量召回: </span><span class="p pb">VE-KNN</span><span style="color:var(--color-text-tertiary)"> / </span><span class="p po">Proxima</span><span style="color:var(--color-text-tertiary)"> → U2I/I2I Top-K 候选</span><br>
+<span style="color:var(--color-text-tertiary)">├ SIM/SDIM: Feature Serving 内嵌 </span><span class="p pp">Faiss Flat</span><span style="color:var(--color-text-tertiary)"> → 长序列 Top-K 检索</span><br>
+<span style="color:var(--color-text-tertiary)">├ 创意去重: </span><span class="p pg">Milvus</span><span style="color:var(--color-text-tertiary)"> / </span><span class="p po">Proxima</span><span style="color:var(--color-text-tertiary)"> → 相似创意检测</span><br>
+<span style="color:var(--color-text-tertiary)">└ 实时增量: VE-KNN 增量缓冲 → 新广告即时可检索</span><br><br>
+
+<strong>训练层</strong><br>
+<span style="color:var(--color-text-tertiary)">├ 负样本采样: </span><span class="p pp">Faiss</span><span style="color:var(--color-text-tertiary)"> → Hard Negative Mining (检索与正样本最相似的负样本)</span><br>
+<span style="color:var(--color-text-tertiary)">├ Embedding 质量评估: </span><span class="p pp">Faiss</span><span style="color:var(--color-text-tertiary)"> → KNN Recall@K / Hit Rate 计算</span><br>
+<span style="color:var(--color-text-tertiary)">└ 向量空间可视化: </span><span class="p pp">Faiss PCA/t-SNE</span><span style="color:var(--color-text-tertiary)"> → Embedding 分布诊断</span>
+</div>
+
+<div class="I">
+<strong>关键总结: Faiss 是"离线万金油"，VE-KNN/Proxima 是"在线专用引擎"</strong><br><br>
+在字节/阿里的实际架构中，向量检索的使用模式非常清晰:<br>
+• <span class="p pp">Faiss</span>: 离线工具库，用于索引构建、Look-alike、聚类、评估、负样本挖掘。它不直接服务在线流量，而是作为 Spark Job 中的库被调用。<br>
+• <span class="p pb">VE-KNN</span> / <span class="p po">Proxima</span>: 在线检索引擎，专门服务毫秒级的向量召回。它们是独立部署的分布式集群，通过 gRPC 被 Ad Server 调用。<br>
+• <span class="p pg">Milvus</span>: 在字节/阿里核心链路中不是首选 (自研方案性能更优)，但在中小规模场景 (如创意去重、非核心召回通道) 中被使用。开源方案首选。<br>
+• <span class="p pk">Jina / Weaviate</span>: 偏向语义搜索产品化，在广告特征工程的核心链路中不常见。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 8: Performance ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">8</div>
+性能参数与规模参考
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">各场景的向量检索规模</div>
+<div class="cd">
+<table class="tbl">
+<tr><th>场景</th><th>向量库规模</th><th>维度</th><th>QPS</th><th>延迟</th></tr>
+<tr><td>U2I 召回</td><td>1000 万广告</td><td>128d</td><td>~100 万/s</td><td>P99 &lt;5ms</td></tr>
+<tr><td>I2I 召回</td><td>1000 万广告</td><td>128d</td><td>~50 万/s</td><td>P99 &lt;3ms</td></tr>
+<tr><td>SIM TopK</td><td>50~1000/用户</td><td>128d</td><td>~500 万/s</td><td>P99 &lt;0.5ms</td></tr>
+<tr><td>Look-alike</td><td>5 亿用户</td><td>128d</td><td>离线批量</td><td>~30min/批</td></tr>
+<tr><td>创意去重</td><td>5000 万创意</td><td>256d</td><td>~1000/s</td><td>P99 &lt;50ms</td></tr>
+<tr><td>新广告索引</td><td>增量缓冲 ~1万</td><td>128d</td><td>~1000/s (写)</td><td>&lt;10s 可检索</td></tr>
+</table>
+</div>
+</div>
+<div class="c">
+<div class="ct">完整中间件清单</div>
+<div class="cd">
+<strong>离线工具</strong>:<br>
+<span class="p pp">Faiss (Meta)</span> 索引构建/KNN/聚类/评估<br>
+<span class="p pp">Spark</span> 大规模 Embedding 推理调度<br>
+<span class="p pp">GPU Cluster</span> CV/NLP/多模态模型推理<br><br>
+<strong>在线引擎</strong>:<br>
+<span class="p pb">VE-KNN (字节自研)</span> 核心向量召回<br>
+<span class="p po">Proxima/Aitheta (阿里)</span> 核心向量召回<br>
+<span class="p pg">Milvus</span> 通用向量数据库 (非核心场景)<br><br>
+<strong>支撑组件</strong>:<br>
+<span class="p pa">TF Serving / Triton</span> Embedding 在线推理<br>
+<span class="p pa">Tair / Redis</span> Embedding KV 存储<br>
+<span class="p pa">HDFS / OSS</span> 索引文件存储<br>
+<span class="p pa">RoaringBitmap</span> 人群包压缩存储
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+字节 DSP 向量检索规模: VE-KNN 集群 ~50 台 (GPU+CPU 混合) | 广告索引 ~1000 万向量 (128d HNSW+PQ) | 用户索引 ~5 亿向量 (128d, 离线 Faiss 构建) | 在线召回 QPS ~100 万/s | 索引更新: 全量每小时 + 增量实时
+</div>
+</div>

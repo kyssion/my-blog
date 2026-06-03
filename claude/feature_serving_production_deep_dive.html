@@ -1,0 +1,721 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+.R{font-family:var(--font-sans);color:var(--color-text-primary);padding:0.5rem 0;max-width:680px}
+.S{margin-bottom:1.5rem}
+.SH{font-size:15px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.SH .n{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.sub{font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;line-height:1.7}
+.p{display:inline-block;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500;margin:1px}
+.pb{background:#E6F1FB;color:#0C447C}.pg{background:#E1F5EE;color:#085041}.po{background:#FAECE7;color:#712B13}.pp{background:#EEEDFE;color:#3C3489}.pa{background:#FAEEDA;color:#633806}.pr{background:#FCEBEB;color:#791F1F}.pk{background:#FBEAF0;color:#72243E}.pgy{background:#F1EFE8;color:#444441}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:6px}
+.c{border:0.5px solid var(--color-border-tertiary);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6;background:var(--color-background-primary)}
+.ct{font-weight:500;font-size:12px;margin-bottom:4px}
+.cd{color:var(--color-text-secondary);font-size:11px;line-height:1.6}
+.I{padding:10px 12px;border-left:2px solid var(--color-border-info);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.W{padding:10px 12px;border-left:2px solid var(--color-border-danger);background:var(--color-background-secondary);border-radius:0 8px 8px 0;font-size:11px;color:var(--color-text-secondary);line-height:1.8;margin-bottom:8px}
+.F{padding:10px 12px;border:0.5px solid var(--color-border-tertiary);border-radius:8px;background:var(--color-background-secondary);font-size:11px;line-height:2;margin-bottom:8px}
+.sp{height:0.5px;background:var(--color-border-tertiary);margin:16px 0}
+.tag{font-size:10px;padding:1px 5px;border-radius:3px;border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);display:inline-block;margin:1px}
+.tbl{width:100%;font-size:11px;border-collapse:collapse;margin:6px 0}
+.tbl th{text-align:left;font-weight:500;padding:5px 6px;border-bottom:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);font-size:11px}
+.tbl td{padding:4px 6px;border-bottom:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);font-size:11px;line-height:1.5;vertical-align:top}
+.code{font-family:var(--font-mono);font-size:10px;background:var(--color-background-secondary);padding:8px 10px;border-radius:6px;margin:6px 0;line-height:1.7;color:var(--color-text-primary);white-space:pre-wrap;overflow-x:auto}
+.bl{border-left:2px solid;border-radius:0 8px 8px 0}
+.metric{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:8px 10px;text-align:center}
+.metric .mv{font-size:18px;font-weight:500;color:var(--color-text-primary)}
+.metric .ml{font-size:11px;color:var(--color-text-secondary);margin-top:2px}
+</style>
+<div class="R">
+
+<div style="font-size:16px;font-weight:500;margin-bottom:2px">Feature Serving 生产级架构全解</div>
+<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">参考字节 ByteFeature / 阿里 ABFS (阿里巴巴特征服务) 线上方案 — 特征全链路最后一公里</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:12px">
+<div class="metric"><div class="mv">&lt;7ms</div><div class="ml">端到端特征 serving</div></div>
+<div class="metric"><div class="mv">~2500</div><div class="ml">单次请求 KV key 数</div></div>
+<div class="metric"><div class="mv">2000万/s</div><div class="ml">峰值 Tair 读 QPS</div></div>
+<div class="metric"><div class="mv">85%+</div><div class="ml">L0 Cache 命中率</div></div>
+</div>
+
+<!-- ==================== SECTION 0 ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">0</div>
+Feature Serving 的定位 — 它到底做什么
+</div>
+
+<div class="sub">Feature Serving 是 Feature Store 面向在线推理的服务层。它的职责是：在 Ad Server 收到一次广告请求后，在 <strong>≤7ms</strong> 内，将分散在 Tair/Redis、本地缓存、在线计算等多处的特征值，<strong>按照模型配置的 slot 顺序</strong>拼接为一个完整的特征向量 (FeatureBatch)，交给模型 Serving 做推理。</div>
+
+<div class="I">
+<strong>Feature Serving 不是一个独立的微服务</strong>。在字节和阿里的架构中，Feature Serving 是以 SDK/Library 的形式<strong>嵌入 Ad Server 进程</strong>中的 (C++ 静态库 / Go package)。不走网络调用，直接在进程内完成。这样做的原因是：如果 Feature Serving 是独立服务，一次 gRPC 调用就要 0.5~1ms 的网络开销，而精排需要对 500 个候选做特征拼接——500 次 gRPC 远程调用完全不可接受。<br><br>
+<strong>与 Model Serving 的关系</strong>: Feature Serving 输出 FeatureBatch → gRPC → Model Serving (TF Serving/Triton) → 返回 pCTR/pCVR。这是唯一一次网络调用，因为模型推理需要 GPU，必须在独立进程。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 1: Internal Architecture ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E6F1FB;color:#0C447C">1</div>
+内部架构 — Feature Serving SDK 的六大核心模块
+</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#534AB7">
+<div class="ct" style="color:#534AB7">1. Config Manager</div>
+<div class="cd">
+<strong>职责</strong>: 加载并管理 feature_config.pb (模型特征配置)<br><br>
+<strong>核心数据</strong>:<br>
+• Model → Feature View 绑定关系<br>
+• 每个 slot 的特征名、dtype、来源、KV key 模板、默认值、Embedding 维度<br>
+• 版本号 + 灰度分桶信息<br><br>
+<strong>更新机制</strong>:<br>
+启动时从配置中心 (Consul/Nacos) 拉取完整配置；运行中监听配置变更事件，热加载新版本 (无需重启进程)。<br><br>
+<span class="p pp">Consul/Nacos</span> <span class="p pp">Protobuf Config</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#0F6E56">
+<div class="ct" style="color:#0F6E56">2. Key Generator</div>
+<div class="cd">
+<strong>职责</strong>: 根据 Entity join_keys + key_template 批量生成 KV key<br><br>
+<strong>输入</strong>: user_id + [ad_id_1..ad_id_500]<br>
+<strong>输出</strong>: 一组按 Tair 分片聚合的 key 集合<br><br>
+<strong>核心优化</strong>:<br>
+• <strong>Key 分片预排序</strong>: 对每个 key 计算 CRC16(key) % 16384 (Tair slot)，按 slot 聚合，同一分片的 key 合并为一次 Pipeline MGet<br>
+• <strong>User/Ad key 分离</strong>: User key 只生成一次 (所有候选共享)；Ad key 按候选列表批量生成<br>
+• <strong>Cross key 动态拼接</strong>: user_id + ad_id/advertiser_id 动态拼接<br><br>
+<span class="p pg">Key Router</span> <span class="p pg">Shard Calculator</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#D85A30">
+<div class="ct" style="color:#D85A30">3. Cache Manager</div>
+<div class="cd">
+<strong>职责</strong>: 管理三级缓存的读写策略<br><br>
+<strong>L0 进程内 LRU</strong>:<br>
+Go: sync.Map + 自定义 LRU 淘汰<br>
+C++: 分片 LRU (16 个 shard，减少锁竞争)<br>
+容量 ~100K key, ~500MB 内存<br><br>
+<strong>L1 本机 RocksDB</strong>:<br>
+嵌入式 KV，NVMe SSD 存储<br>
+容量 ~50GB，用于当日活跃用户预热<br><br>
+<strong>L2 Tair Client</strong>:<br>
+分布式 KV 连接池 + Pipeline<br><br>
+<strong>读取路径</strong>: L0 → L1 → L2 → 缺失处理<br>
+<span class="p po">LRU Cache</span> <span class="p po">RocksDB</span> <span class="p po">Tair Client</span>
+</div>
+</div>
+</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#BA7517">
+<div class="ct" style="color:#854F0B">4. OnDemand Engine</div>
+<div class="cd">
+<strong>职责</strong>: 执行 OnDemand Feature View 的 Transform<br><br>
+由 DSL Compiler 编译出的 C++ 算子组成。请求到达时，从 Bid Request 中提取原始字段 → 执行 Transform 链 → 输出特征值。<br><br>
+<strong>算子类型</strong>:<br>
+• 时间类: HOUR_OF_DAY, IS_WEEKEND<br>
+• 编码类: GEOHASH, HASH<br>
+• 分桶类: BUCKET<br>
+• 引用类: 读取其他 View 的已拉取值进行二次计算<br><br>
+耗时 &lt;0.5ms (纯 CPU)<br>
+<span class="p pa">C++ Operators</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#D4537E">
+<div class="ct" style="color:#993556">5. Feature Assembler</div>
+<div class="cd">
+<strong>职责</strong>: 将各来源的特征值拼接为模型输入<br><br>
+按 feature_config 中定义的 slot 顺序，将特征值填入 FeatureBatch 矩阵。核心是<strong>共享-个性化分离</strong>策略:<br><br>
+• <strong>共享特征</strong> (User + Context): 500 个候选只存一份，通过指针/offset 共享<br>
+• <strong>个性化特征</strong> (Ad + Cross): 每个候选独立填充<br><br>
+<strong>输出</strong>: FlatBuffer 序列化的 FeatureBatch (500 × N_slots)<br><br>
+<span class="p pk">Slot Mapper</span> <span class="p pk">FlatBuffer Builder</span>
+</div>
+</div>
+<div class="c bl" style="border-left-color:#A32D2D">
+<div class="ct" style="color:#A32D2D">6. Degradation Controller</div>
+<div class="cd">
+<strong>职责</strong>: 降级、熔断、超时控制<br><br>
+每个 Feature View 独立监控健康状态。异常时按策略降级:<br><br>
+• Tair 超时: 使用 default_value<br>
+• View 缺失率飙升: 熔断该 View<br>
+• 全局超时: 丢弃低优先级 View<br><br>
+实现: 基于滑动窗口的熔断器 (类 Hystrix)，但更轻量 (纯内存计数器)<br><br>
+<span class="p pr">Circuit Breaker</span> <span class="p pr">Timeout Manager</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 2: Request Flow ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#E1F5EE;color:#085041">2</div>
+一次完整请求的 Feature Serving 时序 — 逐毫秒拆解
+</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:6px">精排阶段 Feature Serving 完整时序 (500 个候选广告)</div>
+
+<strong>T+0.0ms</strong> — <span class="p pgy">Ad Server 收到精排请求</span><br>
+<span style="color:var(--color-text-tertiary)">输入: user_id="U123", candidate_ads=[ad_001..ad_500], bid_request_context</span><br><br>
+
+<strong>T+0.2ms</strong> — <span class="p pp">Config Manager 解析模型所需 Feature View</span><br>
+<span style="color:var(--color-text-tertiary)">├ 查 ModelFeatureBinding → 该模型需要 8 个 Feature View:</span><br>
+<span style="color:var(--color-text-tertiary)">│   User 侧: user_profile(v2), user_interest_tags(v1), user_behavior_seq(v3),</span><br>
+<span style="color:var(--color-text-tertiary)">│            user_realtime_stats(v3), user_embedding(v1)</span><br>
+<span style="color:var(--color-text-tertiary)">│   Ad 侧:   ad_meta(v2), ad_stats(v1), ad_embedding(v1)</span><br>
+<span style="color:var(--color-text-tertiary)">│   Cross:   user_x_advertiser(v1)</span><br>
+<span style="color:var(--color-text-tertiary)">│   OnDemand: user_context(v1)</span><br>
+<span style="color:var(--color-text-tertiary)">└ 计算优先级: user_profile > user_behavior_seq > user_realtime_stats > ...</span><br><br>
+
+<strong>T+0.4ms</strong> — <span class="p pg">Key Generator 批量生成 KV key</span><br>
+<span style="color:var(--color-text-tertiary)">├ User keys (固定，不随候选变化): 5 个</span><br>
+<span style="color:var(--color-text-tertiary)">│   "uf:p:U123", "uf:tag:U123", "uf:seq:U123", "uf:rts:U123", "uf:emb:U123"</span><br>
+<span style="color:var(--color-text-tertiary)">├ Ad keys (每个候选 3 个): 500 × 3 = 1500 个</span><br>
+<span style="color:var(--color-text-tertiary)">│   "af:m:{ad_id}", "af:s:{ad_id}", "af:e:{ad_id}"</span><br>
+<span style="color:var(--color-text-tertiary)">├ Cross keys (每个候选 1 个): ~500 个</span><br>
+<span style="color:var(--color-text-tertiary)">│   "cf:uxadv:U123_{advertiser_id}"  (同广告主的广告共用一个 key → 去重后 ~200)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 去重后总计: ~1705 个 unique key</span><br>
+<span style="color:var(--color-text-tertiary)">└ 按 Tair slot 分桶: 聚合到 ~8 个分片</span><br><br>
+
+<strong>T+0.5ms</strong> — <span class="p po">三条并行路径同时启动</span><br>
+<span style="color:var(--color-text-tertiary)">┌─ Path A: OnDemand 计算 (CPU, 非阻塞)</span><br>
+<span style="color:var(--color-text-tertiary)">│  HOUR_OF_DAY(ts)→14, IS_WEEKEND→0, GEOHASH(lat,lng,5)→"wx4g0",</span><br>
+<span style="color:var(--color-text-tertiary)">│  DEVICE_TYPE→2, NETWORK→1, SCREEN_BUCKET→2, ...</span><br>
+<span style="color:var(--color-text-tertiary)">│  完成: T+0.8ms (耗时 0.3ms)</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">├─ Path B: User 特征拉取 (5 key, 异步 I/O)</span><br>
+<span style="color:var(--color-text-tertiary)">│  L0 Cache 查询: uf:p:U123 命中! (该用户最近有请求)</span><br>
+<span style="color:var(--color-text-tertiary)">│  L0 Cache 查询: uf:rts:U123 命中! (30s 前刚更新)</span><br>
+<span style="color:var(--color-text-tertiary)">│  L0 miss → L1 RocksDB: uf:seq:U123 命中! (当日活跃预热)</span><br>
+<span style="color:var(--color-text-tertiary)">│  L0/L1 miss → Tair MGet: ["uf:tag:U123","uf:emb:U123"] (2 key)</span><br>
+<span style="color:var(--color-text-tertiary)">│  Tair 响应: T+2.5ms (网络 RTT ~1.5ms + Tair 处理 ~0.5ms)</span><br>
+<span style="color:var(--color-text-tertiary)">│  写回 L0 Cache</span><br>
+<span style="color:var(--color-text-tertiary)">│  完成: T+2.8ms</span><br>
+<span style="color:var(--color-text-tertiary)">│</span><br>
+<span style="color:var(--color-text-tertiary)">└─ Path C: Ad + Cross 特征拉取 (~1700 key, 异步 I/O)</span><br>
+<span style="color:var(--color-text-tertiary)">   L0 Cache 批量查询: 热门广告 af:* key 命中 ~900 个 (头部广告)</span><br>
+<span style="color:var(--color-text-tertiary)">   L0 miss → 按 Tair 分片聚合剩余 ~800 key → 8 个 Pipeline MGet 并行发出</span><br>
+<span style="color:var(--color-text-tertiary)">   Tair 响应: T+3.5ms (最慢的分片决定耗时)</span><br>
+<span style="color:var(--color-text-tertiary)">   写回 L0 Cache (仅广告特征，Cross 特征不缓存——user×ad 组合太稀疏)</span><br>
+<span style="color:var(--color-text-tertiary)">   完成: T+4.0ms</span><br><br>
+
+<strong>T+4.0ms</strong> — <span class="p pk">三条路径全部完成，进入 Feature Assembler</span><br>
+<span style="color:var(--color-text-tertiary)">├ FlatBuffer 零拷贝反序列化: 从 Tair value 中读取各字段 (不分配内存)</span><br>
+<span style="color:var(--color-text-tertiary)">├ 缺失处理: 检查每个 slot，NULL → 使用 Feature.default_value</span><br>
+<span style="color:var(--color-text-tertiary)">│   统计类缺失 (ctr_7d): 层级回退 ad→advertiser→category→global</span><br>
+<span style="color:var(--color-text-tertiary)">│   ID 类缺失: 填 slot-0 (default embedding)</span><br>
+<span style="color:var(--color-text-tertiary)">│   SEQ 缺失: 填空序列 + padding 到 max_seq_len</span><br>
+<span style="color:var(--color-text-tertiary)">├ 共享特征广播: User+Context 特征只填一份，500 个候选通过 offset 引用</span><br>
+<span style="color:var(--color-text-tertiary)">├ 个性化特征填充: 遍历 500 个候选，逐条填 Ad+Cross 特征</span><br>
+<span style="color:var(--color-text-tertiary)">└ FlatBuffer 序列化: 输出 FeatureBatch (约 500 × 200 slots)</span><br><br>
+
+<strong>T+5.5ms</strong> — <span class="p pp">FeatureBatch 就绪，通过 gRPC 发送到 Model Serving</span><br>
+<span style="color:var(--color-text-tertiary)">├ FeatureBatch 大小: ~120KB (FlatBuffer 紧凑格式)</span><br>
+<span style="color:var(--color-text-tertiary)">├ gRPC 传输: ~0.5ms (同机房，共享内存或 Unix socket 更快)</span><br>
+<span style="color:var(--color-text-tertiary)">└ Model Serving 开始 GPU 推理...</span><br><br>
+
+<strong>T+6.0ms</strong> — <span class="p pgy">Feature Serving 任务完成</span><br>
+<span style="color:var(--color-text-tertiary)">总耗时分解: Key生成 0.4ms + 并行I/O 3.5ms + 拼接序列化 1.5ms + gRPC 0.5ms ≈ 6ms</span>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 3: Multi-level Cache ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAECE7;color:#993C1D">3</div>
+三级缓存架构 — Feature Serving 性能的核心
+</div>
+
+<div class="sub">缓存是 Feature Serving 能在 7ms 内完成的关键。没有缓存，每次请求 2500 key 全部查 Tair，P99 延迟会飙到 15~20ms。三级缓存将实际 Tair 查询量降低到 30% 以下。</div>
+
+<div class="g3">
+<div class="c bl" style="border-left-color:#A32D2D">
+<div class="ct" style="color:#A32D2D">L0: 进程内 LRU Cache</div>
+<div class="cd">
+<strong>技术实现</strong>:<br>
+C++: 16 个分片 LRU (key hash 到分片，每个分片一把 mutex，减少锁竞争)<br>
+Go: sync.Map (读多写少场景最优) + 后台 goroutine 做 LRU 淘汰<br><br>
+<strong>容量</strong>: ~100K key, ~500MB 内存<br>
+<strong>TTL</strong>: 30~60s (短 TTL 保证近线特征的时效性)<br>
+<strong>命中率</strong>: 60~85% (取决于流量集中度)<br>
+<strong>延迟</strong>: &lt;0.01ms<br><br>
+<strong>缓存什么</strong>:<br>
+• 热门广告特征 (头部 1000 条广告被大量请求复用)<br>
+• 高频活跃用户特征 (短时间内多次请求的用户)<br><br>
+<strong>不缓存什么</strong>:<br>
+• Cross 特征 (user×ad 组合太稀疏，缓存效率极低)<br>
+• 低频用户特征 (只出现一次就淘汰，浪费缓存空间)<br><br>
+<strong>淘汰策略</strong>: LRU + TTL 双重淘汰。key 到 TTL 强制过期 (保证时效)；空间满时按 LRU 淘汰最久未访问的 key。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#BA7517">
+<div class="ct" style="color:#854F0B">L1: 本机 RocksDB</div>
+<div class="cd">
+<strong>技术实现</strong>:<br>
+嵌入式 RocksDB，存储在本机 NVMe SSD<br>
+Block Cache 128MB (热数据内存缓存)<br><br>
+<strong>容量</strong>: ~50GB (SSD)<br>
+<strong>TTL</strong>: 1~7d<br>
+<strong>命中率</strong>: 15~25% (L0 miss 后)<br>
+<strong>延迟</strong>: &lt;0.1ms (SSD 随机读)<br><br>
+<strong>预热策略</strong>:<br>
+每天凌晨 Batch Materialization 完成后，触发 L1 预热 Job:<br>
+• 从 Tair 中拉取<strong>当日预计活跃用户</strong>的特征 (根据昨日活跃用户列表预测)<br>
+• 写入本机 RocksDB<br>
+• 覆盖 ~80% 的当日请求用户<br><br>
+<strong>字节实践</strong>: L1 预热覆盖了大部分 User 特征查询。Ad 特征因为广告上下线频繁，不做 L1 预热——用 L0 短 TTL 缓存更合适。<br><br>
+<strong>写入方式</strong>: Batch Ingest (SSTFileWriter 直接写 SST 文件) 而非逐条 Put，吞吐提升 10 倍。
+</div>
+</div>
+<div class="c bl" style="border-left-color:#185FA5">
+<div class="ct" style="color:#0C447C">L2: Tair / Redis Cluster</div>
+<div class="cd">
+<strong>技术实现</strong>:<br>
+Tair 集群 (字节) / Redis Cluster (开源方案) / ABFS (阿里)<br><br>
+<strong>集群规模</strong> (字节 DSP):<br>
+• 200+ 节点<br>
+• 总内存 ~20TB<br>
+• 16384 个 hash slot<br><br>
+<strong>连接池</strong>:<br>
+每个 Ad Server 进程维护到每个 Tair 分片的长连接池 (Go: 每分片 8~16 连接; C++: 每分片 4~8 连接)。连接复用，避免 TCP 握手开销。<br><br>
+<strong>Pipeline 模式</strong>:<br>
+同一分片的多个 key 合并为一次 Pipeline MGet 命令。一次网络往返可查 200~500 key。实际上 2500 key 只需要 8~10 次网络往返 (按分片并行)。<br><br>
+<strong>延迟</strong>: P50 0.5ms, P99 2ms, P999 5ms (同机房)<br><br>
+<strong>跨机房</strong>: P99 5~8ms (主从复制，就近读)
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>缓存命中率的关键影响因素</strong><br><br>
+<strong>广告侧 L0 命中率高</strong>: 广告系统的特点是头部效应极强——Top 1000 条广告占全部曝光的 60%+。这 1000 条广告的 af:meta/af:stats/af:emb 在 L0 中几乎常驻。<br><br>
+<strong>Cross 特征无法缓存</strong>: user_id × advertiser_id 的组合空间是亿级，L0 容量 100K key 根本装不下。即使缓存了，下一次请求的 user×ad 组合大概率与上次不同，命中率 &lt;1%。因此 Cross 特征<strong>总是</strong>查 Tair (L2)。这也是 Cross Feature View 的 serving 成本最高的原因。<br><br>
+<strong>字节的优化</strong>: 对 Cross 特征做<strong>广告主粒度聚合</strong>——key 是 user_id × advertiser_id (而非 user_id × ad_id)。同一广告主的多条广告共享一个 Cross key，去重后 Cross key 从 ~500 降到 ~200。
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 4: Tair Client ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">4</div>
+Tair Client 深度优化 — 毫秒级的生死线
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">4.1 Pipeline MGet 批量化</div>
+<div class="cd">
+<strong>原理</strong>: Redis/Tair 的 Pipeline 模式允许客户端一次发送 N 个命令，服务端批量处理后一次性返回 N 个结果。网络往返从 N 次降到 1 次。<br><br>
+<strong>实现步骤</strong>:<br>
+① Key Generator 输出 2500 key<br>
+② 对每个 key 计算 CRC16(key) % 16384 → Tair slot → 物理节点<br>
+③ 按物理节点分组: { node_A: [key1,key2...], node_B: [key3,key4...] }<br>
+④ 对每个 node，发送一个 Pipeline MGet 命令<br>
+⑤ 并行等待所有 node 响应 (Go: goroutine per node; C++: epoll 多路复用)<br>
+⑥ 合并结果，返回 key→value map<br><br>
+<strong>性能</strong>: 2500 key 散布在 ~8 个物理节点 → 8 次并行 Pipeline MGet → 总耗时 = max(单节点延迟) ≈ 2ms
+</div>
+</div>
+<div class="c">
+<div class="ct">4.2 连接池管理</div>
+<div class="cd">
+<strong>池化策略</strong> (Go 实现):<br>
+<div class="code">type TairConnPool struct {
+  pools    map[string]*connPool // 每个 Tair 节点一个池
+  poolSize int                  // 每节点连接数: 8~16
+  idleTimeout time.Duration     // 空闲连接超时: 5min
+  maxRetries  int               // 重试次数: 2
+}
+</div>
+
+<strong>连接复用</strong>: 从池中 Get 连接 → 发送 Pipeline → 收到响应 → Put 回池。连接不关闭，跨请求复用。<br><br>
+<strong>故障处理</strong>:<br>
+• 连接断开: 自动重连 + 从池中剔除坏连接<br>
+• 节点下线: 从集群拓扑更新中感知，重新路由到新节点<br>
+• 超时: 单次 Pipeline 设 5ms 超时，超时后放弃并使用 default_value<br><br>
+<strong>字节实践</strong>: 使用自研 Go Tair Client (基于 go-redis 魔改)，核心优化是<strong>异步批量发送</strong>——不等上一个 Pipeline 响应就发送下一个节点的请求。
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">4.3 Shard-Aware 路由</div>
+<div class="cd">
+<strong>问题</strong>: Tair Cluster 有 16384 个逻辑 slot，映射到 N 个物理节点。客户端需要知道哪个 key 在哪个节点。<br><br>
+<strong>实现</strong>:<br>
+① 启动时: 执行 CLUSTER SLOTS 命令获取 slot → node 映射表<br>
+② 缓存映射表到内存 (Map[slotRange]→node_addr)<br>
+③ 每个 key: CRC16(key) % 16384 → 查映射表 → 目标 node<br>
+④ 定期刷新映射表 (每 30s，或遇到 MOVED/ASK 重定向时立即刷新)<br><br>
+<strong>ASK/MOVED 处理</strong>:<br>
+Tair 在线扩缩容时，部分 slot 在迁移中。收到 MOVED → 更新映射表 → 重试到新节点。收到 ASK → 临时查询新节点 (不更新映射表)。<br><br>
+<span class="p pa">Slot Map</span> <span class="p pa">CRC16 Router</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">4.4 热 Key 保护</div>
+<div class="cd">
+<strong>问题</strong>: 品牌广告 (如 iPhone 开屏广告) 的特征 key 被所有请求查询，单个 Tair 节点扛不住。<br><br>
+<strong>检测</strong>:<br>
+Ad Server 内维护 HeavyHitter 计数器 (基于 Count-Min Sketch)。每秒统计各 key 的访问频次，超过阈值 (如 10000 QPS) 的 key 标记为热 key。<br><br>
+<strong>保护策略</strong>:<br>
+① <strong>L0 延长 TTL</strong>: 热 key 在 L0 的 TTL 从 30s 延长到 300s<br>
+② <strong>本地复制</strong>: 热 key 在 16 个 L0 Cache shard 中<strong>全部复制一份</strong>，任意 shard 都能命中 (避免单 shard 锁竞争)<br>
+③ <strong>Tair 侧 LocalCache</strong>: Tair Proxy 层对热 key 开启 LocalCache (Tair 自带功能，只读缓存 1s)<br><br>
+<strong>效果</strong>: 热 key 的 Tair 查询降到几乎为 0。<br><br>
+<span class="p pr">HotKey Detector</span> <span class="p po">Local Replica</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 5: Assembler ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FBEAF0;color:#72243E">5</div>
+Feature Assembler — 特征拼接的核心逻辑
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">5.1 共享-个性化分离策略</div>
+<div class="cd">
+精排 500 个候选的特征矩阵 (500 × 200 slots) 中，User + Context 特征对所有候选相同，Ad + Cross 特征每个候选不同。<br><br>
+<strong>内存布局</strong>:<br>
+<div class="code">FeatureBatch {
+  shared_features:    Buffer   // User+Context, 只存一份
+  shared_slot_ids:    [int]    // 共享 slot 的编号列表
+  per_item_features:  Buffer[] // 500 个候选各自的 Ad+Cross
+  per_item_slot_ids:  [int]    // 个性化 slot 的编号列表
+  num_candidates:     int      // 500
+}
+</div>
+
+<strong>Model Serving 侧处理</strong>:<br>
+TF Serving 的 Custom Op 或 Triton 的 Ensemble 负责将 shared 部分 broadcast 到 500 行，拼接 per_item 部分，组成完整的 (500, 200) 输入矩阵。<br><br>
+<strong>节省</strong>: 共享特征约 80 个 slot，每个 slot 平均 8 Bytes → 80×8=640B。不共享的话 500×640B=320KB；共享后 640B + 指针。内存节省 99.8%。
+</div>
+</div>
+<div class="c">
+<div class="ct">5.2 缺失处理 (Missing Value Handling)</div>
+<div class="cd">
+<strong>缺失的三种来源</strong>:<br>
+① Tair 中无该 key (新用户/新广告)<br>
+② Tair 中有 key 但该字段为 NULL (部分字段缺失)<br>
+③ Tair 查询超时 (网络/服务异常)<br><br>
+<strong>处理策略 (按优先级)</strong>:<br><br>
+<strong>策略 A: 精确默认值</strong><br>
+Feature 注册时指定 default_value。<br>
+• INT64 默认 0 → Embedding Table 的 slot-0 (可训练的 default embedding)<br>
+• FLOAT 默认 -1.0 → 模型学到 -1 意味着缺失<br>
+• SEQ 默认 [] → 零向量 / padding<br><br>
+
+<strong>策略 B: 层级回退 (统计类特征)</strong><br>
+ad_ctr_7d 缺失 → 查 advertiser_ctr_7d → 查 category_ctr_7d → 全局 global_ctr_7d<br>
+回退链在 feature_config 中预配置。<br><br>
+
+<strong>策略 C: 模型侧处理</strong><br>
+增加 is_missing 指示特征。Feature Assembler 对缺失 slot 同时设置 value=default 和 is_missing=1。模型学到"当 is_missing=1 时忽略该特征的值"。
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">5.3 FlatBuffer 零拷贝反序列化</div>
+<div class="cd">
+<strong>为什么不用 Protobuf？</strong><br>
+Protobuf 的反序列化过程: 读取 wire format → 分配内存 → 逐字段解码填充到 struct/class。对一个 200 Bytes 的 value 反序列化需要 ~5μs。500 个候选 × 3 个 Ad View = 1500 次反序列化 → 7.5ms。<strong>比整个 Tair 查询还慢。</strong><br><br>
+<strong>FlatBuffer 的做法</strong>:<br>
+不反序列化。value 的 byte buffer 就是最终内存布局。读取字段 = 读 buffer 的固定 offset → O(1)。<br><br>
+<div class="code">// FlatBuffer 读取 (C++, 零拷贝)
+auto view = GetFeatureView(tair_value_buffer);
+int64_t gender = view->gender();      // 读偏移量 4
+float ctr = view->ctr_7d();           // 读偏移量 12
+auto seq = view->click_seq();         // 读指针+长度
+// 没有内存分配，没有解码，直接读原始 bytes
+</div>
+
+<strong>性能</strong>: 1500 次 FlatBuffer "反序列化" &lt; 0.1ms (vs Protobuf 7.5ms)。<br><br>
+<strong>代价</strong>: FlatBuffer 的 value 比 Protobuf 大 10~20% (对齐填充)。但在网络 I/O 和存储层面这点开销远低于序列化省下的 CPU。
+</div>
+</div>
+<div class="c">
+<div class="ct">5.4 序列特征 (SEQ) 的特殊处理</div>
+<div class="cd">
+<strong>问题</strong>: 行为序列特征 (click_ad_seq) 长度不固定，且模型要求固定长度输入。<br><br>
+<strong>处理步骤</strong>:<br>
+① <strong>截断</strong>: 序列长度 &gt; max_seq_len (50) → 只保留最近的 50 个<br>
+② <strong>Padding</strong>: 序列长度 &lt; 50 → 末尾用 padding_id=0 填充到 50<br>
+③ <strong>生成 mask</strong>: valid_len=真实长度，模型用 mask 区分真实元素和 padding<br><br>
+<strong>输出</strong>:<br>
+<div class="code">seq_slot: [ad_23, ad_45, ad_12, ..., 0, 0, 0]  // 长度 50
+mask_slot: 35  // 真实长度 35, 后 15 个是 padding
+</div>
+
+<strong>Target Attention 特殊处理</strong>:<br>
+DIN/DIEN 模型的 Target Attention 需要<strong>候选广告 embedding</strong>作为 Query。Feature Assembler 在填充序列时，同时将当前候选广告的 ad_id 填入一个 target_id slot，让模型知道"用哪个广告做 attention query"。<br><br>
+<strong>SIM 长序列优化</strong>: 对 1000+ 行为序列，Feature Assembler 先用 Hard Search (品类匹配) 过滤到 Top-K (K=50~100) 相关行为，只填入 K 条。减少模型 Attention 计算量。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 6: Degradation ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FCEBEB;color:#791F1F">6</div>
+降级与容错体系 — 保证特征 Serving 永不宕机
+</div>
+
+<div class="sub">广告系统的 SLA 要求 99.99% 可用性。Feature Serving 必须在任何异常下都能返回结果 (哪怕是降级结果)，绝不能阻塞请求。</div>
+
+<div class="F">
+<div style="font-weight:500;font-size:12px;margin-bottom:4px">六层降级策略 (从轻到重)</div>
+<table class="tbl">
+<tr><th style="width:5%">级别</th><th style="width:15%">触发条件</th><th style="width:30%">降级行为</th><th style="width:25%">影响范围</th><th>模型效果影响</th></tr>
+<tr><td>L1</td><td>单个 key 查询超时 (&gt;5ms)</td><td>该 key 使用 default_value，其他 key 正常</td><td>单条特征</td><td>几乎无感 (&lt;0.01%)</td></tr>
+<tr><td>L2</td><td>单个 Tair 节点延迟飙升 (P99 &gt;10ms)</td><td>该节点上的所有 key 使用 default_value；自动将该节点标记为"慢节点"，后续请求跳过直接走 default</td><td>~1/N 的 key (N=节点数)</td><td>可控 (&lt;0.5%)</td></tr>
+<tr><td>L3</td><td>单个 Feature View 缺失率 &gt;50%</td><td>熔断该 View: 所有 key 全部使用 default_value。停止向 Tair 发送该 View 的查询</td><td>一个完整 View 的所有特征</td><td>可感知 (0.5~2%)</td></tr>
+<tr><td>L4</td><td>全局 Tair 延迟 P99 &gt;8ms</td><td>关闭低优先级 View (如 user_interest_tags, ad_embedding)，只保留核心 View (user_profile, ad_meta, user_behavior_seq)</td><td>~40% 的 Feature View</td><td>显著 (2~5%)</td></tr>
+<tr><td>L5</td><td>Tair 集群不可用</td><td>完全依赖 L0+L1 缓存 + OnDemand 特征。L0 命中的部分正常，L0 miss 全部 default</td><td>除缓存命中外的全部特征</td><td>严重 (5~15%)</td></tr>
+<tr><td>L6</td><td>Ad Server 内存压力 (OOM 风险)</td><td>禁用 L0+L1 缓存，只使用 OnDemand + default_value。极端兜底</td><td>全部远端特征</td><td>极端 (&gt;15%)</td></tr>
+</table>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">6.1 熔断器实现 (Circuit Breaker)</div>
+<div class="cd">
+每个 Feature View 有独立的熔断器。基于<strong>滑动窗口计数器</strong>:<br><br>
+<div class="code">struct ViewCircuitBreaker {
+  window_size:   10s         // 滑动窗口
+  buckets:       10          // 每秒一个 bucket
+  failure_threshold: 50%     // 失败率超过 50% 触发熔断
+  half_open_after:   30s     // 熔断后 30s 尝试半开
+  half_open_requests: 10     // 半开状态只放行 10 个请求
+  state: CLOSED | OPEN | HALF_OPEN
+}</div>
+
+<strong>状态转换</strong>:<br>
+CLOSED (正常) → 失败率超阈值 → OPEN (熔断，全部 default)<br>
+OPEN → 等待 half_open_after → HALF_OPEN (试探性放行少量请求)<br>
+HALF_OPEN → 试探成功率 &gt;80% → CLOSED (恢复)<br>
+HALF_OPEN → 试探仍然失败 → OPEN (继续熔断)<br><br>
+<strong>与 Hystrix 的区别</strong>: 纯内存实现，没有线程池隔离 (Feature Serving 是嵌入式 SDK，不能创建额外线程池)。通过异步 I/O + 超时控制实现隔离。
+</div>
+</div>
+<div class="c">
+<div class="ct">6.2 超时预算分配 (Timeout Budget)</div>
+<div class="cd">
+精排总延迟预算: ~25ms<br>
+其中 Feature Serving: ≤7ms<br>
+其中 Model Serving (GPU): ≤15ms<br>
+其中网络+调度: ≤3ms<br><br>
+
+Feature Serving 内部的 7ms 预算再细分:<br>
+<div class="code">Config + KeyGen:     0.5ms (硬上限)
+Parallel I/O:       4.5ms (Tair 超时上限)
+  ├ L0 查询:        0.01ms
+  ├ L1 查询:        0.1ms
+  └ L2 Tair:        4.5ms  ← 最大瓶颈
+OnDemand 计算:      0.5ms (并行执行)
+Assemble + 序列化:  1.5ms (硬上限)
+</div>
+
+<strong>自适应超时</strong>:<br>
+非固定 4.5ms。Feature Serving 监控当前请求已消耗的时间:<br>
+• T+3ms 时 Tair 还没响应 → 降低剩余 View 的优先级<br>
+• T+5ms 时 Tair 还没响应 → 立即中断等待，使用已返回的部分结果 + default<br>
+• 核心 View (user_profile, ad_meta) 的超时比非核心 View 长 1ms<br><br>
+<span class="p pr">Adaptive Timeout</span> <span class="p pr">Priority Queue</span>
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 7: Observability ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#EEEDFE;color:#534AB7">7</div>
+可观测性 — Feature Serving 的监控指标体系
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">延迟指标</div>
+<div class="cd">
+<strong>端到端延迟</strong>:<br>
+• feature_serving_latency_p50/p99/p999<br>
+• 按阶段细分: keygen_latency, tair_latency, assemble_latency<br><br>
+<strong>Tair 延迟</strong>:<br>
+• tair_mget_latency_p99 (按节点)<br>
+• tair_pipeline_size (每次 MGet 的 key 数)<br>
+• tair_timeout_rate (超时比率)<br><br>
+<strong>告警</strong>:<br>
+p99 &gt; 5ms → P2<br>
+p99 &gt; 8ms → P1 (触发 L4 降级)
+</div>
+</div>
+<div class="c">
+<div class="ct">缓存指标</div>
+<div class="cd">
+<strong>命中率</strong>:<br>
+• l0_hit_rate (目标 &gt;60%)<br>
+• l1_hit_rate (目标 &gt;15%)<br>
+• overall_cache_hit_rate (目标 &gt;70%)<br><br>
+<strong>缓存效率</strong>:<br>
+• l0_eviction_rate (淘汰速率)<br>
+• l0_memory_usage (内存使用)<br>
+• l1_disk_usage (SSD 使用)<br><br>
+<strong>告警</strong>:<br>
+l0_hit_rate &lt; 40% → P2 (流量模式变化?)<br>
+l0_memory &gt; 80% → Warning
+</div>
+</div>
+<div class="c">
+<div class="ct">质量指标</div>
+<div class="cd">
+<strong>缺失率</strong>:<br>
+• missing_rate_per_view (每个 View)<br>
+• missing_rate_per_feature (每个特征)<br>
+• default_value_usage_rate<br><br>
+<strong>降级指标</strong>:<br>
+• circuit_breaker_state_per_view<br>
+• degradation_level (当前全局降级级别)<br>
+• degraded_request_ratio<br><br>
+<strong>告警</strong>:<br>
+missing_rate &gt; 20% → P2<br>
+missing_rate &gt; 50% → P0 (触发 View 熔断)<br>
+任何 View OPEN 状态 → P1
+</div>
+</div>
+</div>
+
+<div class="I">
+<strong>Feature Serving Grafana Dashboard 标准面板</strong><br><br>
+字节 ByteFeature 为每个 Ad Server 集群自动生成一个 Feature Serving 大盘，包含:<br><br>
+<strong>Row 1 — 全局概览</strong>: 总请求 QPS、端到端延迟 (p50/p99)、全局降级级别、活跃模型数<br>
+<strong>Row 2 — 缓存</strong>: L0/L1/L2 命中率趋势图、L0 内存使用、热 key Top-10 列表<br>
+<strong>Row 3 — Tair</strong>: 各节点 MGet 延迟热力图、Pipeline 大小分布、超时率、QPS 分布<br>
+<strong>Row 4 — 各 View 健康</strong>: 每个 Feature View 的缺失率、熔断状态、响应延迟<br>
+<strong>Row 5 — 特征质量</strong>: default_value 使用率 Top-10 特征、PSI 异常特征列表<br>
+<strong>Row 6 — 业务关联</strong>: Feature Serving 延迟 vs 模型 CTR 预估准确率的对比图 (用于分析降级对效果的影响)
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 8: Model Serving Integration ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:#FAEEDA;color:#633806">8</div>
+与 Model Serving 的对接 — FeatureBatch 到 GPU 推理
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="ct">8.1 传输协议</div>
+<div class="cd">
+<strong>方案一: gRPC + FlatBuffer (字节首选)</strong><br>
+Feature Assembler 输出 FlatBuffer 序列化的 FeatureBatch → gRPC 传输到 TF Serving → Custom Op 直接读取 FlatBuffer buffer (零拷贝到 GPU memory)。<br><br>
+<strong>方案二: 共享内存 (阿里 PAI-EAS)</strong><br>
+Ad Server 和 Model Serving 部署在同一台物理机。FeatureBatch 写入共享内存 (mmap)。Model Serving 通过文件描述符直接访问。省去 gRPC 序列化/反序列化 + 网络传输。<br>延迟从 0.5ms 降到 &lt;0.05ms。<br><br>
+<strong>方案三: RDMA (实验性)</strong><br>
+字节部分集群使用 RDMA (Remote Direct Memory Access) 代替 TCP。FeatureBatch 直接 DMA 到 GPU Server 的内存。延迟 &lt;0.1ms。但硬件成本高，仅用于核心模型。<br><br>
+<span class="p pa">gRPC</span> <span class="p pg">Shared Memory</span> <span class="p pb">RDMA</span>
+</div>
+</div>
+<div class="c">
+<div class="ct">8.2 Embedding 在哪里查表？</div>
+<div class="cd">
+Feature Serving 输出的是<strong>特征 ID</strong> (如 ad_category=23, user_city=110100)，不是 Embedding 向量。Embedding Lookup 发生在 Model Serving 侧。<br><br>
+<strong>原因</strong>:<br>
+① Embedding Table 总量 ~100GB (亿级参数)，存在 GPU 显存/PS 中，Feature Serving 进程无法容纳<br>
+② Embedding 是模型参数的一部分，随模型训练更新。如果 Feature Serving 做 Lookup，需要同步模型参数更新<br>
+③ GPU 做 Embedding Lookup 比 CPU 快 10 倍+ (gather 操作)<br><br>
+<strong>例外: 预训练 Embedding</strong><br>
+user_dssm_embedding (双塔预计算的 128d 向量) 和 creative_embedding (ResNet 提取的 128d 向量) 作为 FLOAT 数组存在 Tair 中，由 Feature Serving 直接拉取，<strong>不走 Embedding Table</strong>。这类特征是"固定向量"，不随模型训练更新。<br><br>
+<strong>Feature Serving 输出格式</strong>:<br>
+<div class="code">slot_01: INT64   → 23     // ad_category ID
+slot_02: INT64   → 110100 // user_city ID  
+slot_03: FLOAT[] → [0.12, -0.34, ...] // user_embedding 128d
+slot_04: SEQ_INT64 → [45, 12, 78, ...] // click_seq 50 个 ID</div>
+Model Serving 对 slot_01/02/04 做 Embedding Lookup；对 slot_03 直接作为 dense feature 输入 MLP。
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+
+<!-- ==================== SECTION 9: Tech Stack ==================== -->
+<div class="S">
+<div class="SH">
+<div class="n" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">9</div>
+Feature Serving 完整技术栈
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="ct">核心 SDK (嵌入 Ad Server)</div>
+<div class="cd">
+<span class="p pp">C++ / Go</span> SDK 主体<br>
+<span class="p pp">FlatBuffer</span> 零拷贝序列化<br>
+<span class="p pp">Protobuf</span> Config 文件格式<br>
+<span class="p pp">LRU Cache</span> L0 进程内缓存<br>
+<span class="p pp">RocksDB</span> L1 本机嵌入式 KV<br>
+<span class="p pp">CRC16</span> Tair slot 路由<br>
+<span class="p pp">Count-Min Sketch</span> 热 key 检测<br>
+<span class="p pp">Circuit Breaker</span> 熔断器
+</div>
+</div>
+<div class="c">
+<div class="ct">外部依赖</div>
+<div class="cd">
+<span class="p po">Tair / Redis Cluster</span> L2 分布式 KV<br>
+<span class="p po">Consul / Nacos</span> 配置中心<br>
+<span class="p po">gRPC</span> 对接 Model Serving<br>
+<span class="p po">TF Serving / Triton</span> 模型推理<br>
+<span class="p po">GPU Cluster</span> V100/A100<br>
+<span class="p po">RDMA NIC</span> (可选) 高性能传输<br>
+<span class="p po">NVMe SSD</span> L1 RocksDB 存储
+</div>
+</div>
+<div class="c">
+<div class="ct">监控 & 运维</div>
+<div class="cd">
+<span class="p pr">Prometheus</span> 指标采集<br>
+<span class="p pr">Grafana</span> 可视化大盘<br>
+<span class="p pr">PagerDuty / 飞书</span> 告警<br>
+<span class="p pa">Feature Quality Dashboard</span><br>
+<span class="p pa">Tair 运维平台</span> 集群管理<br>
+<span class="p pa">Airflow</span> L1 预热调度<br>
+<span class="p pa">AB Platform</span> 灰度发布
+</div>
+</div>
+</div>
+</div>
+
+<div class="sp"></div>
+<div style="font-size:11px;color:var(--color-text-tertiary);line-height:1.6">
+Feature Serving 线上规模 (字节 DSP): Ad Server 集群 ~3000 台 | 每台进程内 L0 Cache ~500MB | L1 RocksDB ~50GB/台 | Tair 集群 200+ 节点 20TB | 峰值 QPS ~2000 万/s (Tair 读) | Feature Serving P99 延迟 &lt;6ms | 全局降级率 &lt;0.1%
+</div>
+</div>
